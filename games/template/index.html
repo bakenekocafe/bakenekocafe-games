@@ -1,0 +1,28 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>ゲームテンプレ - bakenekocafe.studio</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <div id="root">
+        <h1>ゲームテンプレ（320px 想定）</h1>
+        <p>スタートを押すと game_start を送信（Core 計測）。</p>
+        <button class="btn" id="btn-start">スタート</button>
+        <div id="reward-cta" style="display:none;">
+            <button class="btn" id="btn-reward">広告を見て○○を獲得</button>
+        </div>
+    </div>
+
+    <script>
+        window.BAKENEKO_GAME_ID = 'template';
+        window.BAKENEKO_API_BASE = 'https://api.bakenekocafe.studio';
+    </script>
+    <script src="/core/config-loader.js"></script>
+    <script src="/core/rewarded-adapter.js"></script>
+    <script src="/core/analytics.js"></script>
+    <script src="game.js"></script>
+</body>
+</html>

@@ -43,15 +43,14 @@ body {
 }
 
 /* 1. Top Banner (Fixed) */
-/* バナー枠（banner-loader.js が中身を注入） */
 .ad-banner {
     position: absolute;
     top: 0;
     left: 50%;
     transform: translateX(-50%);
-    width: 320px;
-    max-width: calc(100% - 16px);
-    height: 100px;
+    width: 60%;
+    max-width: 320px;
+    height: 60px;
     display: flex;
     align-items: center;
     justify-content: center;
@@ -61,35 +60,47 @@ body {
     border-radius: 6px;
 }
 
-/* タイトル画面内バナー（レイアウトの流れ内で表示） */
+/* タイトル画面内バナー */
 .ad-banner--title {
     position: relative;
     top: auto;
     left: auto;
     transform: none;
+    width: min(95%, 420px);
+    height: min(12vh, 100px);
     margin: 4px auto;
 }
 
-/* 320×50 用 */
+/* 下段バナー */
 .ad-banner--50 {
-    height: 50px;
+    width: min(90%, 340px);
+    height: min(10vh, 80px);
 }
 
 .ad-banner .banner-link {
-    display: block;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 100%;
+    height: 100%;
     line-height: 0;
 }
 .ad-banner .banner-link img {
-    border-radius: 6px;
+    border-radius: 4px;
+    max-width: 100%;
+    max-height: 100%;
+    width: auto;
+    height: auto;
+    object-fit: contain;
 }
 
-/* 2. Game Area（バナー100px以外がゲーム領域） */
+/* 2. Game Area */
 #game-container {
     position: relative;
     flex: 1;
     width: 100%;
     min-height: 0;
-    padding-top: 100px;
+    padding-top: 60px;
     overflow: hidden;
     user-select: none;
     -webkit-user-select: none;
@@ -105,7 +116,7 @@ body {
 
 #touch-area {
     position: absolute;
-    top: 100px;
+    top: 60px;
     left: 0;
     right: 0;
     bottom: 0;
@@ -127,7 +138,7 @@ body {
 /* TOP UI: Controls（ゲーム領域の上端＝バナー直下） */
 #ui-top {
     position: absolute;
-    top: 100px;
+    top: 60px;
     left: 0;
     width: 100%;
     pointer-events: none;
@@ -277,7 +288,7 @@ body {
 /* ─── Overlays (Title, Result) ─── バナー以外のゲーム領域に合わせる */
 .screen {
     position: absolute;
-    top: 100px;
+    top: 0;
     left: 0;
     right: 0;
     bottom: 0;
@@ -305,12 +316,12 @@ body {
 
 .title-content {
     text-align: center;
-    padding: 10px 16px;
+    padding: 56px 12px 8px;
     display: flex;
     flex-direction: column;
     align-items: center;
     justify-content: center;
-    gap: 4px;
+    gap: 2px;
     width: 100%;
     min-height: 100%;
     overflow-y: auto;
@@ -318,21 +329,21 @@ body {
 }
 
 .title-cat {
-    margin-bottom: 2px;
+    margin-bottom: 4px;
     animation: bounce 2s infinite;
     display: flex;
     align-items: center;
     justify-content: center;
     height: auto;
-    max-height: 160px;
+    max-height: min(28vh, 220px);
     overflow: visible;
 }
 
 .title-main {
     font-family: var(--font-main);
-    font-size: clamp(28px, 7vw, 48px);
+    font-size: clamp(24px, 7vw, 48px);
     font-weight: 900;
-    margin: 2px 0;
+    margin: 0;
     background: linear-gradient(to bottom, #fff 0%, #ffd700 50%, #ff8c00 100%);
     background-clip: text;
     -webkit-background-clip: text;
@@ -343,19 +354,19 @@ body {
 
 .title-sub {
     color: #ffd700;
-    font-size: clamp(12px, 2.5vw, 16px);
-    margin-top: -4px;
-    margin-bottom: 4px;
-    letter-spacing: 4px;
+    font-size: clamp(12px, 2.8vw, 18px);
+    margin-top: -2px;
+    margin-bottom: 2px;
+    letter-spacing: 3px;
     font-weight: bold;
     text-shadow: 0 2px 4px rgba(0, 0, 0, 0.5);
 }
 
 .title-desc {
     color: #fff;
-    font-size: clamp(11px, 2.2vw, 13px);
-    margin-bottom: 6px;
-    line-height: 1.5;
+    font-size: clamp(12px, 2.2vw, 15px);
+    margin-bottom: 4px;
+    line-height: 1.4;
     text-shadow: 0 2px 2px #000;
 }
 
@@ -365,9 +376,9 @@ body {
     gap: 8px;
     justify-content: center;
     flex-wrap: wrap;
-    margin-bottom: 6px;
+    margin-bottom: 4px;
     width: 100%;
-    max-width: 340px;
+    max-width: min(95%, 380px);
 }
 .title-play-count-wrap,
 .title-support-count-wrap {
@@ -389,9 +400,9 @@ body {
 .title-support-count-suffix { color: rgba(255, 255, 255, 0.9); font-size: 12px; margin-left: 2px; }
 
 .nickname-container {
-    margin: 6px 0;
-    width: 90%;
-    max-width: 300px;
+    margin: 4px 0;
+    width: 85%;
+    max-width: 320px;
 }
 
 /* ニックネーム入力は選択・長押しを通常どおり使える */
@@ -416,8 +427,8 @@ body {
     background: linear-gradient(135deg, #ff6b35, #ff8c00);
     color: #fff;
     border: none;
-    padding: 12px 40px;
-    font-size: clamp(18px, 4vw, 24px);
+    padding: 12px 36px;
+    font-size: clamp(18px, 4.5vw, 26px);
     border-radius: 50px;
     font-family: var(--font-main);
     font-weight: 900;

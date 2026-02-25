@@ -23,10 +23,10 @@ window.BANNERS_CONFIG = {
     LINEスタンプ: {
       type: "image",
       url: "https://store.line.me/stickershop/author/2987510/ja",
-      imgSrc: "siyougazou/banaline.png",
-      alt: "BAKENEKO CAFE LINEスタンプ",
+      imgSrc: "siyougazou/banasita.png",
+      alt: "BAKENEKO CAFE バナー",
       width: 320,
-      height: 50,
+      height: 100,
     },
   },
 

@@ -55,9 +55,7 @@
     var img = document.createElement("img");
     img.src = imgSrc;
     img.alt = alt;
-    img.width = w;
-    img.height = h;
-    img.style.maxWidth = "100%";
+    img.style.width = "100%";
     img.style.height = "auto";
     img.style.display = "block";
     img.style.borderRadius = "6px";

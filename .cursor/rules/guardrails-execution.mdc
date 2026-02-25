@@ -1,0 +1,12 @@
+---
+description: ARCHITECTURE_GUARDRAILS に従い、Auto-Run 時は RUN/ACCEPT を省く
+alwaysApply: true
+globs: "**"
+---
+
+# 実行制御（Guardrails 1b）
+
+- 開発方針は **ルート直下の `ARCHITECTURE_GUARDRAILS.md`** に従う。
+- **実行まわり**: ユーザーが Cursor の **Auto-Run を有効**（`cursor.agent.autoRun` / `cursor.terminal.autoRun`）にしている場合は、**「ACCEPT RUN」や「RUN REQUIRED: 1 time」を要求しない**。依頼に応じてターミナル実行してよい。
+- その場合でも、可能なときは **1 コマンドにまとめる**（例: `.\run-full-verify.ps1`）。自動デプロイ・Cloudflare/DNS の自動操作は行わない。
+- Auto-Run が無効なときは、Guardrails セクション 1a のとおり「RUN REQUIRED」と「ACCEPT RUN」を明示してから実行する。

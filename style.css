@@ -1,0 +1,825 @@
+/* ============================================================
+   こはだジャンプ～BAKENEKOドリーム～ Styles (REBUILT)
+   ============================================================ */
+
+:root {
+    --bg-dark: #0f0f1a;
+    --text-primary: #f0f0f0;
+    --text-secondary: #a0a0b0;
+    --accent: #ff6b35;
+    --accent-glow: rgba(255, 107, 53, 0.6);
+    --gold: #ffd700;
+    --danger: #ff4444;
+    --success: #44ff88;
+    --font-jp: 'Zen Maru Gothic', sans-serif;
+    --font-num: 'Orbitron', monospace;
+    --ui-bg: rgba(0, 0, 0, 0.6);
+    --ui-border: 1px solid rgba(255, 255, 255, 0.15);
+}
+
+* {
+    box-sizing: border-box;
+    margin: 0;
+    padding: 0;
+}
+
+html,
+body {
+    width: 100%;
+    height: 100%;
+    overflow: hidden;
+    background: var(--bg-dark);
+    font-family: var(--font-jp);
+    color: var(--text-primary);
+    touch-action: manipulation;
+    user-select: none;
+    -webkit-tap-highlight-color: transparent;
+}
+
+/* ─── Layout Container ─── */
+body {
+    display: flex;
+    flex-direction: column;
+}
+
+/* 1. Top Banner (Fixed) */
+/* バナー枠（banner-loader.js が中身を注入） */
+.ad-banner {
+    position: absolute;
+    top: 0;
+    left: 50%;
+    transform: translateX(-50%);
+    width: 320px;
+    max-width: calc(100% - 16px);
+    height: 100px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 3000;
+    pointer-events: auto;
+    overflow: hidden;
+    border-radius: 6px;
+}
+
+/* タイトル画面内バナー（レイアウトの流れ内で表示） */
+.ad-banner--title {
+    position: relative;
+    top: auto;
+    left: auto;
+    transform: none;
+    margin: 4px auto;
+}
+
+/* 320×50 用 */
+.ad-banner--50 {
+    height: 50px;
+}
+
+.ad-banner .banner-link {
+    display: block;
+    line-height: 0;
+}
+.ad-banner .banner-link img {
+    border-radius: 6px;
+}
+
+/* 2. Game Area（バナー100px以外がゲーム領域） */
+#game-container {
+    position: relative;
+    flex: 1;
+    width: 100%;
+    min-height: 0;
+    padding-top: 100px;
+    overflow: hidden;
+    user-select: none;
+    -webkit-user-select: none;
+    -webkit-touch-callout: none;
+    touch-action: none;
+}
+
+#game-canvas {
+    display: block;
+    width: 100%;
+    height: 100%;
+}
+
+#touch-area {
+    position: absolute;
+    top: 100px;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    z-index: 10;
+    cursor: pointer;
+}
+#game-container.title-screen-visible #touch-area {
+    pointer-events: none;
+}
+#touch-area {
+    user-select: none;
+    -webkit-user-select: none;
+    -webkit-touch-callout: none;
+    touch-action: none;
+}
+
+/* ─── UI Layers (Clean Split) ─── */
+
+/* TOP UI: Controls（ゲーム領域の上端＝バナー直下） */
+#ui-top {
+    position: absolute;
+    top: 100px;
+    left: 0;
+    width: 100%;
+    pointer-events: none;
+    z-index: 100;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 10px;
+}
+
+/* Power Meter Container */
+#phase-ui {
+    width: min(400px, 90vw);
+    background: var(--ui-bg);
+    backdrop-filter: blur(4px);
+    border: var(--ui-border);
+    border-radius: 12px;
+    padding: 10px 20px;
+    text-align: center;
+}
+
+.phase-title {
+    font-size: 20px;
+    font-weight: 900;
+    color: var(--gold);
+    text-shadow: 0 0 10px rgba(255, 215, 0, 0.5);
+    margin-bottom: 5px;
+}
+
+.phase-gauge-bg {
+    height: 30px;
+    background: rgba(255, 255, 255, 0.1);
+    border-radius: 15px;
+    position: relative;
+    overflow: hidden;
+    border: 1px solid rgba(255, 255, 255, 0.2);
+}
+
+.phase-gauge-fill {
+    height: 100%;
+    width: 0%;
+    background: linear-gradient(90deg, #ff4444, #ffaa00, #44ff88);
+}
+
+.phase-gauge-marker {
+    position: absolute;
+    top: 0;
+    bottom: 0;
+    width: 4px;
+    background: #fff;
+    left: 0%;
+    box-shadow: 0 0 5px #fff;
+}
+
+.phase-gauge-sweet {
+    position: absolute;
+    top: 0;
+    bottom: 0;
+    background: rgba(68, 255, 136, 0.3);
+    border-left: 2px solid var(--success);
+    border-right: 2px solid var(--success);
+    display: none;
+}
+
+.phase-value {
+    font-family: var(--font-num);
+    font-size: 24px;
+    font-weight: 700;
+    color: var(--accent);
+    margin-top: 5px;
+}
+
+.phase-instruction {
+    font-size: 12px;
+    color: var(--text-secondary);
+}
+
+/* Boost Indicator */
+#boost-ui {
+    margin-top: 10px;
+}
+
+.boost-text {
+    font-size: 28px;
+    font-weight: 900;
+    color: #ff4444;
+    text-shadow: 0 0 15px rgba(255, 68, 68, 0.8);
+    animation: pulse 0.4s infinite alternate;
+}
+
+/* BOTTOM UI: Status (Score, Speed) */
+#ui-bottom {
+    position: absolute;
+    bottom: 20px;
+    left: 10px;
+    right: 10px;
+    pointer-events: none;
+    z-index: 100;
+    display: flex;
+    justify-content: center;
+    gap: 10px;
+}
+
+.hud-panel {
+    background: var(--ui-bg);
+    backdrop-filter: blur(4px);
+    border: var(--ui-border);
+    border-radius: 10px;
+    padding: 8px 16px;
+    text-align: center;
+    min-width: 80px;
+    flex: 1;
+    max-width: 150px;
+}
+
+.hud-panel.wide {
+    flex: 2;
+    max-width: 250px;
+}
+
+.hud-label {
+    display: block;
+    font-size: 10px;
+    color: #aaa;
+    margin-bottom: 2px;
+}
+
+.hud-value {
+    display: block;
+    font-family: var(--font-num);
+    font-size: 20px;
+    font-weight: 700;
+    color: var(--gold);
+}
+
+.hud-panel.wide .hud-value {
+    font-size: 28px;
+    color: #fff;
+}
+
+.hud-unit {
+    font-size: 11px;
+    color: #888;
+}
+
+
+/* ─── Overlays (Title, Result) ─── バナー以外のゲーム領域に合わせる */
+.screen {
+    position: absolute;
+    top: 100px;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: rgba(15, 15, 26, 0.8);
+    z-index: 3500;
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 0.3s;
+    overflow-y: auto;
+    overflow-x: hidden;
+}
+
+.screen.active {
+    opacity: 1;
+    pointer-events: auto;
+}
+
+/* Title */
+#title-screen {
+    background: linear-gradient(135deg, #1a1a2e, #0f3460);
+}
+
+.title-content {
+    text-align: center;
+    padding: 10px 16px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 4px;
+    width: 100%;
+    min-height: 100%;
+    overflow-y: auto;
+    box-sizing: border-box;
+}
+
+.title-cat {
+    margin-bottom: 2px;
+    animation: bounce 2s infinite;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    height: auto;
+    max-height: 160px;
+    overflow: visible;
+}
+
+.title-main {
+    font-family: var(--font-main);
+    font-size: clamp(28px, 7vw, 48px);
+    font-weight: 900;
+    margin: 2px 0;
+    background: linear-gradient(to bottom, #fff 0%, #ffd700 50%, #ff8c00 100%);
+    background-clip: text;
+    -webkit-background-clip: text;
+    color: transparent;
+    filter: drop-shadow(0 4px 0 #000);
+    letter-spacing: 2px;
+}
+
+.title-sub {
+    color: #ffd700;
+    font-size: clamp(12px, 2.5vw, 16px);
+    margin-top: -4px;
+    margin-bottom: 4px;
+    letter-spacing: 4px;
+    font-weight: bold;
+    text-shadow: 0 2px 4px rgba(0, 0, 0, 0.5);
+}
+
+.title-desc {
+    color: #fff;
+    font-size: clamp(11px, 2.2vw, 13px);
+    margin-bottom: 6px;
+    line-height: 1.5;
+    text-shadow: 0 2px 2px #000;
+}
+
+/* タイトル：統計行（横並び） */
+.title-stats-row {
+    display: flex;
+    gap: 8px;
+    justify-content: center;
+    flex-wrap: wrap;
+    margin-bottom: 6px;
+    width: 100%;
+    max-width: 340px;
+}
+.title-play-count-wrap,
+.title-support-count-wrap {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 1px;
+    flex: 1;
+    min-width: 120px;
+    padding: 6px 10px;
+    background: rgba(0, 0, 0, 0.25);
+    border-radius: 10px;
+    border: 1px solid rgba(255, 255, 255, 0.15);
+}
+#title-play-count-label,
+#title-support-count-label { color: rgba(255, 255, 255, 0.7); font-size: 10px; }
+#title-play-count-value { color: #ffd700; font-size: clamp(16px, 3.5vw, 20px); font-weight: 700; }
+#title-support-count-value { color: #ff8c00; font-size: clamp(16px, 3.5vw, 20px); font-weight: 700; }
+.title-support-count-suffix { color: rgba(255, 255, 255, 0.9); font-size: 12px; margin-left: 2px; }
+
+.nickname-container {
+    margin: 6px 0;
+    width: 90%;
+    max-width: 300px;
+}
+
+/* ニックネーム入力は選択・長押しを通常どおり使える */
+.nickname-container input,
+#nickname {
+    user-select: text;
+    -webkit-user-select: text;
+    -webkit-touch-callout: default;
+    touch-action: manipulation;
+}
+
+.nickname-label {
+    display: block;
+    color: #ff8c00;
+    font-weight: bold;
+    font-size: 14px;
+    margin-bottom: 5px;
+    text-shadow: 0 1px 2px #000;
+}
+
+.btn-start {
+    background: linear-gradient(135deg, #ff6b35, #ff8c00);
+    color: #fff;
+    border: none;
+    padding: 12px 40px;
+    font-size: clamp(18px, 4vw, 24px);
+    border-radius: 50px;
+    font-family: var(--font-main);
+    font-weight: 900;
+    cursor: pointer;
+    box-shadow: 0 5px 0 #b33e00, 0 10px 20px rgba(255, 100, 50, 0.4);
+    transition: transform 0.1s;
+    text-shadow: 0 2px 0 rgba(0, 0, 0, 0.2);
+    margin-top: 5px;
+    pointer-events: auto;
+    position: relative;
+    z-index: 1;
+}
+
+.btn-start:active {
+    transform: scale(0.95);
+}
+
+.btn-sub {
+    background: linear-gradient(135deg, #4a5568, #2d3748);
+    color: #fff;
+    border: none;
+    padding: 12px 30px;
+    font-size: clamp(16px, 3.5vw, 20px);
+    border-radius: 50px;
+    font-family: var(--font-main);
+    font-weight: 700;
+    cursor: pointer;
+    box-shadow: 0 3px 0 #1a202c, 0 6px 15px rgba(0, 0, 0, 0.3);
+    transition: transform 0.1s;
+    text-shadow: 0 1px 0 rgba(0, 0, 0, 0.2);
+}
+
+.btn-sub:active {
+    transform: scale(0.95);
+}
+
+/* リザルト：支援ブロック */
+.result-support-block {
+    margin: 18px auto 0;
+    padding: 0;
+    width: 100%;
+    max-width: 340px;
+    text-align: center;
+}
+.result-support-note {
+    font-size: 11px;
+    color: rgba(255, 255, 255, 0.55);
+    margin: 8px 0 0 0;
+}
+
+/* リザルト：広告を見て猫を支援する（最大CTA） */
+.btn-support-ad {
+    display: block;
+    width: 100%;
+    max-width: 340px;
+    margin: 0 auto;
+    padding: 16px 24px;
+    font-size: clamp(17px, 4vw, 20px);
+    font-family: var(--font-main);
+    font-weight: 900;
+    letter-spacing: 0.04em;
+    color: #fff;
+    background: linear-gradient(135deg, #22c55e 0%, #16a34a 60%, #15803d 100%);
+    border: 2px solid rgba(255, 255, 255, 0.25);
+    border-radius: 60px;
+    cursor: pointer;
+    box-shadow: 0 4px 0 #15803d, 0 8px 20px rgba(34, 197, 94, 0.35), 0 0 24px rgba(34, 197, 94, 0.15);
+    transition: transform 0.12s, box-shadow 0.12s;
+    pointer-events: auto;
+    animation: support-btn-glow 2.5s ease-in-out infinite;
+}
+.btn-support-ad:hover {
+    transform: translateY(-1px);
+    box-shadow: 0 5px 0 #15803d, 0 10px 24px rgba(34, 197, 94, 0.45), 0 0 32px rgba(34, 197, 94, 0.25);
+}
+.btn-support-ad:active {
+    transform: translateY(2px) scale(0.98);
+    box-shadow: 0 2px 0 #15803d, 0 4px 8px rgba(34, 197, 94, 0.3);
+}
+.btn-support-ad:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+    transform: none;
+    animation: none;
+    box-shadow: none;
+}
+@keyframes support-btn-glow {
+    0%, 100% { box-shadow: 0 4px 0 #15803d, 0 8px 20px rgba(34, 197, 94, 0.35), 0 0 24px rgba(34, 197, 94, 0.15); }
+    50% { box-shadow: 0 4px 0 #15803d, 0 8px 20px rgba(34, 197, 94, 0.55), 0 0 40px rgba(34, 197, 94, 0.3); }
+}
+
+/* リザルト：操作ボタン（もう一度・シェア・ランキング）は控えめに */
+.result-secondary-actions {
+    display: flex;
+    gap: 8px;
+    justify-content: center;
+    flex-wrap: wrap;
+    margin-top: 16px;
+}
+.result-secondary-actions .btn-start {
+    font-size: 15px;
+    padding: 8px 22px;
+}
+
+/* リザルト：フッターリンク */
+.result-footer-links {
+    margin-top: 14px;
+    display: flex;
+    gap: 16px;
+    justify-content: center;
+    flex-wrap: wrap;
+}
+.result-footer-links a {
+    color: rgba(255, 255, 255, 0.5);
+    font-size: 12px;
+    text-decoration: underline;
+}
+.result-footer-links a:hover {
+    color: rgba(255, 255, 255, 0.8);
+}
+
+/* リザルト：本日の応援回数＋簡易バー */
+.result-support-count-wrap {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    margin-bottom: 8px;
+    font-size: 14px;
+    color: rgba(255, 255, 255, 0.85);
+}
+#result-support-count-value { color: #ff8c00; font-weight: 700; }
+.result-support-bar-wrap {
+    width: 100%;
+    max-width: 200px;
+    margin: 0 auto 14px;
+}
+.result-support-bar-bg {
+    height: 6px;
+    background: rgba(255, 255, 255, 0.15);
+    border-radius: 3px;
+    overflow: hidden;
+}
+.result-support-bar-fill {
+    height: 100%;
+    width: 0%;
+    max-width: 100%;
+    background: linear-gradient(90deg, #ff8c00, #ffd700);
+    border-radius: 3px;
+    transition: width 0.3s ease;
+}
+
+/* 支援メーター：10回ごとの色変化（tier = floor(count/10)） */
+.support-count-tier-0 #title-support-count-value,
+.support-count-tier-0 #result-support-count-value { color: #ff8c00; }
+.support-count-tier-1 #title-support-count-value,
+.support-count-tier-1 #result-support-count-value { color: #ffa500; }
+.support-count-tier-2 #title-support-count-value,
+.support-count-tier-2 #result-support-count-value { color: #ffb347; }
+.support-count-tier-3 #title-support-count-value,
+.support-count-tier-3 #result-support-count-value { color: #ffd700; }
+.support-count-tier-4 #title-support-count-value,
+.support-count-tier-4 #result-support-count-value { color: #daa520; }
+.support-count-tier-5 #title-support-count-value,
+.support-count-tier-5 #result-support-count-value { color: #ff8c00; }
+.support-count-tier-6 #title-support-count-value,
+.support-count-tier-6 #result-support-count-value { color: #ffa500; }
+.support-count-tier-7 #title-support-count-value,
+.support-count-tier-7 #result-support-count-value { color: #ffb347; }
+.support-count-tier-8 #title-support-count-value,
+.support-count-tier-8 #result-support-count-value { color: #ffd700; }
+.support-count-tier-9 #title-support-count-value,
+.support-count-tier-9 #result-support-count-value { color: #daa520; }
+.support-count-tier-10 #title-support-count-value,
+.support-count-tier-10 #result-support-count-value { color: #ffd700; }
+/* 100回ごとの小エフェクト */
+.support-milestone.title-support-count-wrap,
+.support-milestone.result-support-count-wrap {
+    box-shadow: 0 0 12px rgba(255, 215, 0, 0.25);
+    border-color: rgba(255, 215, 0, 0.35);
+}
+.support-milestone #title-support-count-value,
+.support-milestone #result-support-count-value {
+    text-shadow: 0 0 8px rgba(255, 215, 0, 0.4);
+}
+/* 増分時の数字アニメーション（軽量CSS） */
+.support-count-updated {
+    animation: support-count-bump 0.5s ease;
+}
+@keyframes support-count-bump {
+    0% { transform: scale(1); }
+    30% { transform: scale(1.15); }
+    100% { transform: scale(1); }
+}
+.support-count-subtitle {
+    display: block;
+    font-size: 11px;
+    color: rgba(255, 255, 255, 0.7);
+    margin-top: 2px;
+}
+.ranking-retry-wrap {
+    margin-bottom: 12px;
+}
+
+.support-loading-text {
+    font-size: 12px;
+    color: rgba(255, 215, 0, 0.9);
+    margin: 4px 0 0;
+}
+
+/* 支援エラー・成功演出 */
+.support-error-message {
+    margin-top: 10px;
+    color: #ff6b6b;
+    font-size: 14px;
+    text-align: center;
+}
+.support-queued-message {
+    margin-top: 10px;
+    color: #ffd700;
+    font-size: 13px;
+    text-align: center;
+}
+.support-success-overlay {
+    position: absolute;
+    inset: 0;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    background: rgba(0, 0, 0, 0.5);
+    border-radius: 20px;
+    z-index: 10;
+    pointer-events: none;
+    animation: support-success-fade 3s ease forwards;
+    box-shadow: inset 0 0 60px rgba(255, 215, 0, 0.15);
+}
+@keyframes support-success-fade {
+    0%, 70% { opacity: 1; }
+    100% { opacity: 0; visibility: hidden; }
+}
+.support-success-hearts {
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
+}
+.support-success-hearts .heart-particle {
+    position: absolute;
+    font-size: 24px;
+    animation: heart-float 2.5s ease-out forwards;
+    opacity: 0;
+}
+@keyframes heart-float {
+    0% { opacity: 0; transform: scale(0.5) translateY(0); }
+    15% { opacity: 1; transform: scale(1) translateY(-10px); }
+    100% { opacity: 0; transform: scale(1.2) translateY(-80px); }
+}
+.support-success-text {
+    position: relative;
+    z-index: 2;
+    color: #ffd700;
+    font-size: clamp(16px, 3.5vw, 22px);
+    font-weight: 700;
+    text-shadow: 0 2px 8px rgba(0, 0, 0, 0.8), 0 0 20px rgba(255, 215, 0, 0.5);
+    margin: 0;
+    animation: support-success-glow 1.5s ease-out;
+}
+@keyframes support-success-glow {
+    0% { opacity: 0; filter: brightness(2); }
+    30% { opacity: 1; filter: brightness(1.2); }
+    100% { opacity: 1; filter: brightness(1); }
+}
+
+/* Result */
+.result-content {
+    position: relative;
+    background: rgba(20, 20, 35, 0.95);
+    border: 1px solid rgba(255, 255, 255, 0.2);
+    padding: 30px;
+    border-radius: 20px;
+    text-align: center;
+    max-width: 90%;
+}
+
+/* Ranking Modal */
+.ranking-content {
+    background: rgba(20, 20, 35, 0.95);
+    padding: 20px;
+    border-radius: 15px;
+    width: 95%;
+    max-width: 500px;
+    max-height: 60vh;
+    display: flex;
+    flex-direction: column;
+}
+
+.rank-row {
+    display: flex;
+    align-items: center;
+    padding: 8px 0;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+    font-size: 14px;
+}
+
+.rank-pos {
+    width: 30px;
+    color: var(--gold);
+    font-weight: bold;
+    flex-shrink: 0;
+}
+
+.rank-icon {
+    width: 30px;
+    text-align: center;
+    flex-shrink: 0;
+}
+
+.rank-name {
+    flex: 1;
+    color: #fff;
+    text-align: left;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    min-width: 0;
+    /* Important for flex shrinking */
+    margin-right: 5px;
+}
+
+.rank-dist {
+    width: 70px;
+    text-align: right;
+    font-family: var(--font-num);
+    color: var(--accent);
+    flex-shrink: 0;
+}
+
+.rank-date {
+    display: block;
+    width: 70px;
+    text-align: right;
+    font-size: 11px;
+    color: #888;
+    flex-shrink: 0;
+}
+
+.result-val {
+    font-family: var(--font-num);
+    font-size: 60px;
+    color: var(--gold);
+}
+
+/* Milestone Popup (Center Screen) */
+#milestone-popup {
+    position: absolute;
+    top: 40%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    pointer-events: none;
+    z-index: 500;
+    text-align: center;
+}
+
+.milestone-text {
+    font-size: 80px;
+    font-weight: 900;
+    color: #fff;
+    text-shadow: 0 0 20px #ff6b35, 4px 4px 0 #000;
+    white-space: nowrap;
+    animation: popIn 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+}
+
+/* Utility */
+.hidden {
+    display: none !important;
+}
+
+/* Animations */
+@keyframes pulse {
+    to {
+        transform: scale(1.1);
+    }
+}
+
+@keyframes bounce {
+
+    0%,
+    100% {
+        transform: translateY(0);
+    }
+
+    50% {
+        transform: translateY(-20px);
+    }
+}
+
+@keyframes popIn {
+    from {
+        transform: scale(0);
+    }
+
+    to {
+        transform: scale(1);
+    }
+}

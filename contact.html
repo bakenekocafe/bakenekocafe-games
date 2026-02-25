@@ -1,19 +1,87 @@
 <!DOCTYPE html>
 <html lang="ja">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>お問い合わせ - こはだジャンプ / BAKENEKOドリーム</title>
-    <style>
-        body { font-family: sans-serif; max-width: 720px; margin: 2rem auto; padding: 0 1rem; line-height: 1.7; }
-        h1 { font-size: 1.25rem; }
-        a { color: #1d9bf0; }
-    </style>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>お問い合わせ｜BAKENEKO GAMES</title>
+  <meta name="description" content="BAKENEKO GAMESへのお問い合わせはこちらです。">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Noto+Serif+JP:wght@400;700;900&family=Share+Tech+Mono&family=Zen+Old+Mincho:wght@400;700;900&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="portal.css">
 </head>
 <body>
-    <h1>お問い合わせ</h1>
-    <p>本サービスに関するお問い合わせは、以下のメールアドレスまでお願いします。</p>
-    <p><a href="mailto:contact@bakenekocafe.studio">contact@bakenekocafe.studio</a></p>
-    <p><a href="/">トップに戻る</a></p>
+
+  <div id="progress-bar"></div>
+  <div class="film-grain"></div>
+  <div class="scanlines"></div>
+  <div class="vignette"></div>
+
+  <header class="portal-header" id="header">
+    <a href="index.html" class="portal-logo">BAKENEKO GAMES</a>
+    <nav class="portal-nav">
+      <a href="index.html#games">ゲーム</a>
+      <a href="index.html#support">猫支援</a>
+      <a href="index.html#how">仕組み</a>
+      <a href="contact.html">お問い合わせ</a>
+    </nav>
+  </header>
+
+  <main class="portal-page">
+    <section class="portal-section portal-section--page">
+      <h1 class="page-title">お問い合わせ</h1>
+
+      <div class="page-body">
+        <p>BAKENEKO GAMESおよび本サイトに関するお問い合わせは、下記の運営元までご連絡ください。一般社団法人 新宿租界（保護猫カフェ「BAKENEKO CAFE 化猫茶屋」と同一運営）が対応いたします。</p>
+
+        <div class="contact-block">
+          <h2>運営者</h2>
+          <p><strong>一般社団法人 新宿租界</strong></p>
+          <p>代表理事：遠藤慎大</p>
+        </div>
+
+        <div class="contact-block">
+          <h2>メール</h2>
+          <p><a href="mailto:info@bakeneko-cafe.tokyo" class="contact-link">info@bakeneko-cafe.tokyo</a></p>
+          <p class="contact-note">件名に「BAKENEKO GAMES」とご記載いただくとスムーズです。</p>
+        </div>
+
+        <div class="contact-block">
+          <h2>電話</h2>
+          <p><a href="tel:03-6161-2929" class="contact-link">03-6161-2929</a></p>
+          <p class="contact-note">カフェ営業時間等は<a href="https://bakeneko-cafe.tokyo/" target="_blank" rel="noopener">BAKENEKO CAFE 公式サイト</a>をご確認ください。</p>
+        </div>
+
+        <div class="contact-block">
+          <h2>所在地</h2>
+          <p>〒169-0072 東京都新宿区大久保3-13-1</p>
+          <p class="contact-note">店舗は同住所の「1棟106」です。</p>
+        </div>
+
+        <p class="page-contact" style="margin-top: 2rem;">ゲームの不具合・ランキング・広告に関するお問い合わせも上記で受け付けております。</p>
+      </div>
+    </section>
+
+    <footer class="portal-footer">
+      <p class="footer-ads-note">広告を表示しています。視聴は任意で、利用者への金銭・ポイント等の付与はありません。詳細は<a href="support.html">広告とサイトの仕組み</a>・<a href="terms.html">利用規約</a>・<a href="privacy.html">プライバシー</a>をご覧ください。</p>
+      <svg class="footer-mon" viewBox="0 0 100 100" fill="none">
+        <circle cx="50" cy="50" r="47" stroke="rgba(255,215,0,0.8)" stroke-width="1.5"/>
+        <circle cx="50" cy="50" r="36" stroke="rgba(255,215,0,0.8)" stroke-width="1"/>
+        <circle cx="50" cy="50" r="20" stroke="rgba(255,215,0,0.8)" stroke-width="1.5"/>
+        <line x1="50" y1="3" x2="50" y2="97" stroke="rgba(255,215,0,0.8)" stroke-width="1"/>
+        <line x1="3" y1="50" x2="97" y2="50" stroke="rgba(255,215,0,0.8)" stroke-width="1"/>
+      </svg>
+      <span class="footer-cats">🐾 🐱 🐾 🐱 🐾 🐱 🐾</span>
+      <nav class="footer-links">
+        <a href="support.html">広告とサイトの仕組み</a>
+        <a href="terms.html">利用規約</a>
+        <a href="privacy.html">プライバシーポリシー</a>
+        <a href="contact.html">お問い合わせ</a>
+      </nav>
+      <div class="footer-copy">© BAKENEKO GAMES / 一般社団法人 新宿租界</div>
+    </footer>
+  </main>
+
+  <script src="portal.js"></script>
 </body>
 </html>

@@ -116,7 +116,7 @@
         <p class="hero-tagline" id="tagline">PLAY &nbsp;/&nbsp; WATCH &nbsp;/&nbsp; SUPPORT</p>
         <div class="hero-divider"></div>
         <p class="hero-subline">保護猫活動を応援するオンラインゲームプロジェクト</p>
-        <p class="hero-desc">BAKENEKO GAMESは、一般社団法人 新宿租界による公式オンライン企画です。<br>ゲームを通じて保護猫活動を広く知っていただくことを目的としています。</p>
+        <p class="hero-desc">BAKENEKO GAMESは、一般社団法人 新宿租界による<br>公式オンライン企画です。<br>ゲームを通じて保護猫活動を広く知っていただくことを<br>目的としています。</p>
         <a href="#games" class="portal-cta" id="cta-btn">
           <span>▶</span><span>ゲームを選ぶ</span>
         </a>
@@ -171,14 +171,13 @@
         <div class="support-inner">
           <div class="support-visual">
             <div class="support-visual-inner">
-              <img src="assets/portal/story.jpg" alt="保護猫こはだ（BAKENEKO CAFE）" loading="lazy" onerror="this.style.display='none'">
-              <div class="support-visual-placeholder">🐱</div>
+              <img src="siyougazou/portaruyou1.png" alt="保護猫こはだ（BAKENEKO CAFE）" loading="lazy" onerror="this.onerror=null;this.src='siyougazou/portaruyou1.jpg';" class="support-visual-img">
             </div>
           </div>
           <div class="support-text">
             <h2 class="section-title">ゲームで遊んで、<br>猫さんたちを応援しよう</h2>
             <p>ゲームのリザルト画面に表示される「広告を見てこはだを応援する」ボタンから、任意で広告を視聴できます。</p>
-            <p>広告収益の一部は、保護猫活動の運営や環境維持に活用されます（予定）。活動内容の詳細は<a href="https://bakeneko-cafe.tokyo/" target="_blank" rel="noopener">公式サイト</a>をご覧ください。</p>
+            <p>広告収益の一部は、保護猫活動の運営や環境維持に活用されます。活動内容の詳細は<a href="https://bakeneko-cafe.tokyo/" target="_blank" rel="noopener">公式サイト</a>をご覧ください。</p>
             <a href="game.html" class="portal-cta" style="margin-top:16px;display:inline-flex;">
               <span>▶</span><span>こはだジャンプで遊ぶ</span>
             </a>
@@ -192,12 +191,11 @@
         <div class="games-grid">
           <a href="game.html" class="game-card">
             <div class="game-card-thumb">
-              <img src="assets/portal/game-kohada.jpg" alt="ブラウザゲーム こはだジャンプ" loading="lazy" onerror="this.style.display='none'">
-              <div class="thumb-placeholder">🐟🐱</div>
+              <img src="siyougazou/kohadajyanpu.png" alt="ブラウザゲーム こはだジャンプ" loading="lazy" onerror="this.style.display='none'">
             </div>
             <div class="game-card-body">
-              <h3>こはだジャンプ ～ BAKENEKO ドリーム ～</h3>
-              <p>こはだといっしょにジャンプして遠くまで飛ぼう。ランキングに挑戦！</p>
+              <h3>こはだジャンプ<br>～ BAKENEKO ドリーム ～</h3>
+              <p>こはだがジャンプ！<br>東京BAKENEKO CAFEから千葉県猫又療養所までホッピング！<br>好記録は難易度高めです！<br>100キロでゴールですが、<br>理論値300キロ近く飛べるはずです！<br>人知を超えたスーパージャンプに挑戦ください！<br>世界ランキング対応です！</p>
               <span class="play-btn">▶ PLAY NOW</span>
             </div>
           </a>
@@ -245,11 +243,11 @@
         <line x1="50" y1="3" x2="50" y2="97" stroke="rgba(255,215,0,0.8)" stroke-width="1"/>
         <line x1="3" y1="50" x2="97" y2="50" stroke="rgba(255,215,0,0.8)" stroke-width="1"/>
       </svg>
-      <span class="footer-cats">🐾 🐱 🐾 🐱 🐾 🐱 🐾</span>
-      <div class="footer-mobile-link">
-        <span class="footer-mobile-label">📱 スマホで開く</span>
-        <a href="#" id="portal-mobile-url" class="footer-mobile-url" title="スマホのブラウザにこのURLを入力">—</a>
-        <button type="button" class="footer-mobile-copy" id="portal-mobile-copy" aria-label="URLをコピー">コピー</button>
+      <div class="footer-cats-wrap">
+        <div class="footer-cats-track">
+          <img src="siyougazou/portarusita.png" alt="" class="footer-cats-img" width="680" height="100">
+          <img src="siyougazou/portarusita.png" alt="" class="footer-cats-img" width="680" height="100">
+        </div>
       </div>
       <nav class="footer-links">
         <a href="support.html">広告とサイトの仕組み</a>
@@ -262,17 +260,5 @@
   </main>
 
   <script src="portal.js"></script>
-  <script>
-  (function(){
-    var a=document.getElementById('portal-mobile-url');
-    var btn=document.getElementById('portal-mobile-copy');
-    if(a){ a.href=a.textContent=window.location.href; }
-    if(btn&&a){
-      btn.addEventListener('click',function(){
-        navigator.clipboard&&navigator.clipboard.writeText(a.href).then(function(){ btn.textContent='コピーした!'; setTimeout(function(){ btn.textContent='コピー'; },1500); }).catch(function(){});
-      });
-    }
-  })();
-  </script>
 </body>
 </html>

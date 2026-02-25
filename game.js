@@ -1702,7 +1702,7 @@ const Game = {
             if (data && data.ok && typeof data.rank === 'number') {
                 self._lastSubmitRank = data.rank;
                 var el = document.getElementById('result-api-rank');
-                if (el) el.textContent = 'APIランキング: ' + data.rank + '\u4f4d';
+                if (el) el.textContent = '世界ランキング: ' + data.rank + '\u4f4d';
             }
         }).catch(function (err) {
             console.error('[ranking API] submit error:', err);
@@ -1893,7 +1893,14 @@ const Game = {
                     list.innerHTML = data.entries.map(function (e) {
                         const distKm = (Number(e.score) / 1000).toFixed(3);
                         const name = self.escapeHtml(e.nickname != null ? e.nickname : '');
-                        return '<div class="rank-row"><div class="rank-pos">' + e.rank + '</div><div class="rank-name">' + name + '</div><div class="rank-dist">' + distKm + 'km</div></div>';
+                        var dateStr = '';
+                        if (e.submitted_at) {
+                            try {
+                                var d = new Date(e.submitted_at);
+                                dateStr = (d.getMonth()+1) + '/' + d.getDate();
+                            } catch(_){}
+                        }
+                        return '<div class="rank-row"><div class="rank-pos">' + e.rank + '</div><div class="rank-name">' + name + '</div><div class="rank-date">' + dateStr + '</div><div class="rank-dist">' + distKm + 'km</div></div>';
                     }).join('');
                 } else if (data && Array.isArray(data.entries)) {
                     list.innerHTML = '<p style="color:#a0a0b0;padding:20px">まだ記録がありません</p><p style="color:#888;font-size:12px">ローカル記録:</p>';

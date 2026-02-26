@@ -731,6 +731,7 @@ const Game = {
             this._scoreSubmitted = false;
             this.showScreen('none');
             this.state = 'phase1';
+            this.inputLock = false;
             this.startPhase1();
             try { if (typeof Sound !== 'undefined' && Sound.resume) Sound.resume(); } catch (_) {}
         } catch (e) {
@@ -1625,8 +1626,6 @@ const Game = {
             if (!this.holdingDown) return;
             this.holdingDown = false;
             this.inputLock = true;
-            const self = this;
-            setTimeout(function () { self.inputLock = false; }, self.INPUT_LOCK_MS);
             this.stopGauge('phase1');
         } catch (err) {
             console.warn('handleRelease error:', err);
@@ -1666,23 +1665,25 @@ const Game = {
                 } catch (_) {}
             }
 
-            // 必ず次へ進む（前回のタイマーは必ず解除してから1本だけ予約）
             self.clearPhaseTimeout();
             if (phase === 'phase1') {
                 self._phaseTimeoutId = setTimeout(() => {
                     self._phaseTimeoutId = null;
+                    self.inputLock = false;
                     try { self.state = 'phase2'; self.startPhase2(); } catch (e2) { console.warn(e2); }
-                }, 500);
+                }, 300);
             } else if (phase === 'phase2') {
                 self._phaseTimeoutId = setTimeout(() => {
                     self._phaseTimeoutId = null;
+                    self.inputLock = false;
                     try { self.state = 'phase3'; self.startPhase3(); } catch (e2) { console.warn(e2); }
-                }, 500);
+                }, 300);
             } else if (phase === 'phase3') {
                 self._phaseTimeoutId = setTimeout(() => {
                     self._phaseTimeoutId = null;
+                    self.inputLock = false;
                     try { self.launch(); } catch (e2) { console.warn(e2); }
-                }, 600);
+                }, 350);
             }
         } catch (e) {
             console.warn('stopGauge error:', e);
@@ -1959,6 +1960,7 @@ const Game = {
         this.clearPhaseTimeout();
         try {
             this.boostTapIgnoreUntil = 0;
+            this.inputLock = false;
             this.state = 'title';
             this.cutInTimer = 0;
             this.currentMilestone = null;

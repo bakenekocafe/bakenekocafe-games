@@ -745,21 +745,25 @@ const Game = {
             if (!el) return;
             const base = (this.BAKENEKO_API_BASE || '').trim();
             const gameId = this.KOHADA_GAME_ID || 'kohada';
+            const showLocal = () => {
+                const n = parseInt(localStorage.getItem('kohada_play_count') || '0', 10);
+                el.textContent = n > 0 ? n.toLocaleString() + '人' : '—';
+            };
             if (base) {
-                fetch(base + '/api/public-stats?gameId=' + encodeURIComponent(gameId))
+                this._fetchWithTimeout(base + '/api/public-stats?gameId=' + encodeURIComponent(gameId), {}, 6000)
                     .then(r => r.json())
                     .then(data => {
-                        const n = data.totalPlays != null ? Number(data.totalPlays) : null;
-                        el.textContent = n != null && !Number.isNaN(n) && n > 0 ? n.toLocaleString() + '人' : '—';
+                        const n = data.totalPlays != null ? Number(data.totalPlays) : 0;
+                        if (n > 0) {
+                            el.textContent = n.toLocaleString() + '人';
+                        } else {
+                            showLocal();
+                        }
                     })
-                    .catch(() => {
-                        const n = parseInt(localStorage.getItem('kohada_play_count') || '0', 10);
-                        el.textContent = n > 0 ? n.toLocaleString() + '人' : '—';
-                    });
+                    .catch(showLocal);
                 return;
             }
-            const n = parseInt(localStorage.getItem('kohada_play_count') || '0', 10);
-            el.textContent = n > 0 ? n.toLocaleString() + '人' : '—';
+            showLocal();
         } catch (_) {}
     },
 

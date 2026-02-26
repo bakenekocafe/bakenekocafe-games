@@ -119,9 +119,9 @@ const Game = {
     nextMilestone: 10000,
     physicsAccumulator: 0,
     lastInputTime: 0,
-    INPUT_THROTTLE_MS: 280,
-    inputLock: false,       // 処理直後は新規入力を無視（連打で落ちないように）
-    INPUT_LOCK_MS: 450,
+    INPUT_THROTTLE_MS: 120,
+    inputLock: false,
+    INPUT_LOCK_MS: 250,
     _phaseTimeoutId: null,  // フェーズ遷移の setTimeout（2回目落ち防止で retry/startGame 時に必ず解除）
     lastTouchTime: 0,       // スマホ: タップ直後の合成 click を無視する用
     boostTapIgnoreUntil: 0, // 発射後ブースト1回だけ・連打で落ちないように無視する期間の終了時刻
@@ -728,6 +728,7 @@ const Game = {
             } catch (_) {}
 
             this._supportDoneThisResult = false;
+            this._scoreSubmitted = false;
             this.showScreen('none');
             this.state = 'phase1';
             this.startPhase1();
@@ -742,12 +743,14 @@ const Game = {
         try {
             const el = document.getElementById('title-play-count-value');
             if (!el) return;
-            if (typeof window !== 'undefined' && window.KOHADA_PLAY_COUNT_API) {
-                fetch(window.KOHADA_PLAY_COUNT_API)
+            const base = (this.BAKENEKO_API_BASE || '').trim();
+            const gameId = this.KOHADA_GAME_ID || 'kohada';
+            if (base) {
+                fetch(base + '/api/public-stats?gameId=' + encodeURIComponent(gameId))
                     .then(r => r.json())
                     .then(data => {
-                        const n = data.count != null ? Number(data.count) : (data.total != null ? Number(data.total) : null);
-                        el.textContent = n != null && !Number.isNaN(n) ? n.toLocaleString() + '人' : '—';
+                        const n = data.totalPlays != null ? Number(data.totalPlays) : null;
+                        el.textContent = n != null && !Number.isNaN(n) && n > 0 ? n.toLocaleString() + '人' : '—';
                     })
                     .catch(() => {
                         const n = parseInt(localStorage.getItem('kohada_play_count') || '0', 10);
@@ -1451,7 +1454,7 @@ const Game = {
             if (!Number.isFinite(vx) || !Number.isFinite(vy)) return;
             this.boostUsed = true;
             // 発射後の連打で落ちないよう、ブースト後は一定時間タップをすべて無視
-            this.boostTapIgnoreUntil = (typeof Date.now === 'function' ? Date.now() : 0) + 700;
+            this.boostTapIgnoreUntil = (typeof Date.now === 'function' ? Date.now() : 0) + 350;
             document.getElementById('boost-ui')?.classList?.add('hidden');
             try { if (typeof Sound !== 'undefined' && Sound.playBoost) Sound.playBoost(); } catch (_) {}
 
@@ -1584,7 +1587,7 @@ const Game = {
                 isTouch = (e.type === 'touchstart') || (e.touches && e.touches.length > 0);
             } catch (_) {}
             if (isTouch) this.lastTouchTime = now;
-            if (!isTouch && (e.type === 'click' || e.type === 'mousedown') && (now - this.lastTouchTime < 400)) return;
+            if (!isTouch && (e.type === 'click' || e.type === 'mousedown') && (now - this.lastTouchTime < 300)) return;
 
             if (this.inputLock) return;
             if (this.state === 'flying' && this.boostUsed) return;
@@ -1685,28 +1688,48 @@ const Game = {
     },
 
     // ─── Score & Ranking ───
+    _fetchWithTimeout(url, opts, timeoutMs) {
+        timeoutMs = timeoutMs || 8000;
+        var controller = typeof AbortController !== 'undefined' ? new AbortController() : null;
+        var signal = controller ? controller.signal : undefined;
+        var tid = controller ? setTimeout(function () { controller.abort(); }, timeoutMs) : null;
+        var fetchOpts = signal ? Object.assign({}, opts, { signal: signal }) : opts;
+        return fetch(url, fetchOpts).finally(function () { if (tid) clearTimeout(tid); });
+    },
+
+    _scoreSubmitted: false,
+
     submitScoreToApi() {
+        if (this._scoreSubmitted) return;
         const base = (this.BAKENEKO_API_BASE || '').trim();
         if (!base) return;
         const score = Math.max(0, Math.min(999999999, Math.round(this.distance)));
         const nickname = (this.nickname && this.nickname.trim()) ? this.nickname.trim() : 'anon';
         const self = this;
-        fetch(base + '/api/ranking/submit', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ gameId: this.KOHADA_GAME_ID || 'kohada', nickname: nickname, score: score })
-        }).then(function (res) {
-            if (!res.ok) throw new Error('submit ' + res.status);
-            return res.json();
-        }).then(function (data) {
-            if (data && data.ok && typeof data.rank === 'number') {
-                self._lastSubmitRank = data.rank;
-                var el = document.getElementById('result-api-rank');
-                if (el) el.textContent = '世界ランキング: ' + data.rank + '\u4f4d';
-            }
-        }).catch(function (err) {
-            console.error('[ranking API] submit error:', err);
-        });
+        var attempt = 0;
+        function trySubmit() {
+            if (self._scoreSubmitted) return;
+            attempt++;
+            self._fetchWithTimeout(base + '/api/ranking/submit', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ gameId: self.KOHADA_GAME_ID || 'kohada', nickname: nickname, score: score })
+            }, 8000).then(function (res) {
+                if (!res.ok) throw new Error('submit ' + res.status);
+                return res.json();
+            }).then(function (data) {
+                self._scoreSubmitted = true;
+                if (data && data.ok && typeof data.rank === 'number') {
+                    self._lastSubmitRank = data.rank;
+                    var el = document.getElementById('result-api-rank');
+                    if (el) el.textContent = '世界ランキング: ' + data.rank + '\u4f4d';
+                }
+            }).catch(function (err) {
+                console.warn('[ranking] submit attempt ' + attempt + ':', err.message || err);
+                if (attempt < 2) setTimeout(trySubmit, 1500);
+            });
+        }
+        trySubmit();
     },
 
     saveScore() {
@@ -1881,10 +1904,10 @@ const Game = {
                     };
                 }
             }
-            fetch(base + '/api/ranking/leaderboard?gameId=' + encodeURIComponent(gameId) + '&limit=50', {
+            self._fetchWithTimeout(base + '/api/ranking/leaderboard?gameId=' + encodeURIComponent(gameId) + '&limit=50', {
                 method: 'GET',
                 headers: { 'Accept': 'application/json' }
-            }).then(function (res) {
+            }, 8000).then(function (res) {
                 if (!res.ok) throw new Error('leaderboard ' + res.status);
                 return res.json();
             }).then(function (data) {

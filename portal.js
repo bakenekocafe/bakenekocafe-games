@@ -322,6 +322,11 @@
         body: JSON.stringify({ game_id: 'portal', session_id: sid, event_name: 'page_view', props: { page: page } })
       }).catch(function(){});
     } catch (_) {}
+    try {
+      if (typeof window.gtag === 'function') {
+        window.gtag('event', 'portal_page_view', { page_name: page });
+      }
+    } catch (_) {}
   })();
 
   // ═══ 本日の応援回数（GET /api/public-stats）60秒TTLキャッシュ・safeGet/safeSet ─══

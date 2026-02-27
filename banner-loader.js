@@ -19,21 +19,25 @@
     try {
       var apiBase = (typeof window.BAKENEKO_API_BASE === "string") ? window.BAKENEKO_API_BASE.replace(/\/+$/, "") : "";
       var gameId = (typeof window.BAKENEKO_GAME_ID === "string") ? window.BAKENEKO_GAME_ID : "kohada";
-      if (!apiBase) return;
-      var body = JSON.stringify({
-        game_id: gameId,
-        event_name: "banner_click",
-        props: { banner: bannerName, url: url }
-      });
-      if (navigator.sendBeacon) {
-        navigator.sendBeacon(apiBase + "/api/analytics/event", new Blob([body], { type: "application/json" }));
-      } else {
-        fetch(apiBase + "/api/analytics/event", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: body,
-          keepalive: true
-        }).catch(function () {});
+      if (apiBase) {
+        var body = JSON.stringify({
+          game_id: gameId,
+          event_name: "banner_click",
+          props: { banner: bannerName, url: url }
+        });
+        if (navigator.sendBeacon) {
+          navigator.sendBeacon(apiBase + "/api/analytics/event", new Blob([body], { type: "application/json" }));
+        } else {
+          fetch(apiBase + "/api/analytics/event", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: body,
+            keepalive: true
+          }).catch(function () {});
+        }
+      }
+      if (typeof window.gtag === "function") {
+        window.gtag("event", "banner_click", { banner_name: bannerName, link_url: url });
       }
     } catch (_) {}
   }

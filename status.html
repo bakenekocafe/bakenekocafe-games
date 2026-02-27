@@ -99,6 +99,35 @@
           </div>
         </div>
 
+        <h2>広告・バナー実績</h2>
+        <div class="status-grid" id="ad-grid">
+          <div class="status-card">
+            <span class="s-label">バナークリック数</span>
+            <span class="s-value" id="st-banner-clicks">—</span>
+            <span class="s-sub">累計（全バナー合算）</span>
+          </div>
+          <div class="status-card">
+            <span class="s-label">広告視聴完了</span>
+            <span class="s-value" id="st-rewards">—</span>
+            <span class="s-sub">リワード広告</span>
+          </div>
+        </div>
+
+        <h3 style="margin-top:24px;font-size:.9rem;opacity:.6">計測データソース</h3>
+        <table class="about-structure-table" style="font-size:.85rem">
+          <thead><tr><th>指標</th><th>自前API（D1）</th><th>GA4</th></tr></thead>
+          <tbody>
+            <tr><td>ページビュー</td><td>✅ page_view</td><td>✅ 自動</td></tr>
+            <tr><td>ゲーム開始数</td><td>✅ game_start</td><td>✅ game_start</td></tr>
+            <tr><td>バナークリック</td><td>✅ banner_click</td><td>✅ banner_click</td></tr>
+            <tr><td>広告応援</td><td>✅ support系</td><td>✅ カスタムイベント</td></tr>
+            <tr><td>ユーザー属性・流入元</td><td>—</td><td>✅ GA4レポート</td></tr>
+          </tbody>
+        </table>
+        <p style="font-size:.82rem;opacity:.45;margin-top:8px">
+          GA4 の詳細レポートは <a href="https://analytics.google.com/" target="_blank" rel="noopener" style="color:var(--gold)">Google Analytics 管理画面</a> で確認できます。
+        </p>
+
         <h2>世界ランキング TOP 10</h2>
         <p style="font-size:.85rem;opacity:.55;margin-bottom:8px">こはだジャンプ — 飛距離ランキング</p>
         <div id="ranking-top"></div>
@@ -190,6 +219,9 @@
         var todayPv = (g.todayPv||0) + (p.todayPv||0);
         setText('st-total-pv', totalPv > 0 ? totalPv.toLocaleString() : '計測開始');
         setText('st-today-pv', todayPv > 0 ? todayPv.toLocaleString() : '計測開始');
+        var bannerClicks = (g.totalBannerClicks||0) + (p.totalBannerClicks||0);
+        setText('st-banner-clicks', bannerClicks > 0 ? bannerClicks.toLocaleString() : '計測開始');
+        setText('st-rewards', (g.totalRewards||0) > 0 ? (g.totalRewards||0).toLocaleString() : '計測開始');
       }).catch(function(){
         setText('st-api','異常'); setClass('st-api','s-err');
       })

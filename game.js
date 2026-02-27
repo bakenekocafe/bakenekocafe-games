@@ -1032,6 +1032,11 @@ const Game = {
                 body: JSON.stringify({ game_id: gameId, session_id: sid, event_name: eventName, props: props || {} })
             }).catch(() => {});
         } catch (_) {}
+        try {
+            if (typeof window.gtag === 'function') {
+                window.gtag('event', eventName, props || {});
+            }
+        } catch (_) {}
     },
 
     flushPendingSupportQueue() {

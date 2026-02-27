@@ -767,4 +767,19 @@ a.portal-logo:hover{color:var(--gold)}
 }
 .contact-link{font-size:1.05rem;color:var(--cyan)!important;word-break:break-all}
 .contact-note{font-size:.85rem;color:rgba(232,232,240,.5);margin-top:8px;margin-bottom:0!important}
+.about-structure-table{
+  width:100%;border-collapse:collapse;margin:14px 0 20px;
+  font-size:.95rem;
+}
+.about-structure-table th{
+  text-align:left;padding:10px 14px;
+  background:rgba(255,215,0,.1);color:var(--gold);
+  border-bottom:1px solid rgba(255,215,0,.25);
+  font-family:'Share Tech Mono',monospace;font-size:.85rem;letter-spacing:.1em;
+}
+.about-structure-table td{
+  padding:10px 14px;
+  border-bottom:1px solid rgba(255,255,255,.06);
+  color:rgba(232,232,240,.85);
+}
 @media(max-width:768px){.portal-section--page{padding:48px 20px 64px}}

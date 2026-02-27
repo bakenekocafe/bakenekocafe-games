@@ -1,7 +1,7 @@
 // GA4 — 測定ID は GA_MEASUREMENT_ID を置換してください
 // Google Analytics 管理画面 → データストリーム → 測定ID（G-XXXXXXXXXX 形式）
 (function(){
-  var GA_ID = 'G-XXXXXXXXXX'; // ← ここに実際の測定IDを入れる
+  var GA_ID = 'G-G56T44122D';
   if (GA_ID === 'G-XXXXXXXXXX') return; // 未設定時はスキップ
 
   var s = document.createElement('script');

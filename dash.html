@@ -1,0 +1,153 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="robots" content="noindex, nofollow">
+  <title>BAKENEKO GAMES — Internal Dashboard</title>
+  <style>
+    *{margin:0;padding:0;box-sizing:border-box}
+    body{background:#0a0c10;color:#e8e8f0;font-family:'Segoe UI',system-ui,sans-serif;padding:20px;max-width:900px;margin:0 auto}
+    h1{font-size:1.1rem;color:#ffd700;margin-bottom:6px;letter-spacing:.05em}
+    .ts{font-size:.72rem;color:rgba(232,232,240,.35);margin-bottom:24px;font-family:monospace}
+    h2{font-size:.9rem;color:#ffd700;margin:24px 0 10px;border-bottom:1px solid rgba(255,215,0,.15);padding-bottom:6px}
+    .grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:10px;margin-bottom:8px}
+    .card{background:rgba(255,255,255,.03);border:1px solid rgba(255,215,0,.12);border-radius:8px;padding:14px 10px;text-align:center}
+    .card .l{font-size:.7rem;color:rgba(232,232,240,.45);letter-spacing:.06em;display:block;margin-bottom:4px}
+    .card .v{font-family:monospace;font-size:1.3rem;color:#ffd700;letter-spacing:.03em}
+    .card .v.ok{color:#4ade80}
+    .card .v.err{color:#f87171}
+    .card .sub{font-size:.65rem;color:rgba(232,232,240,.3);margin-top:3px;display:block}
+    .rank-row{display:flex;gap:8px;padding:5px 0;border-bottom:1px solid rgba(255,255,255,.04);font-size:.82rem}
+    .rank-row .pos{font-family:monospace;color:#ffd700;min-width:24px;text-align:right}
+    .rank-row .nm{flex:1;color:rgba(232,232,240,.8)}
+    .rank-row .sc{font-family:monospace;color:rgba(232,232,240,.6)}
+    table.t{width:100%;border-collapse:collapse;font-size:.8rem;margin:8px 0}
+    table.t th{text-align:left;padding:6px 8px;background:rgba(255,215,0,.06);color:#ffd700;font-size:.72rem;letter-spacing:.06em}
+    table.t td{padding:6px 8px;border-bottom:1px solid rgba(255,255,255,.04);color:rgba(232,232,240,.75)}
+    #auth-wall{text-align:center;margin-top:30vh}
+    #auth-wall p{color:rgba(232,232,240,.4);font-size:.85rem}
+    a{color:#ffd700}
+  </style>
+</head>
+<body>
+  <div id="auth-wall"><p>🔒</p></div>
+  <div id="dashboard" style="display:none">
+    <h1>BAKENEKO GAMES — Internal Dashboard</h1>
+    <div class="ts" id="dash-ts">—</div>
+
+    <h2>サービス稼働</h2>
+    <div class="grid">
+      <div class="card"><span class="l">ポータル</span><span class="v" id="d-portal">—</span></div>
+      <div class="card"><span class="l">ゲーム</span><span class="v" id="d-game">—</span></div>
+      <div class="card"><span class="l">API</span><span class="v" id="d-api">—</span></div>
+    </div>
+
+    <h2>トラフィック</h2>
+    <div class="grid">
+      <div class="card"><span class="l">累計PV（合算）</span><span class="v" id="d-total-pv">—</span></div>
+      <div class="card"><span class="l">本日PV（合算）</span><span class="v" id="d-today-pv">—</span></div>
+      <div class="card"><span class="l">ゲームPV</span><span class="v" id="d-game-pv">—</span></div>
+      <div class="card"><span class="l">ポータルPV</span><span class="v" id="d-portal-pv">—</span></div>
+    </div>
+
+    <h2>ゲーム指標</h2>
+    <div class="grid">
+      <div class="card"><span class="l">累計プレイ数</span><span class="v" id="d-plays">—</span></div>
+      <div class="card"><span class="l">累計応援</span><span class="v" id="d-support">—</span></div>
+      <div class="card"><span class="l">本日の応援</span><span class="v" id="d-today-support">—</span></div>
+    </div>
+
+    <h2>広告・バナー</h2>
+    <div class="grid">
+      <div class="card"><span class="l">バナークリック</span><span class="v" id="d-banner">—</span></div>
+      <div class="card"><span class="l">広告視聴完了</span><span class="v" id="d-rewards">—</span></div>
+    </div>
+
+    <h2>世界ランキング TOP 10</h2>
+    <div id="d-ranking"></div>
+
+    <h2>インフラ</h2>
+    <table class="t">
+      <tbody>
+        <tr><td style="width:35%">ホスティング</td><td>Cloudflare Pages</td></tr>
+        <tr><td>API</td><td>Cloudflare Workers</td></tr>
+        <tr><td>DB</td><td>Cloudflare D1</td></tr>
+        <tr><td>ドメイン</td><td>bakenekocafe.studio（Cloudflare DNS）</td></tr>
+        <tr><td>CDN / SSL</td><td>Cloudflare（自動証明書）</td></tr>
+      </tbody>
+    </table>
+
+    <h2>計測ソース</h2>
+    <table class="t">
+      <thead><tr><th>指標</th><th>自前 D1</th><th>GA4</th></tr></thead>
+      <tbody>
+        <tr><td>PV</td><td>page_view</td><td>自動</td></tr>
+        <tr><td>ゲーム開始</td><td>game_start</td><td>game_start</td></tr>
+        <tr><td>バナークリック</td><td>banner_click</td><td>banner_click</td></tr>
+        <tr><td>広告応援</td><td>support系</td><td>カスタムイベント</td></tr>
+        <tr><td>ユーザー属性</td><td>—</td><td>GA4レポート</td></tr>
+      </tbody>
+    </table>
+    <p style="font-size:.75rem;opacity:.35;margin-top:8px">
+      GA4 詳細: <a href="https://analytics.google.com/" target="_blank">analytics.google.com</a>
+    </p>
+  </div>
+
+  <script>
+  (function(){
+    var DASH_KEY = 'bakeneko-dash-2026';
+    var params = new URLSearchParams(location.search);
+    if (params.get('key') !== DASH_KEY) return;
+
+    document.getElementById('auth-wall').style.display = 'none';
+    document.getElementById('dashboard').style.display = 'block';
+
+    var API = 'https://api.bakenekocafe.studio';
+    function setText(id,v){ var el=document.getElementById(id); if(el) el.textContent=v; }
+    function setCls(id,c){ var el=document.getElementById(id); if(el) el.className='v '+c; }
+
+    function check(url){ return fetch(url,{method:'HEAD',mode:'cors'}).then(function(r){return r.ok}).catch(function(){return false}); }
+
+    Promise.all([
+      check('https://bakenekocafe.studio/').then(function(ok){ setText('d-portal',ok?'OK':'NG'); setCls('d-portal',ok?'ok':'err'); }),
+      check('https://bakenekocafe.studio/game.html').then(function(ok){ setText('d-game',ok?'OK':'NG'); setCls('d-game',ok?'ok':'err'); }),
+      Promise.all([
+        fetch(API+'/api/public-stats?gameId=kohada').then(function(r){return r.json()}).catch(function(){return {}}),
+        fetch(API+'/api/public-stats?gameId=portal').then(function(r){return r.json()}).catch(function(){return {}})
+      ]).then(function(arr){
+        var g=arr[0], p=arr[1];
+        setText('d-api','OK'); setCls('d-api','ok');
+        setText('d-plays', ((g.totalPlays||0)).toLocaleString());
+        setText('d-support', ((g.totalSupportCount||0)).toLocaleString());
+        setText('d-today-support', ((g.todaySupportCount||0)).toLocaleString());
+        var totalPv=(g.totalPv||0)+(p.totalPv||0);
+        var todayPv=(g.todayPv||0)+(p.todayPv||0);
+        setText('d-total-pv', totalPv.toLocaleString());
+        setText('d-today-pv', todayPv.toLocaleString());
+        setText('d-game-pv', ((g.totalPv||0)).toLocaleString());
+        setText('d-portal-pv', ((p.totalPv||0)).toLocaleString());
+        setText('d-banner', ((g.totalBannerClicks||0)+(p.totalBannerClicks||0)).toLocaleString());
+        setText('d-rewards', ((g.totalRewards||0)).toLocaleString());
+      }).catch(function(){ setText('d-api','NG'); setCls('d-api','err'); })
+    ]).then(function(){
+      var n=new Date();
+      setText('dash-ts', n.getFullYear()+'-'+String(n.getMonth()+1).padStart(2,'0')+'-'+String(n.getDate()).padStart(2,'0')+' '+String(n.getHours()).padStart(2,'0')+':'+String(n.getMinutes()).padStart(2,'0')+':'+String(n.getSeconds()).padStart(2,'0'));
+    });
+
+    fetch(API+'/api/ranking/leaderboard?gameId=kohada&limit=10').then(function(r){return r.json()}).then(function(d){
+      var w=document.getElementById('d-ranking'); if(!w) return;
+      var h='';
+      (d.entries||[]).forEach(function(e){
+        var dt='';
+        if(e.submitted_at){ var dd=new Date(e.submitted_at); dt=' <span style="font-size:.7rem;opacity:.35">'+(dd.getMonth()+1)+'/'+dd.getDate()+'</span>'; }
+        h+='<div class="rank-row"><span class="pos">#'+e.rank+'</span><span class="nm">'+esc(e.nickname||'名無し')+'</span><span class="sc">'+Number(e.score).toLocaleString()+'m'+dt+'</span></div>';
+      });
+      w.innerHTML=h||'<p style="opacity:.3">データなし</p>';
+    }).catch(function(){});
+
+    function esc(s){ var d=document.createElement('div'); d.textContent=s; return d.innerHTML; }
+  })();
+  </script>
+</body>
+</html>

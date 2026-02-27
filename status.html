@@ -5,6 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>サーバー状況・活動報告｜BAKENEKO GAMES</title>
   <meta name="description" content="BAKENEKO GAMES のサーバー稼働状況・累計プレイ数・ランキング・活動実績をリアルタイムで公開しています。">
+  <script src="ga.js"></script>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Noto+Serif+JP:wght@400;700;900&family=Share+Tech+Mono&family=Zen+Old+Mincho:wght@400;700;900&display=swap" rel="stylesheet">
@@ -80,13 +81,17 @@
             <span class="s-value" id="st-plays">—</span>
           </div>
           <div class="status-card">
+            <span class="s-label">累計PV</span>
+            <span class="s-value" id="st-total-pv">—</span>
+            <span class="s-sub">ゲーム＋ポータル合算</span>
+          </div>
+          <div class="status-card">
             <span class="s-label">累計応援回数</span>
             <span class="s-value" id="st-support">—</span>
           </div>
           <div class="status-card">
-            <span class="s-label">本日のプレイ</span>
-            <span class="s-value" id="st-today-plays">—</span>
-            <span class="s-sub" id="st-today-plays-sub"></span>
+            <span class="s-label">本日のPV</span>
+            <span class="s-value" id="st-today-pv">—</span>
           </div>
           <div class="status-card">
             <span class="s-label">本日の応援</span>
@@ -145,6 +150,9 @@
       <span class="footer-cats">🐾 🐱 🐾 🐱 🐾 🐱 🐾</span>
       <nav class="footer-links">
         <a href="about.html">About</a>
+        <a href="howto.html">遊び方ガイド</a>
+        <a href="nameko.html">次回作</a>
+        <a href="status.html">サーバー状況</a>
         <a href="support.html">広告とサイトの仕組み</a>
         <a href="terms.html">利用規約</a>
         <a href="privacy.html">プライバシーポリシー</a>
@@ -169,13 +177,19 @@
     Promise.all([
       checkEndpoint('https://bakenekocafe.studio/').then(function(ok){ setText('st-portal', ok?'正常':'異常'); setClass('st-portal', ok?'s-ok':'s-err'); }),
       checkEndpoint('https://bakenekocafe.studio/game.html').then(function(ok){ setText('st-game', ok?'正常':'異常'); setClass('st-game', ok?'s-ok':'s-err'); }),
-      fetch(API+'/api/public-stats?gameId=kohada').then(function(r){ return r.json(); }).then(function(d){
+      Promise.all([
+        fetch(API+'/api/public-stats?gameId=kohada').then(function(r){return r.json()}).catch(function(){return {}}),
+        fetch(API+'/api/public-stats?gameId=portal').then(function(r){return r.json()}).catch(function(){return {}})
+      ]).then(function(arr){
+        var g = arr[0]; var p = arr[1];
         setText('st-api','正常'); setClass('st-api','s-ok');
-        setText('st-plays', (d.totalPlays||0).toLocaleString());
-        setText('st-support', (d.totalSupportCount||0).toLocaleString());
-        setText('st-today-support', (d.todaySupportCount||0).toLocaleString());
-        var tp = d.totalPv || 0;
-        setText('st-today-plays', tp.toLocaleString());
+        setText('st-plays', ((g.totalPlays||0)).toLocaleString());
+        setText('st-support', ((g.totalSupportCount||0)).toLocaleString());
+        setText('st-today-support', ((g.todaySupportCount||0)).toLocaleString());
+        var totalPv = (g.totalPv||0) + (p.totalPv||0);
+        var todayPv = (g.todayPv||0) + (p.todayPv||0);
+        setText('st-total-pv', totalPv > 0 ? totalPv.toLocaleString() : '計測開始');
+        setText('st-today-pv', todayPv > 0 ? todayPv.toLocaleString() : '計測開始');
       }).catch(function(){
         setText('st-api','異常'); setClass('st-api','s-err');
       })

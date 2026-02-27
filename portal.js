@@ -305,6 +305,25 @@
     document.body.classList.add('portal-cursor');
   }
 
+  // ═══ ページビュー計測（全ポータルページ共通） ═══
+  (function () {
+    var API_BASE = 'https://api.bakenekocafe.studio';
+    var sid;
+    try { sid = sessionStorage.getItem('bakeneko_session_id'); } catch (_) {}
+    if (!sid) {
+      sid = Date.now().toString(36) + Math.random().toString(36).slice(2, 8);
+      try { sessionStorage.setItem('bakeneko_session_id', sid); } catch (_) {}
+    }
+    var page = location.pathname.replace(/^\//, '').replace(/\.html$/, '') || 'index';
+    try {
+      fetch(API_BASE + '/api/analytics/event', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ game_id: 'portal', session_id: sid, event_name: 'page_view', props: { page: page } })
+      }).catch(function(){});
+    } catch (_) {}
+  })();
+
   // ═══ 本日の応援回数（GET /api/public-stats）60秒TTLキャッシュ・safeGet/safeSet ─══
   (function () {
     var el = document.getElementById('portal-today-support-value');

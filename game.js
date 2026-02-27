@@ -287,6 +287,7 @@ const Game = {
         });
 
         try { this.updateTitlePlayCount(); } catch (_) {}
+        try { this.sendAnalyticsEvent('page_view', { page: 'game' }); } catch (_) {}
 
         try {
             this.render();
@@ -729,6 +730,7 @@ const Game = {
 
             this._supportDoneThisResult = false;
             this._scoreSubmitted = false;
+            this.sendAnalyticsEvent('game_start');
             this.showScreen('none');
             this.state = 'phase1';
             this.inputLock = false;
@@ -1006,6 +1008,28 @@ const Game = {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' },
                 body: JSON.stringify({ game_id: gameId, event_name: eventName, props: props || {} })
+            }).catch(() => {});
+        } catch (_) {}
+    },
+
+    sendAnalyticsEvent(eventName, props) {
+        const base = (this.BAKENEKO_API_BASE || '').trim();
+        const gameId = this.KOHADA_GAME_ID || 'kohada';
+        if (!base || !gameId) return;
+        try {
+            var sid = this._sessionId;
+            if (!sid) {
+                try { sid = sessionStorage.getItem('kohada_session_id'); } catch (_) {}
+                if (!sid) {
+                    sid = Date.now().toString(36) + Math.random().toString(36).slice(2, 8);
+                    try { sessionStorage.setItem('kohada_session_id', sid); } catch (_) {}
+                }
+                this._sessionId = sid;
+            }
+            fetch(base + '/api/analytics/event', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' },
+                body: JSON.stringify({ game_id: gameId, session_id: sid, event_name: eventName, props: props || {} })
             }).catch(() => {});
         } catch (_) {}
     },

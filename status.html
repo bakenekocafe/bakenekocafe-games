@@ -1,0 +1,214 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>サーバー状況・活動報告｜BAKENEKO GAMES</title>
+  <meta name="description" content="BAKENEKO GAMES のサーバー稼働状況・累計プレイ数・ランキング・活動実績をリアルタイムで公開しています。">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Noto+Serif+JP:wght@400;700;900&family=Share+Tech+Mono&family=Zen+Old+Mincho:wght@400;700;900&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="portal.css">
+  <style>
+    .status-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:16px;margin:20px 0 28px}
+    .status-card{background:rgba(255,255,255,.04);border:1px solid rgba(255,215,0,.15);border-radius:12px;padding:18px 14px;text-align:center}
+    .status-card .s-label{font-size:.78rem;color:rgba(232,232,240,.5);letter-spacing:.08em;display:block;margin-bottom:6px}
+    .status-card .s-value{font-family:'Share Tech Mono',monospace;font-size:1.5rem;color:var(--gold);letter-spacing:.05em}
+    .status-card .s-value.s-ok{color:#4ade80}
+    .status-card .s-value.s-warn{color:#fbbf24}
+    .status-card .s-value.s-err{color:#f87171}
+    .status-card .s-sub{font-size:.72rem;color:rgba(232,232,240,.35);margin-top:4px;display:block}
+    .status-ts{text-align:center;font-size:.75rem;color:rgba(232,232,240,.35);margin:10px 0 24px;font-family:'Share Tech Mono',monospace}
+    .rank-row{display:flex;align-items:center;gap:10px;padding:8px 0;border-bottom:1px solid rgba(255,255,255,.06)}
+    .rank-row .r-pos{font-family:'Share Tech Mono',monospace;font-size:.85rem;color:var(--gold);min-width:28px;text-align:right}
+    .rank-row .r-name{flex:1;color:rgba(232,232,240,.85);font-size:.9rem}
+    .rank-row .r-score{font-family:'Share Tech Mono',monospace;font-size:.9rem;color:rgba(232,232,240,.7)}
+    .timeline-list{list-style:none;padding:0;margin:16px 0}
+    .timeline-list li{position:relative;padding:0 0 20px 28px}
+    .timeline-list li::before{content:'';position:absolute;left:8px;top:6px;width:8px;height:8px;border-radius:50%;background:var(--gold);box-shadow:0 0 6px rgba(255,215,0,.4)}
+    .timeline-list li::after{content:'';position:absolute;left:11px;top:18px;width:2px;bottom:0;background:rgba(255,215,0,.12)}
+    .timeline-list li:last-child::after{display:none}
+    .timeline-list .t-date{font-family:'Share Tech Mono',monospace;font-size:.78rem;color:var(--gold);display:block;margin-bottom:2px}
+    .timeline-list .t-text{font-size:.9rem;color:rgba(232,232,240,.8)}
+  </style>
+</head>
+<body>
+
+  <div id="progress-bar"></div>
+  <div class="film-grain"></div>
+  <div class="scanlines"></div>
+  <div class="vignette"></div>
+
+  <header class="portal-header" id="header">
+    <a href="index.html" class="portal-logo">BAKENEKO GAMES</a>
+    <nav class="portal-nav">
+      <a href="index.html#games">ゲーム</a>
+      <a href="index.html#support">猫支援</a>
+      <a href="support.html">仕組み</a>
+      <a href="contact.html">お問い合わせ</a>
+    </nav>
+  </header>
+
+  <main class="portal-page">
+    <section class="portal-section portal-section--page">
+      <h1 class="page-title">サーバー状況・活動報告</h1>
+
+      <div class="page-body">
+        <p class="page-lead">BAKENEKO GAMES のサービス稼働状況と、これまでの活動実績をリアルタイムで公開しています。</p>
+
+        <h2>サービス稼働状況</h2>
+        <div class="status-grid" id="status-grid">
+          <div class="status-card">
+            <span class="s-label">ポータル</span>
+            <span class="s-value" id="st-portal">—</span>
+          </div>
+          <div class="status-card">
+            <span class="s-label">ゲームサーバー</span>
+            <span class="s-value" id="st-game">—</span>
+          </div>
+          <div class="status-card">
+            <span class="s-label">ランキング API</span>
+            <span class="s-value" id="st-api">—</span>
+          </div>
+        </div>
+        <div class="status-ts" id="status-ts">最終確認: —</div>
+
+        <h2>累計アクセス・プレイ状況</h2>
+        <div class="status-grid" id="stats-grid">
+          <div class="status-card">
+            <span class="s-label">累計プレイ数</span>
+            <span class="s-value" id="st-plays">—</span>
+          </div>
+          <div class="status-card">
+            <span class="s-label">累計応援回数</span>
+            <span class="s-value" id="st-support">—</span>
+          </div>
+          <div class="status-card">
+            <span class="s-label">本日のプレイ</span>
+            <span class="s-value" id="st-today-plays">—</span>
+            <span class="s-sub" id="st-today-plays-sub"></span>
+          </div>
+          <div class="status-card">
+            <span class="s-label">本日の応援</span>
+            <span class="s-value" id="st-today-support">—</span>
+          </div>
+        </div>
+
+        <h2>世界ランキング TOP 10</h2>
+        <p style="font-size:.85rem;opacity:.55;margin-bottom:8px">こはだジャンプ — 飛距離ランキング</p>
+        <div id="ranking-top"></div>
+
+        <h2>活動タイムライン</h2>
+        <ul class="timeline-list">
+          <li>
+            <span class="t-date">2026.02</span>
+            <span class="t-text">「こはだジャンプ ～BAKENEKOドリーム～」正式公開。世界ランキング・広告応援システム稼働開始。</span>
+          </li>
+          <li>
+            <span class="t-date">2026.02</span>
+            <span class="t-text">ポータルサイト bakenekocafe.studio 開設。About / プライバシーポリシー / 利用規約 / お問い合わせ / サポート各ページ公開。</span>
+          </li>
+          <li>
+            <span class="t-date">2026.02</span>
+            <span class="t-text">第2弾「なめこバランス」開発開始。物理演算ベースのバランスゲーム。</span>
+          </li>
+          <li>
+            <span class="t-date">2026.02</span>
+            <span class="t-text">遊び方ガイド・次回作紹介・サーバー状況ページ追加。AdSense 審査準備完了。</span>
+          </li>
+        </ul>
+
+        <h2>インフラ構成</h2>
+        <table class="about-structure-table">
+          <tbody>
+            <tr><td style="width:35%">ホスティング</td><td>Cloudflare Pages（静的サイト配信）</td></tr>
+            <tr><td>API サーバー</td><td>Cloudflare Workers（サーバーレス）</td></tr>
+            <tr><td>データベース</td><td>Cloudflare D1（ランキング・統計）</td></tr>
+            <tr><td>ドメイン</td><td>bakenekocafe.studio（Cloudflare DNS）</td></tr>
+            <tr><td>CDN</td><td>Cloudflare（全世界キャッシュ）</td></tr>
+            <tr><td>SSL</td><td>全ページ HTTPS（Cloudflare 自動証明書）</td></tr>
+          </tbody>
+        </table>
+        <p>すべてのサービスは Cloudflare の Edge ネットワーク上で稼働しており、世界中から低レイテンシでアクセスできます。</p>
+      </div>
+    </section>
+
+    <footer class="portal-footer">
+      <p class="footer-ads-note">広告を表示しています。視聴は任意で、利用者への金銭・ポイント等の付与はありません。詳細は<a href="support.html">広告とサイトの仕組み</a>・<a href="terms.html">利用規約</a>・<a href="privacy.html">プライバシー</a>をご覧ください。</p>
+      <svg class="footer-mon" viewBox="0 0 100 100" fill="none">
+        <circle cx="50" cy="50" r="47" stroke="rgba(255,215,0,0.8)" stroke-width="1.5"/>
+        <circle cx="50" cy="50" r="36" stroke="rgba(255,215,0,0.8)" stroke-width="1"/>
+        <circle cx="50" cy="50" r="20" stroke="rgba(255,215,0,0.8)" stroke-width="1.5"/>
+        <line x1="50" y1="3" x2="50" y2="97" stroke="rgba(255,215,0,0.8)" stroke-width="1"/>
+        <line x1="3" y1="50" x2="97" y2="50" stroke="rgba(255,215,0,0.8)" stroke-width="1"/>
+      </svg>
+      <span class="footer-cats">🐾 🐱 🐾 🐱 🐾 🐱 🐾</span>
+      <nav class="footer-links">
+        <a href="about.html">About</a>
+        <a href="support.html">広告とサイトの仕組み</a>
+        <a href="terms.html">利用規約</a>
+        <a href="privacy.html">プライバシーポリシー</a>
+        <a href="contact.html">お問い合わせ</a>
+      </nav>
+      <div class="footer-copy">© BAKENEKO GAMES / 一般社団法人 新宿租界</div>
+    </footer>
+  </main>
+
+  <script src="portal.js"></script>
+  <script>
+  (function(){
+    var API = 'https://api.bakenekocafe.studio';
+
+    function setText(id, v){ var el = document.getElementById(id); if(el) el.textContent = v; }
+    function setClass(id, cls){ var el = document.getElementById(id); if(el){ el.className = 's-value ' + cls; } }
+
+    function checkEndpoint(url){
+      return fetch(url, {method:'HEAD', mode:'cors'}).then(function(r){ return r.ok; }).catch(function(){ return false; });
+    }
+
+    Promise.all([
+      checkEndpoint('https://bakenekocafe.studio/').then(function(ok){ setText('st-portal', ok?'正常':'異常'); setClass('st-portal', ok?'s-ok':'s-err'); }),
+      checkEndpoint('https://bakenekocafe.studio/game.html').then(function(ok){ setText('st-game', ok?'正常':'異常'); setClass('st-game', ok?'s-ok':'s-err'); }),
+      fetch(API+'/api/public-stats?gameId=kohada').then(function(r){ return r.json(); }).then(function(d){
+        setText('st-api','正常'); setClass('st-api','s-ok');
+        setText('st-plays', (d.totalPlays||0).toLocaleString());
+        setText('st-support', (d.totalSupportCount||0).toLocaleString());
+        setText('st-today-support', (d.todaySupportCount||0).toLocaleString());
+        var tp = d.totalPv || 0;
+        setText('st-today-plays', tp.toLocaleString());
+      }).catch(function(){
+        setText('st-api','異常'); setClass('st-api','s-err');
+      })
+    ]).then(function(){
+      var now = new Date();
+      setText('status-ts', '最終確認: ' + now.getFullYear()+'-'
+        +String(now.getMonth()+1).padStart(2,'0')+'-'
+        +String(now.getDate()).padStart(2,'0')+' '
+        +String(now.getHours()).padStart(2,'0')+':'
+        +String(now.getMinutes()).padStart(2,'0')+':'
+        +String(now.getSeconds()).padStart(2,'0'));
+    });
+
+    fetch(API+'/api/ranking/leaderboard?gameId=kohada&limit=10').then(function(r){ return r.json(); }).then(function(d){
+      var wrap = document.getElementById('ranking-top');
+      if(!wrap) return;
+      var html = '';
+      (d.entries||[]).forEach(function(e){
+        var dt = '';
+        if(e.submitted_at){
+          var dd = new Date(e.submitted_at);
+          dt = ' <span style="font-size:.75rem;opacity:.4">' + (dd.getMonth()+1)+'/'+dd.getDate() + '</span>';
+        }
+        html += '<div class="rank-row"><span class="r-pos">#'+e.rank+'</span><span class="r-name">'+escHtml(e.nickname||'名無し')+'</span><span class="r-score">'+Number(e.score).toLocaleString()+'m'+dt+'</span></div>';
+      });
+      wrap.innerHTML = html || '<p style="opacity:.4">データなし</p>';
+    }).catch(function(){
+      var wrap = document.getElementById('ranking-top');
+      if(wrap) wrap.innerHTML = '<p style="opacity:.4">取得できませんでした</p>';
+    });
+
+    function escHtml(s){ var d=document.createElement('div'); d.textContent=s; return d.innerHTML; }
+  })();
+  </script>
+</body>
+</html>

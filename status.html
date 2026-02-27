@@ -74,59 +74,17 @@
         </div>
         <div class="status-ts" id="status-ts">最終確認: —</div>
 
-        <h2>累計アクセス・プレイ状況</h2>
+        <h2>プレイ実績</h2>
         <div class="status-grid" id="stats-grid">
           <div class="status-card">
             <span class="s-label">累計プレイ数</span>
             <span class="s-value" id="st-plays">—</span>
           </div>
           <div class="status-card">
-            <span class="s-label">累計PV</span>
-            <span class="s-value" id="st-total-pv">—</span>
-            <span class="s-sub">ゲーム＋ポータル合算</span>
-          </div>
-          <div class="status-card">
             <span class="s-label">累計応援回数</span>
             <span class="s-value" id="st-support">—</span>
           </div>
-          <div class="status-card">
-            <span class="s-label">本日のPV</span>
-            <span class="s-value" id="st-today-pv">—</span>
-          </div>
-          <div class="status-card">
-            <span class="s-label">本日の応援</span>
-            <span class="s-value" id="st-today-support">—</span>
-          </div>
         </div>
-
-        <h2>広告・バナー実績</h2>
-        <div class="status-grid" id="ad-grid">
-          <div class="status-card">
-            <span class="s-label">バナークリック数</span>
-            <span class="s-value" id="st-banner-clicks">—</span>
-            <span class="s-sub">累計（全バナー合算）</span>
-          </div>
-          <div class="status-card">
-            <span class="s-label">広告視聴完了</span>
-            <span class="s-value" id="st-rewards">—</span>
-            <span class="s-sub">リワード広告</span>
-          </div>
-        </div>
-
-        <h3 style="margin-top:24px;font-size:.9rem;opacity:.6">計測データソース</h3>
-        <table class="about-structure-table" style="font-size:.85rem">
-          <thead><tr><th>指標</th><th>自前API（D1）</th><th>GA4</th></tr></thead>
-          <tbody>
-            <tr><td>ページビュー</td><td>✅ page_view</td><td>✅ 自動</td></tr>
-            <tr><td>ゲーム開始数</td><td>✅ game_start</td><td>✅ game_start</td></tr>
-            <tr><td>バナークリック</td><td>✅ banner_click</td><td>✅ banner_click</td></tr>
-            <tr><td>広告応援</td><td>✅ support系</td><td>✅ カスタムイベント</td></tr>
-            <tr><td>ユーザー属性・流入元</td><td>—</td><td>✅ GA4レポート</td></tr>
-          </tbody>
-        </table>
-        <p style="font-size:.82rem;opacity:.45;margin-top:8px">
-          GA4 の詳細レポートは <a href="https://analytics.google.com/" target="_blank" rel="noopener" style="color:var(--gold)">Google Analytics 管理画面</a> で確認できます。
-        </p>
 
         <h2>世界ランキング TOP 10</h2>
         <p style="font-size:.85rem;opacity:.55;margin-bottom:8px">こはだジャンプ — 飛距離ランキング</p>
@@ -152,18 +110,7 @@
           </li>
         </ul>
 
-        <h2>インフラ構成</h2>
-        <table class="about-structure-table">
-          <tbody>
-            <tr><td style="width:35%">ホスティング</td><td>Cloudflare Pages（静的サイト配信）</td></tr>
-            <tr><td>API サーバー</td><td>Cloudflare Workers（サーバーレス）</td></tr>
-            <tr><td>データベース</td><td>Cloudflare D1（ランキング・統計）</td></tr>
-            <tr><td>ドメイン</td><td>bakenekocafe.studio（Cloudflare DNS）</td></tr>
-            <tr><td>CDN</td><td>Cloudflare（全世界キャッシュ）</td></tr>
-            <tr><td>SSL</td><td>全ページ HTTPS（Cloudflare 自動証明書）</td></tr>
-          </tbody>
-        </table>
-        <p>すべてのサービスは Cloudflare の Edge ネットワーク上で稼働しており、世界中から低レイテンシでアクセスできます。</p>
+        <p style="font-size:.85rem;opacity:.45;margin-top:20px">すべてのサービスはグローバル CDN 上で稼働しており、世界中から低レイテンシでアクセスできます。</p>
       </div>
     </section>
 
@@ -206,22 +153,10 @@
     Promise.all([
       checkEndpoint('https://bakenekocafe.studio/').then(function(ok){ setText('st-portal', ok?'正常':'異常'); setClass('st-portal', ok?'s-ok':'s-err'); }),
       checkEndpoint('https://bakenekocafe.studio/game.html').then(function(ok){ setText('st-game', ok?'正常':'異常'); setClass('st-game', ok?'s-ok':'s-err'); }),
-      Promise.all([
-        fetch(API+'/api/public-stats?gameId=kohada').then(function(r){return r.json()}).catch(function(){return {}}),
-        fetch(API+'/api/public-stats?gameId=portal').then(function(r){return r.json()}).catch(function(){return {}})
-      ]).then(function(arr){
-        var g = arr[0]; var p = arr[1];
+      fetch(API+'/api/public-stats?gameId=kohada').then(function(r){return r.json()}).then(function(d){
         setText('st-api','正常'); setClass('st-api','s-ok');
-        setText('st-plays', ((g.totalPlays||0)).toLocaleString());
-        setText('st-support', ((g.totalSupportCount||0)).toLocaleString());
-        setText('st-today-support', ((g.todaySupportCount||0)).toLocaleString());
-        var totalPv = (g.totalPv||0) + (p.totalPv||0);
-        var todayPv = (g.todayPv||0) + (p.todayPv||0);
-        setText('st-total-pv', totalPv > 0 ? totalPv.toLocaleString() : '計測開始');
-        setText('st-today-pv', todayPv > 0 ? todayPv.toLocaleString() : '計測開始');
-        var bannerClicks = (g.totalBannerClicks||0) + (p.totalBannerClicks||0);
-        setText('st-banner-clicks', bannerClicks > 0 ? bannerClicks.toLocaleString() : '計測開始');
-        setText('st-rewards', (g.totalRewards||0) > 0 ? (g.totalRewards||0).toLocaleString() : '計測開始');
+        setText('st-plays', ((d.totalPlays||0)).toLocaleString());
+        setText('st-support', ((d.totalSupportCount||0)).toLocaleString());
       }).catch(function(){
         setText('st-api','異常'); setClass('st-api','s-err');
       })

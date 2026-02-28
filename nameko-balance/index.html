@@ -1,0 +1,179 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <script async src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-5189561379756793" crossorigin="anonymous"></script>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>なめこバランス｜BAKENEKO GAMES</title>
+  <meta name="description" content="キャットタワーにモフモフ猫を積み上げるバランスゲーム。世界ランキング対応。遊んで広告を見ると保護猫活動を応援できます。">
+  <meta property="og:title" content="なめこバランス｜BAKENEKO GAMES">
+  <meta property="og:description" content="キャットタワーにモフモフ猫を積み上げるバランスゲーム。世界ランキング対応。">
+  <meta property="og:type" content="website">
+  <meta property="og:url" content="https://bakenekocafe.studio/nameko-balance/">
+  <meta name="twitter:card" content="summary">
+  <meta name="twitter:title" content="なめこバランス｜BAKENEKO GAMES">
+  <link href="https://fonts.googleapis.com/css2?family=M+PLUS+Rounded+1c:wght@400;700;800&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/core/banner.css">
+  <link rel="stylesheet" href="style.css">
+  <script src="/ga.js"></script>
+</head>
+<body>
+  <div id="game-container">
+    <canvas id="game-canvas"></canvas>
+
+    <div id="ui-layer">
+
+      <!-- タイトル -->
+      <div id="screen-title" class="screen screen-theme">
+        <div class="deco-layer">
+          <span class="deco" style="top:4%;left:6%">🐾</span>
+          <span class="deco deco--lg" style="top:22%;right:5%">🐾</span>
+          <span class="deco deco--sm" style="top:52%;left:3%">🐟</span>
+          <span class="deco" style="top:70%;right:7%">🧶</span>
+          <span class="deco deco--sm" style="top:14%;left:50%">✦</span>
+          <span class="deco" style="top:40%;right:2%">🐾</span>
+          <span class="deco deco--lg" style="bottom:9%;left:10%">🐾</span>
+          <span class="deco deco--sm" style="bottom:22%;right:14%">✦</span>
+        </div>
+        <div class="deco-stripe" style="top:0"></div>
+        <div class="deco-stripe deco-stripe--bottom" style="bottom:0"></div>
+        <div class="ad-banner ad-banner--title" data-banner="猫又療養所"></div>
+        <div class="title-inner">
+          <div class="title-cat-img">
+            <canvas id="title-cat-canvas" width="140" height="140"></canvas>
+          </div>
+          <h1 class="title-logo">なめこバランス</h1>
+          <p class="title-sub">塩対応なモフモフ猫を<br>崩さず積め！</p>
+          <p class="title-desc">キャットタワーの上でブロックを積み上げて<br>スコアアタック！世界ランキング対応</p>
+          <div class="title-stats">
+            <div class="title-stat"><small>プレイ数</small><span id="title-play-count">—</span></div>
+            <div class="title-stat"><small>本日の応援</small><span id="title-support-count">—</span></div>
+          </div>
+          <button type="button" id="btn-start" class="btn primary">スタート</button>
+          <button type="button" id="btn-title-ranking" class="btn outline">ランキング</button>
+        </div>
+        <div class="ad-banner ad-banner--title ad-banner--50" data-banner="LINEスタンプ"></div>
+        <div class="title-footer">
+          <a href="https://bakenekocafe.studio/" target="_blank">ポータル</a>
+        </div>
+      </div>
+
+      <!-- ニックネーム -->
+      <div id="screen-nickname" class="screen hidden screen-theme">
+        <div class="panel">
+          <h2>ニックネーム</h2>
+          <p>ランキング用（なくてもOK）</p>
+          <input type="text" id="input-nickname" placeholder="名無しさん" maxlength="10">
+          <button id="btn-nick-ok" class="btn primary">OK</button>
+          <button id="btn-nick-skip" class="btn secondary">スキップ</button>
+        </div>
+      </div>
+
+      <!-- HUD -->
+      <div id="screen-hud" class="screen hidden">
+        <div class="hud-frame-top"></div>
+        <div class="hud-bar">
+          <div class="hud-score">
+            <small>SCORE</small>
+            <span id="hud-score-val">0</span>
+          </div>
+          <div class="hud-next">
+            <small>NEXT</small>
+            <div class="hud-next-boxes">
+              <span class="nbox" id="nbox-0"></span>
+              <span class="nbox sm" id="nbox-1"></span>
+            </div>
+          </div>
+        </div>
+        <div id="popup-layer"></div>
+        <div class="fix-timer hidden" id="fix-timer">
+          <span class="fix-icon">⚡</span>
+          <span id="fix-timer-val">10.0</span>s
+        </div>
+        <div class="hint" id="hint">← スワイプして離す →</div>
+      </div>
+
+      <!-- リザルト -->
+      <div id="screen-result" class="screen hidden screen-theme">
+        <div class="deco-layer">
+          <span class="deco-bokeh deco-bokeh--teal" style="top:6%;left:8%"></span>
+          <span class="deco-bokeh deco-bokeh--lg deco-bokeh--purple" style="top:22%;right:4%"></span>
+          <span class="deco-bokeh deco-bokeh--sm" style="bottom:16%;left:15%"></span>
+          <span class="deco-bokeh deco-bokeh--coral" style="top:12%;right:20%"></span>
+          <span class="deco-bokeh deco-bokeh--sky" style="bottom:28%;right:6%"></span>
+          <span class="deco-bokeh deco-bokeh--sm deco-bokeh--pink" style="top:50%;left:4%"></span>
+          <span class="deco-bokeh deco-bokeh--teal" style="bottom:40%;left:30%"></span>
+          <span class="deco-bokeh deco-bokeh--sm" style="top:38%;right:12%"></span>
+        </div>
+        <div class="panel result-panel">
+          <h2>ゲームオーバー</h2>
+          <div class="panel-icon result-cat-icon">
+            <canvas id="result-cat-canvas" width="320" height="160"></canvas>
+          </div>
+          <div class="r-score-area">
+            <small>SCORE</small>
+            <div id="r-score" class="r-score-num">0</div>
+          </div>
+          <div class="r-speech" id="r-speech">「…」</div>
+          <div id="result-support-block" class="result-support-block">
+            <button type="button" class="btn-support" id="btn-support-ad">🐱 広告を見てなめこを応援する</button>
+            <p class="result-support-note">※任意です・広告なしでも遊べます・1プレイ1回</p>
+            <p id="support-loading-text" class="support-loading-text" style="display:none">読み込み中…</p>
+            <p id="support-error-message" class="support-error-message" style="display:none">現在応援できません</p>
+            <p id="support-queued-message" class="support-queued-message" style="display:none">一時保存しました</p>
+          </div>
+          <div id="support-success-overlay" class="support-success-overlay" style="display:none">
+            <div id="support-success-hearts" class="support-success-hearts">💖🐾💖</div>
+            <p class="support-success-text">応援ありがとうございました！</p>
+          </div>
+          <div id="result-support-count-wrap" class="result-support-count-wrap">
+            <span>本日の応援</span>
+            <span id="result-support-count-value" class="result-support-count-value">—</span>
+            <span>回</span>
+          </div>
+          <div id="result-support-bar-wrap" class="result-support-bar-wrap" style="display:none">
+            <div class="result-support-bar-bg"><div id="result-support-bar-fill" class="result-support-bar-fill"></div></div>
+          </div>
+          <div class="r-buttons">
+            <button type="button" id="btn-retry" class="btn primary">もう一回</button>
+            <button type="button" id="btn-share" class="btn btn-x-share">𝕏 ポスト</button>
+            <button type="button" id="btn-ranking" class="btn outline">ランキングを見る</button>
+          </div>
+        </div>
+        <div class="result-banner result-banner--50" data-banner="リザルト下"></div>
+        <div class="result-footer">
+          <a href="https://bakenekocafe.studio/" target="_blank">ポータル</a>
+        </div>
+      </div>
+
+      <!-- ランキング -->
+      <div id="screen-ranking" class="screen hidden screen-theme">
+        <div class="deco-layer">
+          <span class="deco-bokeh deco-bokeh--sm deco-bokeh--teal" style="top:12%;left:8%"></span>
+          <span class="deco-bokeh deco-bokeh--purple" style="top:35%;right:6%"></span>
+          <span class="deco-bokeh deco-bokeh--pink" style="bottom:15%;left:12%"></span>
+          <span class="deco-bokeh deco-bokeh--lg deco-bokeh--coral" style="bottom:35%;right:10%"></span>
+          <span class="deco-bokeh deco-bokeh--sky" style="top:60%;left:5%"></span>
+        </div>
+        <div class="panel panel-tall">
+          <h2>ランキング</h2>
+          <div id="ranking-list" class="ranking-list"></div>
+          <button id="btn-rank-close" class="btn secondary">閉じる</button>
+        </div>
+      </div>
+
+    </div>
+  </div>
+
+  <script>window.GAME_ID = 'nameko-balance'; window.BAKENEKO_GAME_ID = 'nameko-balance'; window.BAKENEKO_API_BASE = window.BAKENEKO_API_BASE || 'https://api.bakenekocafe.studio';</script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/matter-js/0.19.0/matter.min.js"></script>
+  <script src="/core/banners.config.js"></script>
+  <script src="/core/banner-loader.js"></script>
+  <script src="/core/analytics.js"></script>
+  <script src="/core/ranking-client.js"></script>
+  <script src="/core/public-stats-client.js"></script>
+  <script src="/core/share-template.js"></script>
+  <script src="js/app.js"></script>
+
+</body>
+</html>

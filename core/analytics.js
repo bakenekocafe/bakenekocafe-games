@@ -86,6 +86,7 @@
     flush: flush
   };
 
+  // ページ離脱時にキュー送信を試みる（失敗しても握りつぶす）
   if (typeof window.addEventListener === 'function') {
     window.addEventListener('visibilitychange', function () {
       if (document.visibilityState === 'hidden') try { flush(); } catch (_) {}

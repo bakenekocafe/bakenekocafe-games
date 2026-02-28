@@ -399,6 +399,23 @@ a.portal-logo:hover{color:var(--gold)}
   background:linear-gradient(90deg,var(--gold),transparent);
 }
 
+/* 更新履歴 */
+.update-history-list{list-style:none;max-width:640px;margin:0 auto}
+.update-item{
+  padding:14px 0;border-bottom:1px solid rgba(0,212,255,.1);
+  display:flex;flex-wrap:wrap;gap:12px;align-items:baseline;
+}
+.update-item:last-child{border-bottom:none}
+.update-date{
+  font-family:'Share Tech Mono',monospace;font-size:.8rem;
+  color:var(--cyan);opacity:.9;flex-shrink:0;
+}
+.update-body{
+  flex:1;min-width:0;font-size:.9rem;line-height:1.6;
+  color:rgba(232,232,240,.85);
+}
+.update-body code{font-size:.85em;color:var(--gold);opacity:.9}
+
 /* ══════════════════════════════════════════
    STATS
 ══════════════════════════════════════════ */

@@ -42,57 +42,7 @@ body {
     flex-direction: column;
 }
 
-/* 1. Top Banner (Fixed) */
-.ad-banner {
-    position: absolute;
-    top: 0;
-    left: 50%;
-    transform: translateX(-50%);
-    width: 60%;
-    max-width: 320px;
-    height: 60px;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    z-index: 3000;
-    pointer-events: auto;
-    overflow: hidden;
-    border-radius: 6px;
-}
-
-/* タイトル画面内バナー */
-.ad-banner--title {
-    position: relative;
-    top: auto;
-    left: auto;
-    transform: none;
-    width: min(95%, 420px);
-    height: min(12vh, 100px);
-    margin: 4px auto;
-}
-
-/* 下段バナー */
-.ad-banner--50 {
-    width: min(90%, 340px);
-    height: min(10vh, 80px);
-}
-
-.ad-banner .banner-link {
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    width: 100%;
-    height: 100%;
-    line-height: 0;
-}
-.ad-banner .banner-link img {
-    border-radius: 4px;
-    max-width: 100%;
-    max-height: 100%;
-    width: auto;
-    height: auto;
-    object-fit: contain;
-}
+/* 1. Banner — core/banner.css に移動済み */
 
 /* 2. Game Area */
 #game-container {
@@ -242,7 +192,52 @@ body {
     z-index: 100;
     display: flex;
     justify-content: center;
+    flex-wrap: wrap;
     gap: 10px;
+}
+
+/* === Action Button（確実に効く専用ボタン・右寄せ） === */
+.action-btn {
+    pointer-events: auto !important;
+    z-index: 9999 !important;
+    position: absolute;
+    right: 10px;
+    bottom: 140px;
+    width: 40%;
+    max-width: 180px;
+    padding: 14px 10px;
+    font-size: clamp(14px, 3.5vw, 20px);
+    font-weight: 900;
+    font-family: var(--font-heading);
+    color: #fff;
+    background: linear-gradient(135deg, #f59e0b 0%, #ef4444 100%);
+    border: 3px solid rgba(255,255,255,0.4);
+    border-radius: 16px;
+    box-shadow: 0 4px 0 #b45309, 0 8px 24px rgba(245,158,11,0.4);
+    text-shadow: 0 2px 4px rgba(0,0,0,0.5);
+    letter-spacing: 0.05em;
+    cursor: pointer;
+    touch-action: manipulation;
+    -webkit-tap-highlight-color: transparent;
+    user-select: none;
+    -webkit-user-select: none;
+    transition: transform 0.08s, box-shadow 0.08s;
+}
+.action-btn:active {
+    transform: translateY(3px);
+    box-shadow: 0 1px 0 #b45309, 0 2px 8px rgba(245,158,11,0.3);
+}
+.action-btn.hidden {
+    display: none !important;
+}
+.action-btn.boost-mode {
+    background: linear-gradient(135deg, #06b6d4 0%, #8b5cf6 100%);
+    box-shadow: 0 4px 0 #0e7490, 0 8px 24px rgba(6,182,212,0.4);
+    animation: action-btn-pulse 0.8s ease-in-out infinite;
+}
+@keyframes action-btn-pulse {
+    0%, 100% { transform: scale(1); }
+    50% { transform: scale(1.03); }
 }
 
 .hud-panel {

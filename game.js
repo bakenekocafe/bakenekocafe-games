@@ -121,7 +121,6 @@ const Game = {
     lastInputTime: 0,
     INPUT_THROTTLE_MS: 120,
     inputLock: false,
-    INPUT_LOCK_MS: 250,
     _phaseTimeoutId: null,  // フェーズ遷移の setTimeout（2回目落ち防止で retry/startGame 時に必ず解除）
     lastTouchTime: 0,       // スマホ: タップ直後の合成 click を無視する用
     boostTapIgnoreUntil: 0, // 発射後ブースト1回だけ・連打で落ちないように無視する期間の終了時刻
@@ -240,6 +239,9 @@ const Game = {
         bindClick('btn-ranking-back', () => { try { this.hideRanking(); } catch (err) { console.warn(err); } });
         bindClick('btn-support-ad', () => { try { this.startSupportFlow(); } catch (err) { console.warn(err); } });
 
+        // === Action Button（確実に効く専用ボタン）===
+        this._setupActionBtn();
+
         // Touch/Click events（touch-area が無くてもスタート等はボタン・キーで可能）
         const ta = document.getElementById('touch-area');
         const gameContainer = document.getElementById('game-container');
@@ -256,6 +258,7 @@ const Game = {
                 try {
                     if (this.state === 'phase1' && this.holdingDown) {
                         this.holdingDown = false;
+                        this.inputLock = true;
                         this.stopGauge('phase1');
                     }
                 } catch (err) { console.warn(err); }
@@ -741,32 +744,34 @@ const Game = {
         }
     },
 
-    // タイトル「何人がプレイしました」表示を更新（localStorage または window.KOHADA_PLAY_COUNT_API で取得）
     updateTitlePlayCount() {
         try {
             const el = document.getElementById('title-play-count-value');
             if (!el) return;
             const base = (this.BAKENEKO_API_BASE || '').trim();
             const gameId = this.KOHADA_GAME_ID || 'kohada';
-            const showLocal = () => {
-                const n = parseInt(localStorage.getItem('kohada_play_count') || '0', 10);
-                el.textContent = n > 0 ? n.toLocaleString() + '人' : '—';
+            const localCount = parseInt(localStorage.getItem('kohada_play_count') || '0', 10);
+            const cachedApiCount = parseInt(localStorage.getItem('kohada_api_play_peak') || '0', 10);
+
+            const showBest = (apiCount) => {
+                const best = Math.max(apiCount || 0, cachedApiCount, localCount);
+                if (best > cachedApiCount) {
+                    try { localStorage.setItem('kohada_api_play_peak', String(best)); } catch (_) {}
+                }
+                el.textContent = best > 0 ? best.toLocaleString() + '回' : '—';
             };
+
             if (base) {
                 this._fetchWithTimeout(base + '/api/public-stats?gameId=' + encodeURIComponent(gameId), {}, 6000)
                     .then(r => r.json())
                     .then(data => {
                         const n = data.totalPlays != null ? Number(data.totalPlays) : 0;
-                        if (n > 0) {
-                            el.textContent = n.toLocaleString() + '人';
-                        } else {
-                            showLocal();
-                        }
+                        showBest(n);
                     })
-                    .catch(showLocal);
+                    .catch(() => showBest(0));
                 return;
             }
-            showLocal();
+            showBest(0);
         } catch (_) {}
     },
 
@@ -1039,6 +1044,109 @@ const Game = {
         } catch (_) {}
     },
 
+    // === Action Button — touch-area 非依存で確実に効くゲーム操作ボタン ===
+    _setupActionBtn() {
+        const btn = document.getElementById('action-btn');
+        if (!btn) return;
+        const self = this;
+
+        let pressing = false;
+
+        function onPress(e) {
+            e.preventDefault();
+            e.stopPropagation();
+            if (self.inputLock) return;
+            pressing = true;
+            try {
+                switch (self.state) {
+                    case 'phase1':
+                        self.holdingDown = true;
+                        break;
+                    case 'phase2':
+                        self.inputLock = true;
+                        self.stopGauge('phase2');
+                        break;
+                    case 'phase3':
+                        self.inputLock = true;
+                        self.stopGauge('phase3');
+                        break;
+                    case 'flying':
+                        if (!self.boostUsed) {
+                            self.inputLock = true;
+                            self.boost();
+                        }
+                        break;
+                }
+            } catch (err) {
+                console.warn('actionBtn press:', err);
+                self.inputLock = false;
+            }
+        }
+
+        function onRelease(e) {
+            e.preventDefault();
+            e.stopPropagation();
+            if (!pressing) return;
+            pressing = false;
+            try {
+                if (self.state === 'phase1' && self.holdingDown && !self.inputLock) {
+                    self.holdingDown = false;
+                    self.inputLock = true;
+                    self.stopGauge('phase1');
+                }
+            } catch (err) {
+                console.warn('actionBtn release:', err);
+                self.inputLock = false;
+            }
+        }
+
+        btn.addEventListener('touchstart', onPress, { passive: false });
+        btn.addEventListener('mousedown', onPress);
+        btn.addEventListener('touchend', onRelease, { passive: false });
+        btn.addEventListener('mouseup', onRelease);
+        btn.addEventListener('touchcancel', (e) => {
+            pressing = false;
+            try {
+                if (self.state === 'phase1' && self.holdingDown) {
+                    self.holdingDown = false;
+                    self.inputLock = true;
+                    self.stopGauge('phase1');
+                }
+            } catch (_) {}
+        });
+    },
+
+    _updateActionBtn() {
+        const btn = document.getElementById('action-btn');
+        if (!btn) return;
+        switch (this.state) {
+            case 'phase1':
+                btn.classList.remove('hidden', 'boost-mode');
+                btn.textContent = '⚡ 長押し → 離してパワー決定！';
+                break;
+            case 'phase2':
+                btn.classList.remove('hidden', 'boost-mode');
+                btn.textContent = 'タップで角度を決定して！';
+                break;
+            case 'phase3':
+                btn.classList.remove('hidden', 'boost-mode');
+                btn.textContent = '🚀 タップで発射！';
+                break;
+            case 'flying':
+                if (!this.boostUsed) {
+                    btn.classList.remove('hidden');
+                    btn.classList.add('boost-mode');
+                    btn.textContent = '🔥 BOOST!';
+                } else {
+                    btn.classList.add('hidden');
+                }
+                break;
+            default:
+                btn.classList.add('hidden');
+                break;
+        }
+    },
+
     flushPendingSupportQueue() {
         const base = (this.BAKENEKO_API_BASE || '').trim();
         const gameId = this.KOHADA_GAME_ID || 'kohada';
@@ -1294,6 +1402,7 @@ const Game = {
             this.gaugeSpeed = 10.0;
             this.holdingDown = false;
         }
+        try { this._updateActionBtn(); } catch (_) {}
     },
 
     // ─── Phase 2: Angle ───
@@ -1325,6 +1434,7 @@ const Game = {
             this.gaugeDir = 1;
             this.gaugeSpeed = 5.0;
         }
+        try { this._updateActionBtn(); } catch (_) {}
     },
 
     // ─── Phase 3: Timing ───
@@ -1356,6 +1466,7 @@ const Game = {
             this.gaugeDir = 1;
             this.gaugeSpeed = 7.0;
         }
+        try { this._updateActionBtn(); } catch (_) {}
     },
 
     // ─── Launch ───
@@ -1386,12 +1497,14 @@ const Game = {
             this.flyFrameIndex = 0;
 
             document.getElementById('boost-ui')?.classList.remove('hidden');
+            try { this._updateActionBtn(); } catch (_) {}
         } catch (e) {
             console.warn('launch error:', e);
             this.state = 'flying';
             this.vx = Number.isFinite(this.vx) ? this.vx : this.MAX_POWER * 0.5 * Math.cos(50 * Math.PI / 180);
             this.vy = Number.isFinite(this.vy) ? this.vy : this.MAX_POWER * 0.5 * Math.sin(50 * Math.PI / 180);
             this.lastTime = typeof performance !== 'undefined' ? performance.now() : Date.now();
+            try { this._updateActionBtn(); } catch (_) {}
         }
     },
 
@@ -1445,8 +1558,10 @@ const Game = {
     onLand() {
         try {
             this.boostTapIgnoreUntil = 0;
+            this.inputLock = false;
             document.getElementById('boost-ui')?.classList.add('hidden');
             this.state = 'result';
+            try { this._updateActionBtn(); } catch (_) {}
             try { if (typeof Sound !== 'undefined') { Sound.playLand(); Sound.stopBGM(); } } catch (_) {}
 
             this.shakeTimer = 30;
@@ -1487,9 +1602,9 @@ const Game = {
             const vy = Number(this.vy);
             if (!Number.isFinite(vx) || !Number.isFinite(vy)) return;
             this.boostUsed = true;
-            // 発射後の連打で落ちないよう、ブースト後は一定時間タップをすべて無視
             this.boostTapIgnoreUntil = (typeof Date.now === 'function' ? Date.now() : 0) + 350;
             document.getElementById('boost-ui')?.classList?.add('hidden');
+            try { this._updateActionBtn(); } catch (_) {}
             try { if (typeof Sound !== 'undefined' && Sound.playBoost) Sound.playBoost(); } catch (_) {}
 
             const altFactor = Math.max(0, 1 - Math.abs((this.altitude || 0) - 350) / 500);
@@ -1628,19 +1743,30 @@ const Game = {
             if (this.state !== 'phase1' && now - this.lastInputTime < this.INPUT_THROTTLE_MS) return;
             if (this.state !== 'phase1') this.lastInputTime = now;
 
-            const self = this;
-            const setLock = () => {
-                self.inputLock = true;
-                setTimeout(function () { self.inputLock = false; }, self.INPUT_LOCK_MS);
-            };
-
             switch (this.state) {
-                case 'title': setLock(); this.startGame(); break;
-                case 'result': setLock(); this.retry(); break;
-                case 'phase1': this.holdingDown = true; break;
-                case 'phase2': setLock(); this.stopGauge('phase2'); break;
-                case 'phase3': setLock(); this.stopGauge('phase3'); break;
-                case 'flying': setLock(); if (!this.boostUsed) this.boost(); break;
+                case 'title':
+                    this.inputLock = true;
+                    this.startGame();
+                    break;
+                case 'result':
+                    this.inputLock = true;
+                    this.retry();
+                    break;
+                case 'phase1':
+                    this.holdingDown = true;
+                    break;
+                case 'phase2':
+                    this.inputLock = true;
+                    this.stopGauge('phase2');
+                    break;
+                case 'phase3':
+                    this.inputLock = true;
+                    this.stopGauge('phase3');
+                    break;
+                case 'flying':
+                    this.inputLock = true;
+                    if (!this.boostUsed) this.boost();
+                    break;
             }
         } catch (err) {
             console.warn('handleInput error:', err);
@@ -1997,6 +2123,7 @@ const Game = {
             if (this.els?.phaseUI) this.els.phaseUI.classList.add('hidden');
             if (this.els?.uiBottom) this.els.uiBottom.classList.add('hidden');
             document.getElementById('boost-ui')?.classList.add('hidden');
+            try { this._updateActionBtn(); } catch (_) {}
             this.showScreen('title-screen');
             this.updateTitlePlayCount();
             try { if (typeof Sound !== 'undefined' && Sound.startBGM) Sound.startBGM('title'); } catch (_) {}
@@ -2060,22 +2187,27 @@ const Game = {
     share() {
         const distKm = (this.distance / 1000).toFixed(3);
         const isGoal = this.distance >= 100000;
-        const text = isGoal
-            ? `🐱✨ こはだが猫又療養所に到着しました！(${distKm}km)\n#こはだジャンプ #BAKENEKOドリーム`
-            : `🐱💨 こはだの飛距離: ${distKm}km！猫又療養所まであと${(100 - distKm).toFixed(1)}km...\n#こはだジャンプ #BAKENEKOドリーム`;
-        const openTweet = () => { window.open(`https://twitter.com/intent/tweet?text=${encodeURIComponent(text)}`, '_blank'); };
-        if (typeof navigator !== 'undefined' && navigator.share) {
+        const result = isGoal
+            ? `🐱✨ こはだが猫又療養所に到着しました！(${distKm}km)`
+            : `🐱💨 こはだの飛距離: ${distKm}km！猫又療養所まであと${(100 - distKm).toFixed(1)}km...`;
+
+        const doShare = (blob) => {
+            BakenekoShare.post({
+                result:    result,
+                rank:      this._lastSubmitRank || null,
+                tags:      ['こはだジャンプ', 'BAKENEKOドリーム'],
+                gameUrl:   'https://bakenekocafe.studio/game.html',
+                imageBlob: blob || null,
+                imageFileName: 'kohada-record.png',
+            });
+        };
+
+        if (typeof this.createRecordImageBlob === 'function') {
             this.createRecordImageBlob()
-                .then((blob) => {
-                    const file = new File([blob], 'kohada-record.png', { type: 'image/png' });
-                    if (navigator.canShare && navigator.canShare({ files: [file] })) {
-                        return navigator.share({ text, files: [file] });
-                    }
-                    openTweet();
-                })
-                .catch(() => { openTweet(); });
+                .then(doShare)
+                .catch(() => doShare(null));
         } else {
-            openTweet();
+            doShare(null);
         }
     },
 
@@ -2510,6 +2642,60 @@ Canvas: ${this.canvas.width}x${this.canvas.height}
                 ctx.fill();
             }
             ctx.globalAlpha = 1;
+        }
+
+        // UFO（高度10km以上で出現・ゆっくり横移動＋上下ホバー）
+        if (alt > 10000) {
+            const ufoAlpha = Math.min((alt - 10000) / 3000, 0.9);
+            ctx.save();
+            ctx.globalAlpha = ufoAlpha;
+            const time = (typeof performance !== 'undefined' ? performance.now() : Date.now()) / 1000;
+            const ufoCount = alt > 30000 ? 3 : alt > 20000 ? 2 : 1;
+            for (let u = 0; u < ufoCount; u++) {
+                const baseX = ((time * 30 + u * 400 + this.camX * 0.03) % (W + 200)) - 100;
+                const baseY = H * (0.15 + u * 0.12) + Math.sin(time * 1.5 + u * 2) * 25;
+                // ドーム
+                ctx.fillStyle = 'rgba(150, 220, 255, 0.7)';
+                ctx.beginPath();
+                ctx.ellipse(baseX, baseY - 8, 14, 10, 0, Math.PI, 0);
+                ctx.fill();
+                // 本体（円盤）
+                ctx.fillStyle = '#888';
+                ctx.beginPath();
+                ctx.ellipse(baseX, baseY, 26, 8, 0, 0, Math.PI * 2);
+                ctx.fill();
+                ctx.fillStyle = '#aaa';
+                ctx.beginPath();
+                ctx.ellipse(baseX, baseY - 2, 22, 5, 0, 0, Math.PI * 2);
+                ctx.fill();
+                // ライト（点滅）
+                const blink = Math.sin(time * 6 + u * 3) > 0;
+                if (blink) {
+                    ctx.fillStyle = '#0f0';
+                    ctx.beginPath();
+                    ctx.arc(baseX - 15, baseY, 3, 0, Math.PI * 2);
+                    ctx.fill();
+                    ctx.fillStyle = '#f00';
+                    ctx.beginPath();
+                    ctx.arc(baseX + 15, baseY, 3, 0, Math.PI * 2);
+                    ctx.fill();
+                }
+                // ビーム（高度20km以上でランダムに発射）
+                if (alt > 20000 && Math.sin(time * 0.8 + u * 5) > 0.5) {
+                    const beamGrad = ctx.createLinearGradient(baseX, baseY + 8, baseX, baseY + 80);
+                    beamGrad.addColorStop(0, 'rgba(100, 255, 100, 0.4)');
+                    beamGrad.addColorStop(1, 'rgba(100, 255, 100, 0)');
+                    ctx.fillStyle = beamGrad;
+                    ctx.beginPath();
+                    ctx.moveTo(baseX - 12, baseY + 8);
+                    ctx.lineTo(baseX + 12, baseY + 8);
+                    ctx.lineTo(baseX + 25, baseY + 80);
+                    ctx.lineTo(baseX - 25, baseY + 80);
+                    ctx.closePath();
+                    ctx.fill();
+                }
+            }
+            ctx.restore();
         }
 
         // Cloud Layer (Below player when high)

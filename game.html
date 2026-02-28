@@ -19,9 +19,10 @@
     <link
         href="https://fonts.googleapis.com/css2?family=Zen+Maru+Gothic:wght@400;700;900&family=Orbitron:wght@700;900&display=swap"
         rel="stylesheet">
-    <link rel="stylesheet" href="style.css?v=11"> <!-- Version 11 for cache clear -->
-    <script src="banners.config.js"></script>
-    <script src="banner-loader.js"></script>
+    <link rel="stylesheet" href="core/banner.css?v=1">
+    <link rel="stylesheet" href="style.css?v=15">
+    <script src="core/banners.config.js?v=3"></script>
+    <script src="core/banner-loader.js?v=1"></script>
 </head>
 
 <body>
@@ -30,7 +31,7 @@
 
     <!-- GAME CONTAINER（タイトル表示中は touch-area を無効にしてスタートが押せるようにする） -->
     <div id="game-container" class="title-screen-visible">
-        <!-- 共通バナー一括管理: data-banner で名前参照（banners.config.js） -->
+        <!-- 共通バナー一括管理: data-banner で名前参照（core/banners.config.js） -->
         <div class="ad-banner" data-banner="画面上部"></div>
 
         <canvas id="game-canvas"></canvas>
@@ -55,6 +56,9 @@
                 <div class="boost-text">🔥 TAP TO BOOST! 🔥</div>
             </div>
         </div>
+
+        <!-- === Action Button（右下固定・確実に効く） === -->
+        <button type="button" id="action-btn" class="action-btn hidden">TAP!</button>
 
         <!-- === BOTTOM UI (Status) === -->
         <div id="ui-bottom" class="hidden">
@@ -197,8 +201,7 @@
     <!-- Google Ad Placement API（有効化済み） -->
     <script async
       src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-5189561379756793"
-      crossorigin="anonymous"
-      data-adbreak-test="on"></script>
+      crossorigin="anonymous"></script>
     <script>
       window.adsbygoogle = window.adsbygoogle || [];
       var adBreak = adConfig = function(o) { adsbygoogle.push(o); };
@@ -211,8 +214,9 @@
       window.BAKENEKO_USE_REAL_ADS = false;
     </script>
     <script src="core/rewarded-adapter.js"></script>
+    <script src="core/share-template.js?v=1"></script>
     <script src="sound.js?v=11"></script>
-    <script src="game.js?v=11"></script>
+    <script src="game.js?v=15"></script>
     <script>
     (function(){
       var a=document.getElementById('game-mobile-url');

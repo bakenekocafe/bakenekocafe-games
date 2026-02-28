@@ -1,0 +1,65 @@
+/**
+ * BAKENEKO GAMES 共通バナー CSS
+ *
+ * 使い方:
+ *   <link rel="stylesheet" href="/core/banner.css">
+ *
+ * HTML:
+ *   <div class="ad-banner" data-banner="名前"></div>               ← 固定上部
+ *   <div class="ad-banner ad-banner--title" data-banner="名前"></div>  ← タイトル画面内
+ *   <div class="ad-banner ad-banner--title ad-banner--50" ...></div>   ← 下段（小）
+ */
+
+/* ===== 固定上部バナー ===== */
+.ad-banner {
+  position: absolute;
+  top: 0;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 60%;
+  max-width: 320px;
+  height: 60px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 3000;
+  pointer-events: auto;
+  overflow: hidden;
+  border-radius: 6px;
+}
+
+/* ===== タイトル画面内バナー ===== */
+.ad-banner--title {
+  position: relative;
+  top: auto;
+  left: auto;
+  transform: none;
+  width: min(95%, 420px);
+  height: min(12vh, 100px);
+  margin: 4px auto;
+}
+
+/* ===== 下段バナー（小） ===== */
+.ad-banner--50 {
+  width: min(90%, 340px);
+  height: min(10vh, 80px);
+}
+
+/* ===== バナー内リンク ===== */
+.ad-banner .banner-link {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  height: 100%;
+  line-height: 0;
+}
+
+.ad-banner .banner-link img {
+  border-radius: 4px;
+  max-width: 100%;
+  max-height: 100%;
+  width: auto;
+  height: auto;
+  object-fit: contain;
+}

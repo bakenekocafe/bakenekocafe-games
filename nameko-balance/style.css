@@ -517,4 +517,5 @@ input[type="text"]:focus{
 .rank-row.me{ background:rgba(92,184,165,0.12); }
 .rk{ font-weight:800; width:28px; color:var(--gold); }
 .rn{ flex:1; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; padding:0 8px; }
+.rd{ font-size:11px; color:#aaa; white-space:nowrap; padding-right:8px; }
 .rs{ font-weight:800; color:var(--brown); }

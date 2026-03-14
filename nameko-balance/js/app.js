@@ -419,11 +419,16 @@
     }
     for (var i = 0; i < data.length; i++) {
       var it = data[i];
+      var dateStr = '';
+      if (it.submitted_at) {
+        try { var dt = new Date(it.submitted_at); dateStr = (dt.getMonth()+1) + '/' + dt.getDate(); } catch(_){}
+      }
       var d = document.createElement('div');
       d.className = 'rank-row' + (it.nickname === myNick ? ' me' : '');
       d.innerHTML =
         '<span class="rk">' + (i + 1) + '</span>' +
         '<span class="rn">' + esc(it.nickname || '名無し') + '</span>' +
+        '<span class="rd">' + dateStr + '</span>' +
         '<span class="rs">' + (it.score || 0).toLocaleString() + '</span>';
       $rankList.appendChild(d);
     }

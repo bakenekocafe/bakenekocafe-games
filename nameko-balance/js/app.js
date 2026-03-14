@@ -1386,12 +1386,9 @@
     if (btnStart) {
       btnStart.addEventListener('click', function (e) {
         e.preventDefault();
-        if (!myNick) {
-          showScreen('nickname');
-          if (nickInput) nickInput.focus();
-        } else {
-          startGame();
-        }
+        if (nickInput) nickInput.value = myNick;
+        showScreen('nickname');
+        if (nickInput) nickInput.focus();
       });
     }
 

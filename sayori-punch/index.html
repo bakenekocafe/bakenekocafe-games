@@ -1,0 +1,151 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <script async src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-5189561379756793" crossorigin="anonymous"></script>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>さよりパンチ防衛｜BAKENEKO GAMES</title>
+  <meta name="description" content="迫りくる敵を3レーンパンチで撃退！コンボを繋いでハイスコアを目指せ！世界ランキング対応。">
+  <meta property="og:title" content="さよりパンチ防衛｜BAKENEKO GAMES">
+  <meta property="og:description" content="迫りくる敵を3レーンパンチで撃退！コンボを繋いでハイスコアを目指せ！">
+  <meta property="og:type" content="website">
+  <meta property="og:url" content="https://bakenekocafe.studio/sayori-punch/">
+  <meta name="twitter:card" content="summary">
+  <meta name="twitter:title" content="さよりパンチ防衛｜BAKENEKO GAMES">
+  <meta name="bakeneko:gameId" content="sayori-punch">
+  <link href="https://fonts.googleapis.com/css2?family=M+PLUS+Rounded+1c:wght@400;700;800&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/core/banner.css">
+  <link rel="stylesheet" href="style.css">
+  <script src="/ga.js"></script>
+</head>
+<body>
+  <div id="game-container">
+    <div id="phaser-game"></div>
+
+    <div id="ui-layer">
+
+      <!-- タイトル -->
+      <div id="screen-title" class="screen screen-theme">
+        <div class="ad-banner ad-banner--title" data-banner="猫又療養所"></div>
+        <div class="title-inner">
+          <div class="title-cat"><img id="title-cat-img" src="assets/sayorishoumen.png" alt="さより"></div>
+          <h1 class="title-logo">さよりパンチ防衛</h1>
+          <p class="title-sub">迫りくる敵を3レーンパンチで撃退！</p>
+          <div class="title-stats">
+            <div class="title-stat"><small>総プレイ数</small><span id="title-play-count">—</span></div>
+            <div class="title-stat"><small>本日の応援</small><span id="title-support-count">—</span></div>
+          </div>
+          <button type="button" id="btn-start" class="btn primary">スタート</button>
+          <button type="button" id="btn-title-ranking" class="btn outline">ランキング</button>
+        </div>
+        <div class="ad-banner ad-banner--title ad-banner--50" data-banner="LINEスタンプ"></div>
+        <div class="title-footer">
+          <a href="https://bakenekocafe.studio/" target="_blank">ポータル</a> |
+          <a href="https://bakenekocafe.studio/terms.html" target="_blank">利用規約</a> |
+          <a href="https://bakenekocafe.studio/privacy.html" target="_blank">プライバシー</a> |
+          <a href="https://bakenekocafe.studio/contact.html" target="_blank">お問い合わせ</a>
+        </div>
+      </div>
+
+      <!-- ニックネーム -->
+      <div id="screen-nickname" class="screen hidden screen-theme">
+        <div class="panel">
+          <h2>ニックネーム</h2>
+          <p>ランキング用（なくてもOK）</p>
+          <input type="text" id="input-nickname" placeholder="名無しさん" maxlength="10">
+          <button type="button" id="btn-nick-ok" class="btn primary">OK</button>
+          <button type="button" id="btn-nick-skip" class="btn secondary">スキップ</button>
+        </div>
+      </div>
+
+      <!-- HUD -->
+      <div id="screen-hud" class="screen hidden">
+        <div class="hud-top">
+          <div class="hud-cell"><small>SCORE</small><span id="hud-score">0</span></div>
+          <div class="hud-cell"><small>TIME</small><span id="hud-time">0.0</span>s</div>
+          <div class="hud-cell"><small>COMBO</small><span id="hud-combo">0</span> <span id="hud-multiplier" class="hud-multi">x1.0</span></div>
+        </div>
+        <div id="hud-controls" class="hud-controls">
+          <div class="lane-buttons">
+            <button id="btn-lane-L" class="btn-lane">左</button>
+            <button id="btn-lane-C" class="btn-lane">中</button>
+            <button id="btn-lane-R" class="btn-lane">右</button>
+          </div>
+          <button id="btn-bomb" class="btn-bomb">さより百烈拳</button>
+        </div>
+      </div>
+
+      <!-- リザルト -->
+      <div id="screen-result" class="screen hidden screen-theme">
+        <div class="panel result-panel">
+          <h2>ゲームオーバー</h2>
+          <div class="result-cat"><img id="result-cat-img" src="assets/sayoririzaruto.png" alt="さより"></div>
+          <div id="r-title-wrap" class="r-title-wrap"><span id="r-title">—</span></div>
+          <div class="result-stats">
+            <div class="title-stat"><small>生存時間</small><span id="r-time">0.00</span>s</div>
+            <div class="title-stat"><small>スコア</small><span id="r-score">0</span></div>
+          </div>
+          <div id="r-diff-wrap" class="r-diff-wrap" style="display:none">
+            <span id="r-diff">+0.00s</span>
+          </div>
+          <div id="result-support-block" class="result-support-block">
+            <button type="button" id="btn-support-ad" class="btn-support">広告を見てさよりを応援する</button>
+            <p class="result-support-note">※任意です・広告なしでも遊べます・1プレイ1回</p>
+            <p id="support-loading-text" class="support-loading-text" style="display:none">読み込み中…</p>
+            <p id="support-error-message" class="support-error-message" style="display:none">現在応援できません</p>
+            <p id="support-queued-message" class="support-queued-message" style="display:none">一時保存しました</p>
+          </div>
+          <div id="support-success-overlay" class="support-success-overlay" style="display:none">
+            <p class="support-success-text">💖 応援ありがとうございました！ 💖</p>
+          </div>
+          <div id="result-support-count-wrap" class="result-support-count-wrap">
+            <span>本日の応援</span>
+            <span id="result-support-count-value" class="result-support-count-value">—</span>
+            <span>回</span>
+          </div>
+          <div class="r-buttons">
+            <button type="button" id="btn-retry" class="btn primary">もう一回</button>
+            <button type="button" id="btn-share" class="btn btn-x-share">𝕏 ポスト</button>
+            <button type="button" id="btn-ranking" class="btn outline">ランキングを見る</button>
+          </div>
+        </div>
+        <div class="ad-banner ad-banner--title ad-banner--50" data-banner="リザルト下"></div>
+        <div class="result-footer">
+          <a href="https://bakenekocafe.studio/" target="_blank">ポータル</a> |
+          <a href="https://bakenekocafe.studio/terms.html" target="_blank">利用規約</a> |
+          <a href="https://bakenekocafe.studio/privacy.html" target="_blank">プライバシー</a> |
+          <a href="https://bakenekocafe.studio/contact.html" target="_blank">お問い合わせ</a>
+        </div>
+      </div>
+
+      <!-- ランキング -->
+      <div id="screen-ranking" class="screen hidden screen-theme">
+        <div class="panel panel-tall">
+          <h2>世界ランキング</h2>
+          <div id="ranking-list" class="ranking-list"></div>
+          <button type="button" id="btn-rank-close" class="btn secondary">閉じる</button>
+        </div>
+      </div>
+
+    </div>
+  </div>
+
+  <script>
+    window.GAME_ID = 'sayori-punch';
+    window.BAKENEKO_GAME_ID = 'sayori-punch';
+    window.BAKENEKO_API_BASE = window.BAKENEKO_API_BASE || 'https://api.bakenekocafe.studio';
+  </script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/phaser/3.80.1/phaser.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/tone/15.3.5/Tone.min.js"></script>
+  <script src="/core/banners.config.js"></script>
+  <script src="/core/banner-loader.js"></script>
+  <script src="/core/analytics.js"></script>
+  <script src="/core/config-loader.js"></script>
+  <script src="/core/rewarded-adapter.js"></script>
+  <script src="/core/ranking-client.js"></script>
+  <script src="/core/public-stats-client.js"></script>
+  <script src="/core/share-template.js"></script>
+  <script src="js/sound.js"></script>
+  <script src="js/app.js"></script>
+</body>
+</html>

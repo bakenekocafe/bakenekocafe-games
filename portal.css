@@ -578,6 +578,53 @@ a.portal-logo:hover{color:var(--gold)}
 .game-card:hover .play-btn{background:var(--cyan);color:var(--black);box-shadow:var(--glow-c)}
 
 /* ══════════════════════════════════════════
+   PORTAL RANKING (per-game)
+══════════════════════════════════════════ */
+.portal-ranking-block{
+  max-width:480px;margin:18px auto 0;
+  background:linear-gradient(135deg,rgba(8,8,15,.95),rgba(12,16,32,.9));
+  border:1px solid rgba(255,215,0,.12);border-radius:10px;
+  padding:16px 20px 12px;
+}
+.portal-ranking-header{
+  display:flex;align-items:baseline;justify-content:space-between;
+  margin-bottom:10px;flex-wrap:wrap;gap:4px;
+}
+.portal-ranking-title{
+  font-size:.85rem;font-weight:700;color:var(--gold);letter-spacing:.04em;
+}
+.portal-ranking-note{
+  font-size:.65rem;color:rgba(232,232,240,.3);letter-spacing:.03em;
+}
+.portal-ranking-list{min-height:40px}
+.portal-ranking-loading{font-size:.78rem;color:rgba(232,232,240,.25);text-align:center;padding:8px 0}
+.portal-rank-row{
+  display:flex;align-items:center;gap:8px;
+  padding:5px 0;border-bottom:1px solid rgba(255,255,255,.04);
+  font-size:.8rem;line-height:1.4;
+}
+.portal-rank-row:last-child{border-bottom:none}
+.portal-rank-pos{
+  font-family:'Share Tech Mono',monospace;color:var(--gold);
+  min-width:26px;text-align:right;font-weight:700;font-size:.82rem;
+}
+.portal-rank-pos.top1{color:#ffd700;text-shadow:0 0 6px rgba(255,215,0,.5)}
+.portal-rank-pos.top2{color:#c0c0c0}
+.portal-rank-pos.top3{color:#cd7f32}
+.portal-rank-name{
+  flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;
+  color:rgba(232,232,240,.75);
+}
+.portal-rank-date{
+  font-size:.68rem;color:rgba(232,232,240,.25);white-space:nowrap;
+}
+.portal-rank-score{
+  font-family:'Share Tech Mono',monospace;font-weight:700;
+  color:var(--cyan);white-space:nowrap;font-size:.82rem;
+}
+.portal-ranking-empty{font-size:.78rem;color:rgba(232,232,240,.2);text-align:center;padding:12px 0}
+
+/* ══════════════════════════════════════════
    HOW SECTION
 ══════════════════════════════════════════ */
 .how-section{text-align:center}

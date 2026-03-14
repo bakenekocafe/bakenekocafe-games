@@ -372,4 +372,73 @@
         el.textContent = String(fallback);
       });
   })();
+
+  // ═══ ポータル ランキング TOP10（ゲーム別・1日1回更新・24時自動リフレッシュ） ═══
+  (function () {
+    var API = 'https://api.bakenekocafe.studio';
+    var blocks = document.querySelectorAll('.portal-ranking-block');
+    if (!blocks.length) return;
+
+    function esc(s) { var d = document.createElement('div'); d.textContent = s; return d.innerHTML; }
+
+    function renderRanking(block) {
+      var gid = block.getAttribute('data-game-id');
+      var unit = block.getAttribute('data-unit') || '';
+      var listEl = block.querySelector('.portal-ranking-list');
+      if (!listEl || !gid) return;
+
+      fetch(API + '/api/ranking/leaderboard?gameId=' + encodeURIComponent(gid) + '&limit=10', {
+        method: 'GET', mode: 'cors', headers: { 'Accept': 'application/json' }
+      })
+        .then(function (r) { if (!r.ok) throw new Error(r.status); return r.json(); })
+        .then(function (d) {
+          var entries = d.entries || [];
+          if (!entries.length) {
+            listEl.innerHTML = '<p class="portal-ranking-empty">まだ記録がありません</p>';
+            return;
+          }
+          var html = '';
+          for (var i = 0; i < entries.length; i++) {
+            var e = entries[i];
+            var pos = e.rank || (i + 1);
+            var posClass = 'portal-rank-pos';
+            if (pos === 1) posClass += ' top1';
+            else if (pos === 2) posClass += ' top2';
+            else if (pos === 3) posClass += ' top3';
+            var dateStr = '';
+            if (e.submitted_at) {
+              try { var dt = new Date(e.submitted_at); dateStr = (dt.getMonth() + 1) + '/' + dt.getDate(); } catch (_) {}
+            }
+            html += '<div class="portal-rank-row">'
+              + '<span class="' + posClass + '">' + pos + '</span>'
+              + '<span class="portal-rank-name">' + esc(e.nickname || '名無し') + '</span>'
+              + (dateStr ? '<span class="portal-rank-date">' + dateStr + '</span>' : '')
+              + '<span class="portal-rank-score">' + Number(e.score).toLocaleString() + unit + '</span>'
+              + '</div>';
+          }
+          listEl.innerHTML = html;
+        })
+        .catch(function () {
+          listEl.innerHTML = '<p class="portal-ranking-empty">取得できませんでした</p>';
+        });
+    }
+
+    function loadAll() {
+      for (var i = 0; i < blocks.length; i++) renderRanking(blocks[i]);
+    }
+
+    function msUntilMidnight() {
+      var now = new Date();
+      var midnight = new Date(now.getFullYear(), now.getMonth(), now.getDate() + 1, 0, 0, 0);
+      return midnight.getTime() - now.getTime();
+    }
+
+    function scheduleNextRefresh() {
+      var ms = msUntilMidnight() + 3000;
+      setTimeout(function () { loadAll(); scheduleNextRefresh(); }, ms);
+    }
+
+    loadAll();
+    scheduleNextRefresh();
+  })();
 })();

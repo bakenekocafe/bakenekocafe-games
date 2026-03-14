@@ -149,19 +149,36 @@
    * ============================================================ */
   function apiSubmit(nick, score) {
     if (typeof BakenekoRanking !== 'undefined') {
-      return BakenekoRanking.submit(score, nick).then(function (r) { return r.ok; });
+      return BakenekoRanking.submit(score, nick).then(function (r) { return r.ok; }).catch(function () { return false; });
     }
-    return Promise.resolve(false);
+    return fetch(API_HOST + '/api/ranking/submit', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      mode: 'cors',
+      body: JSON.stringify({ gameId: GAME_ID, nickname: nick || '名無しさん', score: score })
+    }).then(function (r) { return r.ok; }).catch(function () { return false; });
   }
 
   function apiFetch(limit) {
+    var url = API_HOST + '/api/ranking/leaderboard?gameId=' + encodeURIComponent(GAME_ID) + '&limit=' + (limit || 20);
+    function parseResponse(d) {
+      var items = Array.isArray(d) ? d : (d.entries || d.items || d.rankings || []);
+      return items;
+    }
     if (typeof BakenekoRanking !== 'undefined') {
       return BakenekoRanking.fetch(limit).then(function (r) {
-        if (r.error) return { error: r.error };
-        return r.items;
+        if (r.error) throw new Error(r.error);
+        return r.items && r.items.length ? r.items : [];
+      }).catch(function () {
+        return fetch(url, { method: 'GET', mode: 'cors', headers: { 'Accept': 'application/json' } })
+          .then(function (r) { if (!r.ok) throw new Error(r.status); return r.json(); })
+          .then(parseResponse);
       });
     }
-    return Promise.resolve({ error: 'ranking client not loaded' });
+    return fetch(url, { method: 'GET', mode: 'cors', headers: { 'Accept': 'application/json' } })
+      .then(function (r) { if (!r.ok) throw new Error(r.status); return r.json(); })
+      .then(parseResponse)
+      .catch(function (e) { return { error: e.message || 'network error' }; });
   }
 
   /* ============================================================

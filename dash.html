@@ -29,6 +29,10 @@
     #auth-wall{text-align:center;margin-top:30vh}
     #auth-wall p{color:rgba(232,232,240,.4);font-size:.85rem}
     a{color:#ffd700}
+    .tab-bar{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:4px}
+    .tab-bar button{background:rgba(255,255,255,.05);border:1px solid rgba(255,215,0,.15);color:rgba(232,232,240,.6);border-radius:6px;padding:6px 14px;font-size:.78rem;cursor:pointer;transition:all .15s}
+    .tab-bar button:hover{background:rgba(255,215,0,.1)}
+    .tab-bar button.active{background:rgba(255,215,0,.15);color:#ffd700;border-color:rgba(255,215,0,.4);font-weight:700}
   </style>
 </head>
 <body>
@@ -44,29 +48,32 @@
       <div class="card"><span class="l">API</span><span class="v" id="d-api">—</span></div>
     </div>
 
-    <h2>トラフィック</h2>
+    <h2>全体サマリー</h2>
     <div class="grid">
       <div class="card"><span class="l">累計PV（合算）</span><span class="v" id="d-total-pv">—</span></div>
-      <div class="card"><span class="l">直近24h PV（合算）</span><span class="v" id="d-today-pv">—</span></div>
-      <div class="card"><span class="l">ゲームPV</span><span class="v" id="d-game-pv">—</span></div>
-      <div class="card"><span class="l">ポータルPV</span><span class="v" id="d-portal-pv">—</span></div>
-    </div>
-
-    <h2>ゲーム指標</h2>
-    <div class="grid">
+      <div class="card"><span class="l">直近24h PV</span><span class="v" id="d-today-pv">—</span></div>
       <div class="card"><span class="l">累計プレイ数</span><span class="v" id="d-plays">—</span></div>
       <div class="card"><span class="l">累計応援</span><span class="v" id="d-support">—</span></div>
       <div class="card"><span class="l">本日の応援</span><span class="v" id="d-today-support">—</span></div>
-    </div>
-
-    <h2>広告・バナー</h2>
-    <div class="grid">
       <div class="card"><span class="l">バナークリック</span><span class="v" id="d-banner">—</span></div>
       <div class="card"><span class="l">広告視聴完了</span><span class="v" id="d-rewards">—</span></div>
     </div>
 
-    <h2>世界ランキング TOP 10</h2>
-    <div id="d-ranking"></div>
+    <h2>ゲーム別集計</h2>
+    <div class="tab-bar" id="game-tabs"></div>
+    <div id="game-detail">
+      <div class="grid" style="margin-top:10px">
+        <div class="card"><span class="l">累計PV</span><span class="v" id="gd-pv">—</span></div>
+        <div class="card"><span class="l">直近24h PV</span><span class="v" id="gd-today-pv">—</span></div>
+        <div class="card"><span class="l">累計プレイ数</span><span class="v" id="gd-plays">—</span></div>
+        <div class="card"><span class="l">累計応援</span><span class="v" id="gd-support">—</span></div>
+        <div class="card"><span class="l">本日の応援</span><span class="v" id="gd-today-support">—</span></div>
+        <div class="card"><span class="l">バナークリック</span><span class="v" id="gd-banner">—</span></div>
+        <div class="card"><span class="l">広告視聴完了</span><span class="v" id="gd-rewards">—</span></div>
+      </div>
+      <h3 style="font-size:.82rem;color:#ffd700;margin:16px 0 8px">ランキング TOP 10</h3>
+      <div id="gd-ranking"></div>
+    </div>
 
     <h2>インフラ</h2>
     <table class="t">
@@ -105,49 +112,104 @@
     document.getElementById('dashboard').style.display = 'block';
 
     var API = 'https://api.bakenekocafe.studio';
+    var GAMES = [
+      { id: 'kohada',        label: 'こはだジャンプ', unit: 'm' },
+      { id: 'nameko-balance', label: 'なめこバランス', unit: '' },
+      { id: 'sayori-punch',  label: 'さよりパンチ',   unit: '' },
+      { id: 'portal',        label: 'ポータル',       unit: '' }
+    ];
+    var statsCache = {};
+
     function setText(id,v){ var el=document.getElementById(id); if(el) el.textContent=v; }
     function setCls(id,c){ var el=document.getElementById(id); if(el) el.className='v '+c; }
+    function esc(s){ var d=document.createElement('div'); d.textContent=s; return d.innerHTML; }
+    function num(v){ return (v||0).toLocaleString(); }
 
     function check(url){ return fetch(url,{method:'HEAD',mode:'cors'}).then(function(r){return r.ok}).catch(function(){return false}); }
 
-    Promise.all([
-      check('https://bakenekocafe.studio/').then(function(ok){ setText('d-portal',ok?'OK':'NG'); setCls('d-portal',ok?'ok':'err'); }),
-      check('https://bakenekocafe.studio/game.html').then(function(ok){ setText('d-game',ok?'OK':'NG'); setCls('d-game',ok?'ok':'err'); }),
-      Promise.all([
-        fetch(API+'/api/public-stats?gameId=kohada').then(function(r){return r.json()}).catch(function(){return {}}),
-        fetch(API+'/api/public-stats?gameId=portal').then(function(r){return r.json()}).catch(function(){return {}})
-      ]).then(function(arr){
-        var g=arr[0], p=arr[1];
-        setText('d-api','OK'); setCls('d-api','ok');
-        setText('d-plays', ((g.totalPlays||0)).toLocaleString());
-        setText('d-support', ((g.totalSupportCount||0)).toLocaleString());
-        setText('d-today-support', ((g.todaySupportCount||0)).toLocaleString());
-        var totalPv=(g.totalPv||0)+(p.totalPv||0);
-        var todayPv=(g.todayPv||0)+(p.todayPv||0);
-        setText('d-total-pv', totalPv.toLocaleString());
-        setText('d-today-pv', todayPv.toLocaleString());
-        setText('d-game-pv', ((g.totalPv||0)).toLocaleString());
-        setText('d-portal-pv', ((p.totalPv||0)).toLocaleString());
-        setText('d-banner', ((g.totalBannerClicks||0)+(p.totalBannerClicks||0)).toLocaleString());
-        setText('d-rewards', ((g.totalRewards||0)).toLocaleString());
-      }).catch(function(){ setText('d-api','NG'); setCls('d-api','err'); })
-    ]).then(function(){
-      var n=new Date();
-      setText('dash-ts', n.getFullYear()+'-'+String(n.getMonth()+1).padStart(2,'0')+'-'+String(n.getDate()).padStart(2,'0')+' '+String(n.getHours()).padStart(2,'0')+':'+String(n.getMinutes()).padStart(2,'0')+':'+String(n.getSeconds()).padStart(2,'0'));
+    check('https://bakenekocafe.studio/').then(function(ok){ setText('d-portal',ok?'OK':'NG'); setCls('d-portal',ok?'ok':'err'); });
+    check('https://bakenekocafe.studio/game.html').then(function(ok){ setText('d-game',ok?'OK':'NG'); setCls('d-game',ok?'ok':'err'); });
+
+    var fetches = GAMES.map(function(g){
+      return fetch(API+'/api/public-stats?gameId='+encodeURIComponent(g.id))
+        .then(function(r){ return r.json(); })
+        .catch(function(){ return {}; })
+        .then(function(d){ statsCache[g.id]=d; return d; });
     });
 
-    fetch(API+'/api/ranking/leaderboard?gameId=kohada&limit=10').then(function(r){return r.json()}).then(function(d){
-      var w=document.getElementById('d-ranking'); if(!w) return;
-      var h='';
-      (d.entries||[]).forEach(function(e){
-        var dt='';
-        if(e.submitted_at){ var dd=new Date(e.submitted_at); dt=' <span style="font-size:.7rem;opacity:.35">'+(dd.getMonth()+1)+'/'+dd.getDate()+'</span>'; }
-        h+='<div class="rank-row"><span class="pos">#'+e.rank+'</span><span class="nm">'+esc(e.nickname||'名無し')+'</span><span class="sc">'+Number(e.score).toLocaleString()+'m'+dt+'</span></div>';
+    Promise.all(fetches).then(function(){
+      setText('d-api','OK'); setCls('d-api','ok');
+      var totPv=0, todPv=0, totPlays=0, totSupp=0, todSupp=0, totBanner=0, totRewards=0;
+      GAMES.forEach(function(g){
+        var s=statsCache[g.id]||{};
+        totPv+=(s.totalPv||0); todPv+=(s.todayPv||0);
+        totPlays+=(s.totalPlays||0); totSupp+=(s.totalSupportCount||0);
+        todSupp+=(s.todaySupportCount||0); totBanner+=(s.totalBannerClicks||0);
+        totRewards+=(s.totalRewards||0);
       });
-      w.innerHTML=h||'<p style="opacity:.3">データなし</p>';
-    }).catch(function(){});
+      setText('d-total-pv', num(totPv));
+      setText('d-today-pv', num(todPv));
+      setText('d-plays', num(totPlays));
+      setText('d-support', num(totSupp));
+      setText('d-today-support', num(todSupp));
+      setText('d-banner', num(totBanner));
+      setText('d-rewards', num(totRewards));
 
-    function esc(s){ var d=document.createElement('div'); d.textContent=s; return d.innerHTML; }
+      var n=new Date();
+      setText('dash-ts', n.getFullYear()+'-'+String(n.getMonth()+1).padStart(2,'0')+'-'+String(n.getDate()).padStart(2,'0')+' '+String(n.getHours()).padStart(2,'0')+':'+String(n.getMinutes()).padStart(2,'0')+':'+String(n.getSeconds()).padStart(2,'0'));
+
+      buildTabs();
+      selectGame(GAMES[0].id);
+    }).catch(function(){ setText('d-api','NG'); setCls('d-api','err'); });
+
+    function buildTabs(){
+      var bar=document.getElementById('game-tabs');
+      GAMES.forEach(function(g){
+        var btn=document.createElement('button');
+        btn.textContent=g.label;
+        btn.setAttribute('data-gid',g.id);
+        btn.addEventListener('click',function(){ selectGame(g.id); });
+        bar.appendChild(btn);
+      });
+    }
+
+    function selectGame(gid){
+      var btns=document.querySelectorAll('#game-tabs button');
+      for(var i=0;i<btns.length;i++){
+        btns[i].className=btns[i].getAttribute('data-gid')===gid?'active':'';
+      }
+      var s=statsCache[gid]||{};
+      setText('gd-pv', num(s.totalPv));
+      setText('gd-today-pv', num(s.todayPv));
+      setText('gd-plays', num(s.totalPlays));
+      setText('gd-support', num(s.totalSupportCount));
+      setText('gd-today-support', num(s.todaySupportCount));
+      setText('gd-banner', num(s.totalBannerClicks));
+      setText('gd-rewards', num(s.totalRewards));
+      loadRanking(gid);
+    }
+
+    function loadRanking(gid){
+      var w=document.getElementById('gd-ranking');
+      w.innerHTML='<p style="opacity:.3">読込中…</p>';
+      var game=GAMES.filter(function(g){return g.id===gid})[0]||{};
+      var unit=game.unit||'';
+
+      fetch(API+'/api/ranking/leaderboard?gameId='+encodeURIComponent(gid)+'&limit=10')
+        .then(function(r){ return r.json(); })
+        .then(function(d){
+          var entries=d.entries||[];
+          if(!entries.length){ w.innerHTML='<p style="opacity:.3">データなし</p>'; return; }
+          var h='';
+          entries.forEach(function(e,i){
+            var dt='';
+            if(e.submitted_at){ var dd=new Date(e.submitted_at); dt=' <span style="font-size:.7rem;opacity:.35">'+(dd.getMonth()+1)+'/'+dd.getDate()+'</span>'; }
+            h+='<div class="rank-row"><span class="pos">#'+(e.rank||(i+1))+'</span><span class="nm">'+esc(e.nickname||'名無し')+'</span><span class="sc">'+Number(e.score).toLocaleString()+unit+dt+'</span></div>';
+          });
+          w.innerHTML=h;
+        })
+        .catch(function(){ w.innerHTML='<p style="opacity:.3">取得失敗</p>'; });
+    }
   })();
   </script>
 </body>

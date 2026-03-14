@@ -1161,6 +1161,9 @@
       this.show('screen-title');
       this._stats();
       GameSound.init();
+      if (typeof BakenekoAnalytics !== 'undefined') {
+        BakenekoAnalytics.event('page_view', { page: 'sayori-punch' });
+      }
     },
 
     bind: function () {

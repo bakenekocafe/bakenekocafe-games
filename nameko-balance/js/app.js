@@ -535,6 +535,10 @@
   function startGame() {
     if (goTimer) { clearTimeout(goTimer); goTimer = null; }
 
+    if (typeof BakenekoAnalytics !== 'undefined') {
+      BakenekoAnalytics.event('game_start', { nickname: myNick });
+    }
+
     initWorld();
     scoreReset();
     hudScore(0);
@@ -1460,6 +1464,10 @@
     });
 
     fetchPublicStats();
+
+    if (typeof BakenekoAnalytics !== 'undefined') {
+      BakenekoAnalytics.event('page_view', { page: 'nameko-balance' });
+    }
 
     /* --- Start loop --- */
     loop();

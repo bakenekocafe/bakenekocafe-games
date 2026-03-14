@@ -29,6 +29,18 @@
   var PU_W = 44, PU_H = 28;
   var FLOOR_FIX_MS = 10000;
 
+  /** 落下の都度ランダム表示する応援メッセージ（語尾 にゃ！） */
+  var CHEER_MESSAGES = [
+    'いい感じにゃ！', 'その調子にゃ！', 'うまくのったにゃ！', 'おっ、いいところにゃ！', 'きれいに積めてるにゃ！',
+    'がんばれにゃ！', 'まだまだいけるにゃ！', 'ナイスにゃ！', 'なかなかだにゃ！', 'のせ方がうまいにゃ！',
+    'バランスいいにゃ！', 'ピタッとにゃ！', 'ふんわり着地にゃ！', 'まかせてにゃ！', 'もっと積めるにゃ！',
+    'やるにゃ！', 'いい位置にゃ！', 'じょうずにゃ！', 'ずっといこうにゃ！', 'そーれ、のったにゃ！',
+    'どんどんいこうにゃ！', 'ナイスドロップにゃ！', 'いいぞいいぞにゃ！', 'おつかれにゃ！', 'きもちいいにゃ！',
+    'こんどもいこうにゃ！', 'さすがにゃ！', 'つぎもいけるにゃ！', 'てきぱきのせてるにゃ！', 'よしよしにゃ！'
+  ];
+  var CHEER_DURATION_MS = 2200;
+  var cheerTimeoutId = null;
+
   /* ============================================================
    *  Matter.js aliases
    * ============================================================ */
@@ -43,7 +55,7 @@
    * ============================================================ */
   var canvas, ctx, container;
   var $screens = {};
-  var $hudScore, $nbox0, $nbox1, $popups, $hint;
+  var $hudScore, $nbox0, $nbox1, $popups, $cheerBubble, $hint;
   var $rScore, $rSpeech, $rankList, $fixTimer, $fixTimerVal;
   var $btnSupport, $supportLoading, $supportError, $supportQueued, $supportOverlay;
   var $supportCountVal, $supportBarWrap, $supportBarFill;
@@ -202,6 +214,66 @@
     el.style.top  = sy + 'px';
     $popups.appendChild(el);
     setTimeout(function () { el.remove(); }, 1100);
+  }
+
+  function showCheerBubble() {
+    if (!$cheerBubble || CHEER_MESSAGES.length === 0) return;
+    if (cheerTimeoutId) { clearTimeout(cheerTimeoutId); cheerTimeoutId = null; }
+    var msg = CHEER_MESSAGES[Math.floor(Math.random() * CHEER_MESSAGES.length)];
+    $cheerBubble.textContent = msg;
+    $cheerBubble.classList.remove('hidden');
+    cheerTimeoutId = setTimeout(function () {
+      cheerTimeoutId = null;
+      $cheerBubble.classList.add('hidden');
+    }, CHEER_DURATION_MS);
+  }
+
+  /** リザルト画像を1枚の画像（Blob）で生成（Xで画像付きシェア用） */
+  function createRecordImageBlob(score, speech) {
+    return new Promise(function (resolve, reject) {
+      try {
+        var W = 600, H = 400;
+        var c = document.createElement('canvas');
+        c.width = W;
+        c.height = H;
+        var ctx = c.getContext('2d');
+        if (!ctx) { reject(new Error('no canvas')); return; }
+        var grad = ctx.createLinearGradient(0, 0, 0, H);
+        grad.addColorStop(0, '#fdfbf7');
+        grad.addColorStop(0.35, '#f0e8e0');
+        grad.addColorStop(0.7, '#e0d4c8');
+        grad.addColorStop(1, '#d4c4b0');
+        ctx.fillStyle = grad;
+        ctx.fillRect(0, 0, W, H);
+        ctx.fillStyle = '#5CB8A5';
+        ctx.font = 'bold 24px "M PLUS Rounded 1c", sans-serif';
+        ctx.textAlign = 'center';
+        ctx.fillText('なめこバランス', W / 2, 52);
+        ctx.fillStyle = '#4A3728';
+        ctx.font = 'bold 56px "M PLUS Rounded 1c", sans-serif';
+        ctx.fillText(score.toLocaleString() + ' 点', W / 2, 150);
+        if (speech) {
+          ctx.font = 'bold 22px "M PLUS Rounded 1c", sans-serif';
+          ctx.fillStyle = '#8B6F47';
+          var msg = '「' + speech + '」';
+          if (ctx.measureText(msg).width > W - 40) {
+            ctx.font = 'bold 18px "M PLUS Rounded 1c", sans-serif';
+          }
+          ctx.fillText(msg, W / 2, 210);
+        }
+        ctx.font = '48px serif';
+        ctx.fillText('🐱', W / 2, 280);
+        ctx.font = '16px "M PLUS Rounded 1c", sans-serif';
+        ctx.fillStyle = 'rgba(74,55,40,0.75)';
+        ctx.fillText('#なめこバランス #BAKENEKO GAMES', W / 2, H - 28);
+        c.toBlob(function (blob) {
+          if (blob) resolve(blob);
+          else reject(new Error('toBlob failed'));
+        }, 'image/png', 0.9);
+      } catch (e) {
+        reject(e);
+      }
+    });
   }
 
   function getResultSpeech(score, lastCfg) {
@@ -372,6 +444,7 @@
   var bgFlipSide = 1;
   var audioCtx = null;
   var bgmGain = null;
+  var seGain = null;
   var bgmOscs = [];
   var bgmPlaying = false;
 
@@ -450,6 +523,9 @@
 
     // BGM 再生（初回スタート時に有効化）
     playBgm();
+    buildReleaseBuffer();
+    buildDropBuffer();
+    buildGoBuffer();
     if ($hint) $hint.style.display = '';
 
     showScreen('hud');
@@ -550,6 +626,7 @@
         Body.setStatic(active.body, false);
         active.st = 'dropping';
         state = 'dropping';
+        playSeReleaseSound();
       }
     }
     canvas.addEventListener('pointerup', up);
@@ -678,69 +755,86 @@
       if (!AC) return null;
       audioCtx = new AC();
     }
-    if (audioCtx.state === 'suspended') audioCtx.resume();
+    if (audioCtx.state === 'suspended') {
+      audioCtx.resume().catch(function () {});
+    }
+    if (!seGain && audioCtx) {
+      seGain = audioCtx.createGain();
+      seGain.gain.value = 2.8;
+      seGain.connect(audioCtx.destination);
+    }
     return audioCtx;
   }
 
-  function playSeDropSound() {
-    var ctx = ensureAudioCtx();
-    if (!ctx) return;
-    var t = ctx.currentTime;
-    var osc = ctx.createOscillator();
-    var g = ctx.createGain();
-    osc.type = 'sine';
-    osc.frequency.setValueAtTime(220, t);
-    osc.frequency.exponentialRampToValueAtTime(80, t + 0.12);
-    g.gain.setValueAtTime(0.35, t);
-    g.gain.exponentialRampToValueAtTime(0.001, t + 0.15);
-    osc.connect(g);
-    g.connect(ctx.destination);
-    osc.start(t);
-    osc.stop(t + 0.15);
+  var seDropBuf = null;
+  var seGoBuf = null;
+  var seReleaseBuf = null;
 
-    var n = ctx.createBufferSource();
-    var buf = ctx.createBuffer(1, ctx.sampleRate * 0.08, ctx.sampleRate);
+  function buildReleaseBuffer() {
+    if (!audioCtx || seReleaseBuf) return;
+    var sr = audioCtx.sampleRate;
+    var len = Math.floor(sr * 0.14);
+    var buf = audioCtx.createBuffer(1, len, sr);
     var d = buf.getChannelData(0);
-    for (var i = 0; i < d.length; i++) d[i] = (Math.random() * 2 - 1) * 0.15;
-    n.buffer = buf;
-    var ng = ctx.createGain();
-    ng.gain.setValueAtTime(0.2, t);
-    ng.gain.exponentialRampToValueAtTime(0.001, t + 0.08);
-    n.connect(ng);
-    ng.connect(ctx.destination);
-    n.start(t);
+    for (var i = 0; i < len; i++) {
+      var t = i / sr;
+      var freq = 320 - 140 * (t / 0.14);
+      var env = Math.max(0, 1 - t / 0.14);
+      d[i] = Math.sin(2 * Math.PI * freq * t) * env;
+    }
+    seReleaseBuf = buf;
+  }
+
+  function buildDropBuffer() {
+    if (!audioCtx || seDropBuf) return;
+    var sr = audioCtx.sampleRate;
+    var len = Math.floor(sr * 0.2);
+    var buf = audioCtx.createBuffer(1, len, sr);
+    var d = buf.getChannelData(0);
+    for (var i = 0; i < len; i++) {
+      var t = i / sr;
+      var freq = 380 - (380 - 120) * (t / 0.2);
+      var env = Math.max(0, 1 - t / 0.2);
+      d[i] = Math.sin(2 * Math.PI * freq * t) * env;
+    }
+    seDropBuf = buf;
+  }
+
+  function buildGoBuffer() {
+    if (!audioCtx || seGoBuf) return;
+    var sr = audioCtx.sampleRate;
+    var len = Math.floor(sr * 1.0);
+    var buf = audioCtx.createBuffer(1, len, sr);
+    var d = buf.getChannelData(0);
+    var notes = [440, 370, 311, 261];
+    for (var i = 0; i < len; i++) {
+      var t = i / sr;
+      var ni = Math.min(3, Math.floor(t / 0.22));
+      var nt = t - ni * 0.22;
+      var env = Math.max(0, 1 - nt / 0.28);
+      d[i] = Math.sin(2 * Math.PI * notes[ni] * t) * env;
+    }
+    seGoBuf = buf;
+  }
+
+  function playSeBuf(buf) {
+    if (!audioCtx || !buf || !seGain) return;
+    var src = audioCtx.createBufferSource();
+    src.buffer = buf;
+    src.connect(seGain);
+    src.start(0);
+  }
+
+  function playSeReleaseSound() {
+    setTimeout(function () { playSeBuf(seReleaseBuf); }, 0);
+  }
+
+  function playSeDropSound() {
+    setTimeout(function () { playSeBuf(seDropBuf); }, 0);
   }
 
   function playSeGameOverSound() {
-    var ctx = ensureAudioCtx();
-    if (!ctx) return;
-    var t = ctx.currentTime;
-    var notes = [440, 370, 311, 261];
-    for (var i = 0; i < notes.length; i++) {
-      var osc = ctx.createOscillator();
-      var g = ctx.createGain();
-      osc.type = 'triangle';
-      osc.frequency.setValueAtTime(notes[i], t + i * 0.2);
-      g.gain.setValueAtTime(0, t);
-      g.gain.linearRampToValueAtTime(0.3, t + i * 0.2);
-      g.gain.setValueAtTime(0.3, t + i * 0.2);
-      g.gain.exponentialRampToValueAtTime(0.001, t + i * 0.2 + 0.25);
-      osc.connect(g);
-      g.connect(ctx.destination);
-      osc.start(t + i * 0.2);
-      osc.stop(t + i * 0.2 + 0.25);
-    }
-    var sub = ctx.createOscillator();
-    var sg = ctx.createGain();
-    sub.type = 'sine';
-    sub.frequency.setValueAtTime(120, t);
-    sub.frequency.exponentialRampToValueAtTime(40, t + 1.0);
-    sg.gain.setValueAtTime(0.25, t);
-    sg.gain.exponentialRampToValueAtTime(0.001, t + 1.0);
-    sub.connect(sg);
-    sg.connect(ctx.destination);
-    sub.start(t);
-    sub.stop(t + 1.0);
+    setTimeout(function () { playSeBuf(seGoBuf); }, 0);
   }
 
   function playBgm() {
@@ -813,6 +907,7 @@
     var sx = active.body.position.x * scale;
     var sy = (active.body.position.y - camY) * scale;
     showPopup('+' + pts, sx, sy);
+    showCheerBubble();
 
     namekos.push(active);
     active = null;
@@ -840,6 +935,8 @@
   function gameOver() {
     if (state === 'gameover') return;
     state = 'gameover';
+    if (cheerTimeoutId) { clearTimeout(cheerTimeoutId); cheerTimeoutId = null; }
+    if ($cheerBubble) $cheerBubble.classList.add('hidden');
     engine.timing.timeScale = 0.15;
 
     playSeGameOverSound();
@@ -1170,8 +1267,12 @@
     var px = d.data;
     for (var i = 0; i < px.length; i += 4) {
       var r = px[i], g = px[i + 1], b = px[i + 2];
-      var isGreen = g > 180 && g - r > 70 && g - b > 70;
-      if (isGreen) px[i + 3] = 0;
+      var gr = g - r, gb = g - b;
+      if (g > 80 && gr > 25 && gb > 25) {
+        var strength = Math.min((g - 80) / 100, (gr - 25) / 50, (gb - 25) / 50);
+        strength = Math.max(0, Math.min(1, strength));
+        px[i + 3] = Math.round(px[i + 3] * (1 - strength));
+      }
     }
     c.putImageData(d, 0, 0);
     return cv;
@@ -1194,8 +1295,9 @@
     $hudScore = document.getElementById('hud-score-val');
     $nbox0    = document.getElementById('nbox-0');
     $nbox1    = document.getElementById('nbox-1');
-    $popups   = document.getElementById('popup-layer');
-    $hint     = document.getElementById('hint');
+    $popups      = document.getElementById('popup-layer');
+    $cheerBubble = document.getElementById('cheer-bubble');
+    $hint        = document.getElementById('hint');
     $rScore   = document.getElementById('r-score');
     $rSpeech  = document.getElementById('r-speech');
     $rankList = document.getElementById('ranking-list');
@@ -1297,17 +1399,23 @@
       btnShare.addEventListener('click', function () {
         var speech = getResultSpeech(totalScore, null);
         var resultText = '🐱🏗️ なめこバランス: ' + totalScore.toLocaleString() + '点！\n' + '「' + speech + '」';
-        if (typeof BakenekoShare !== 'undefined' && BakenekoShare.post) {
-          BakenekoShare.post({
-            result: resultText,
-            rank: lastSubmitRank,
-            tags: ['なめこバランス', 'BAKENEKO GAMES'],
-            gameUrl: 'https://bakenekocafe.studio/nameko-balance/',
-          });
-        } else {
-          var text = resultText + '\n\n#なめこバランス #BAKENEKO GAMES\nhttps://bakenekocafe.studio/nameko-balance/';
-          window.open('https://twitter.com/intent/tweet?text=' + encodeURIComponent(text), '_blank');
+        var opts = {
+          result: resultText,
+          rank: lastSubmitRank,
+          tags: ['なめこバランス', 'BAKENEKO GAMES'],
+          gameUrl: 'https://bakenekocafe.studio/nameko-balance/',
+        };
+        function doShare(blob) {
+          if (blob) opts.imageBlob = blob;
+          opts.imageFileName = 'nameko-balance-record.png';
+          if (typeof BakenekoShare !== 'undefined' && BakenekoShare.post) {
+            BakenekoShare.post(opts);
+          } else {
+            var text = resultText + '\n\n#なめこバランス #BAKENEKO GAMES\nhttps://bakenekocafe.studio/nameko-balance/';
+            window.open('https://twitter.com/intent/tweet?text=' + encodeURIComponent(text), '_blank');
+          }
         }
+        createRecordImageBlob(totalScore, speech).then(doShare).catch(function () { doShare(null); });
       });
     }
 

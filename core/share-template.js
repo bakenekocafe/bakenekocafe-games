@@ -1,6 +1,10 @@
 /**
  * BAKENEKO GAMES 共通 X(Twitter) シェアテンプレート
  *
+ * 新規ゲーム開発時: リザルト画面のシェアでは imageBlob（リザルト画像）を実装すること。
+ * リザルト画像を canvas で描画して toBlob し、post({ ..., imageBlob, imageFileName }) で渡す。
+ * 実装例: こはだ game.js（createRecordImageBlob）、なめこ nameko-balance/js/app.js（createRecordImageBlob）。
+ *
  * 使い方:
  *   BakenekoShare.post({
  *     result:   '🐱💨 こはだの飛距離: 45.123km！',   // メイン結果テキスト（必須）
@@ -9,7 +13,7 @@
  *     tags:     ['こはだジャンプ', 'BAKENEKOドリーム'], // ハッシュタグ（#は不要）
  *     gameUrl:  'https://bakenekocafe.studio/game.html',
  *     gameName: 'こはだジャンプ',                      // ゲーム名（省略可）
- *     imageBlob: blob,                                // シェア画像 Blob（省略可）
+ *     imageBlob: blob,                                // シェア画像 Blob（新規ゲームでは実装推奨）
  *     imageFileName: 'result.png',                    // 画像ファイル名（省略時: share.png）
  *   });
  */

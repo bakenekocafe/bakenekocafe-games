@@ -37,7 +37,10 @@ html,body{ font-family:var(--ff); background:#f0e6d6; color:var(--dark); overflo
   pointer-events:auto;
   opacity:1; transition:opacity 0.3s ease;
 }
-.screen.hidden{ opacity:0; pointer-events:none !important; }
+.screen.hidden{
+  opacity:0; visibility:hidden; pointer-events:none !important;
+  transition:opacity 0.3s ease, visibility 0s 0.3s;
+}
 
 /* === World theme (共通) === */
 .screen-theme{
@@ -198,8 +201,9 @@ html,body{ font-family:var(--ff); background:#f0e6d6; color:var(--dark); overflo
 }
 .title-stat small{ display:block; font-size:10px; color:var(--teal); font-weight:700; }
 .title-stat span{ font-size:18px; font-weight:800; color:var(--brown); }
-.title-footer{ margin-top:4px; flex-shrink:0; }
+.title-footer{ margin-top:4px; flex-shrink:0; font-size:11px; color:rgba(139,111,71,0.4); }
 .title-footer a{ font-size:11px; color:rgba(139,111,71,0.55); text-decoration:none; }
+.title-footer a:hover{ text-decoration:underline; }
 
 /* === Panel === */
 .panel{
@@ -272,17 +276,6 @@ html,body{ font-family:var(--ff); background:#f0e6d6; color:var(--dark); overflo
 }
 .btn-x-share:active{ box-shadow:0 1px 0 #1480cc; }
 
-/* === Ad Banner (shared template) === */
-.ad-banner{
-  position:relative; width:min(92%, 360px); height:min(12vh, 100px);
-  margin:4px auto; border-radius:10px; overflow:hidden;
-  background:linear-gradient(135deg, rgba(218,165,32,0.15), rgba(155,142,196,0.1));
-  border:1px solid rgba(218,165,32,0.2);
-}
-.ad-banner--title{ margin:6px auto; }
-.ad-banner--50{ width:min(88%, 340px); height:min(8vh, 60px); }
-.ad-banner a.banner-link{ display:block; width:100%; height:100%; }
-.ad-banner img{ width:100%; height:auto; display:block; border-radius:6px; }
 
 /* === Support/Reward Button === */
 .btn-support{
@@ -390,6 +383,31 @@ input[type="text"]:focus{
 .nbox{ width:34px; height:34px; border-radius:8px; border:2px solid rgba(155,142,196,0.3); background:#fff; }
 .nbox.sm{ width:22px; height:22px; opacity:0.6; }
 
+/* === Cheer bubble (なめこ応援メッセージ) === */
+.cheer-bubble{
+  position:absolute; top:72px; left:50%; transform:translateX(-50%);
+  max-width:85%; padding:10px 16px;
+  background:linear-gradient(180deg, #fff 0%, #f8f4f0 100%);
+  border:2px solid rgba(139,111,71,0.35);
+  border-radius:16px;
+  box-shadow:0 4px 12px rgba(74,55,40,0.12), inset 0 1px 0 rgba(255,255,255,0.8);
+  font-size:15px; font-weight:700; color:var(--brown);
+  text-align:center; line-height:1.35;
+  pointer-events:none; z-index:5;
+  opacity:0; transition:opacity 0.2s ease;
+}
+.cheer-bubble:not(.hidden){ opacity:1; }
+.cheer-bubble::after{
+  content:''; position:absolute; bottom:-10px; left:50%; margin-left:-8px;
+  border:10px solid transparent; border-top-color:rgba(139,111,71,0.2);
+  border-bottom:none; width:0; height:0;
+}
+.cheer-bubble::before{
+  content:''; position:absolute; bottom:-8px; left:50%; margin-left:-7px;
+  border:8px solid transparent; border-top-color:#f8f4f0;
+  border-bottom:none; width:0; height:0;
+}
+
 /* === Popup === */
 #popup-layer{ position:absolute; top:0; left:0; width:100%; height:100%; pointer-events:none; }
 .popup{
@@ -455,8 +473,9 @@ input[type="text"]:focus{
 .result-panel::before{
   background:linear-gradient(90deg, var(--coral), var(--gold), var(--teal), var(--purple));
 }
-.result-footer{ margin-top:2px; flex-shrink:0; }
+.result-footer{ margin-top:2px; flex-shrink:0; font-size:11px; color:rgba(255,255,255,0.4); }
 .result-footer a{ font-size:11px; color:rgba(255,255,255,0.7); text-decoration:none; }
+.result-footer a:hover{ text-decoration:underline; }
 .r-score-area{ margin:2px 0 6px; }
 .r-score-area small{ font-size:12px; color:var(--gold); }
 .r-score-num{

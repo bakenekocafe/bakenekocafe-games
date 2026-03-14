@@ -152,7 +152,7 @@
         <p class="portal-today-support" id="portal-today-support-wrap">本日の応援回数: <span id="portal-today-support-value">--</span>回</p>
         <div class="stats-grid">
           <div class="stat-item">
-            <span class="stat-num" data-target="1" data-suffix="">🎮</span>
+            <span class="stat-num" data-target="2" data-suffix="">🎮</span>
             <span class="stat-label">リリース中のゲーム</span>
           </div>
           <div class="stat-item">
@@ -207,16 +207,19 @@
           <a href="howto.html" style="color:var(--gold);font-size:.9rem;opacity:.7">遊び方ガイド →</a>
         </div>
         <div class="games-grid" style="margin-top:32px">
-          <div class="game-card" style="opacity:.6;cursor:default">
-            <div class="game-card-body" style="text-align:center;padding:28px 16px">
-              <h3>なめこバランス</h3>
-              <p style="font-size:.85rem;margin:8px 0">🐱 第2弾タイトル制作中<br>キャットタワーにモフモフ猫を積み上げるバランスゲーム</p>
-              <span class="play-btn" style="opacity:.4">開発中</span>
+          <a href="nameko-balance/" class="game-card">
+            <div class="game-card-thumb">
+              <img src="nameko-balance/namekohaikei1.png" alt="ブラウザゲーム なめこバランス" loading="lazy" onerror="this.style.display='none'">
             </div>
-          </div>
+            <div class="game-card-body">
+              <h3>なめこバランス</h3>
+              <p>キャットタワーにモフモフ猫「なめこ」を積み上げろ！<br>物理演算ベースのバランスゲーム。<br>崩さずに積み続けてスコアアタック！<br>世界ランキング対応です！</p>
+              <span class="play-btn">▶ PLAY NOW</span>
+            </div>
+          </a>
         </div>
         <div style="text-align:center;margin-top:10px">
-          <a href="nameko.html" style="color:var(--gold);font-size:.85rem;opacity:.6">次回作の詳細 →</a>
+          <a href="nameko.html" style="color:var(--gold);font-size:.85rem;opacity:.7">なめこバランスの詳細 →</a>
         </div>
       </section>
 
@@ -253,6 +256,10 @@
       <section class="portal-section" id="updates">
         <h2 class="section-title">更新履歴</h2>
         <ul class="update-history-list">
+          <li class="update-item">
+            <span class="update-date">2026-03-11</span>
+            <span class="update-body">第2弾「<a href="nameko-balance/">なめこバランス</a>」正式リリース！キャットタワーにモフモフ猫を積み上げるバランスゲーム。世界ランキング・広告応援対応。</span>
+          </li>
           <li class="update-item">
             <span class="update-date">2026-02-25</span>
             <span class="update-body">X（Twitter）シェアを強化：投稿文に日付・世界ランキング・ゲームURL・ポータルURLを追加。他ゲーム用にシェアテンプレート（<code>core/share-template.js</code>）を共通化。</span>

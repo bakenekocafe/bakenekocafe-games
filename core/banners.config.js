@@ -19,7 +19,7 @@ window.BANNERS_CONFIG = {
     猫又療養所: {
       type: 'image',
       url: 'https://nekomata-sanatorium.com/support/',
-      imgSrc: 'siyougazou/bananekomata.png',
+      imgSrc: '/siyougazou/bananekomata.png',
       alt: '猫又療養所｜ハンディキャプシェルター 支援・寄付',
       width: 320,
       height: 100,
@@ -27,7 +27,7 @@ window.BANNERS_CONFIG = {
     LINEスタンプ: {
       type: 'image',
       url: 'https://store.line.me/stickershop/author/2987510/ja',
-      imgSrc: 'siyougazou/banasita.png',
+      imgSrc: '/siyougazou/banasita.png',
       alt: 'BAKENEKO CAFE バナー',
       width: 320,
       height: 100,

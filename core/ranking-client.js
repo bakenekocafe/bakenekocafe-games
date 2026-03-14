@@ -58,7 +58,7 @@
     }).then(function (r) {
       if (!r.ok) return { items: [], error: r.status + ' ' + r.statusText };
       return r.json().then(function (d) {
-        var items = Array.isArray(d) ? d : (d.items || d.rankings || []);
+        var items = Array.isArray(d) ? d : (d.entries || d.items || d.rankings || []);
         return { items: items };
       });
     }).catch(function (err) {

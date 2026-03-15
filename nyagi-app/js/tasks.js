@@ -35,6 +35,37 @@
   credentials = loadCredentials();
   if (!credentials) {
     loginGate.style.display = 'block';
+    var gateBtn = document.getElementById('gateLoginBtn');
+    var gatePwd = document.getElementById('gatePasswordInput');
+    var gateAlert = document.getElementById('gateLoginAlert');
+    if (gateBtn) {
+      gateBtn.addEventListener('click', function () {
+        var password = (gatePwd && gatePwd.value) ? gatePwd.value.trim() : '';
+        var adminKey = (window.NYAGI_ADMIN_KEY != null) ? String(window.NYAGI_ADMIN_KEY).trim() : '';
+        if (!password) { if (gateAlert) { gateAlert.textContent = 'パスワードを入力してください'; gateAlert.style.display = 'block'; } return; }
+        gateBtn.disabled = true;
+        fetch(_origin + '/api/ops/auth/login', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'X-Admin-Key': adminKey },
+          body: JSON.stringify({ password: password })
+        }).then(function (r) { return r.json(); }).then(function (data) {
+          if (!data || !data.staffId) { if (gateAlert) { gateAlert.textContent = 'パスワードが違います'; gateAlert.style.display = 'block'; } gateBtn.disabled = false; return; }
+          localStorage.setItem('nyagi_creds', JSON.stringify({ adminKey: adminKey, staffId: data.staffId }));
+          credentials = { adminKey: adminKey, staffId: data.staffId };
+          loginGate.style.display = 'none';
+          taskContent.style.display = 'block';
+          var today = new Date().toISOString().slice(0, 10);
+          document.getElementById('filterDate').value = today;
+          document.getElementById('ntDueDate').value = today;
+          loadCatList();
+          loadStaffList();
+          window.loadTasks();
+        }).catch(function () { if (gateAlert) { gateAlert.textContent = '通信エラー'; gateAlert.style.display = 'block'; } gateBtn.disabled = false; });
+      });
+      if (gatePwd) {
+        gatePwd.addEventListener('keydown', function (e) { if (e.key === 'Enter') gateBtn.click(); });
+      }
+    }
   } else {
     taskContent.style.display = 'block';
   }

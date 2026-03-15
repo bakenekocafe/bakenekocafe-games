@@ -481,9 +481,14 @@
   </div>
 
   <div id="loginGate" style="display:none;">
-    <div class="card">
-      <p style="text-align:center;color:var(--text-dim);font-size:14px;">先にログインしてください</p>
-      <a href="index.html" class="btn btn-primary" style="margin-top:12px;text-decoration:none;text-align:center;">ログイン画面へ</a>
+    <div class="card" style="max-width:320px;margin:40px auto;">
+      <h2 style="text-align:center;margin-bottom:16px;">NYAGI ログイン</h2>
+      <div style="margin-bottom:12px;">
+        <label for="gatePasswordInput" style="font-size:13px;color:var(--text-dim);">4桁パスワード</label>
+        <input type="password" id="gatePasswordInput" placeholder="1234" inputmode="numeric" pattern="[0-9]*" maxlength="4" autocomplete="off" style="width:100%;padding:12px;border-radius:8px;border:1px solid var(--surface-alt);background:var(--surface);color:var(--text);font-size:18px;text-align:center;margin-top:6px;">
+      </div>
+      <div id="gateLoginAlert" style="display:none;color:#f87171;font-size:13px;text-align:center;margin-bottom:8px;"></div>
+      <button id="gateLoginBtn" class="btn btn-primary" style="width:100%;">ログイン</button>
     </div>
   </div>
 
@@ -879,9 +884,9 @@
     caches.keys().then(function(n){n.forEach(function(k){caches.delete(k)})});
     navigator.serviceWorker.getRegistrations().then(function(r){r.forEach(function(s){s.unregister()})});
   </script>
-  <script src="config.js?v=60"></script>
-  <script src="js/app.js?v=60"></script>
-  <script src="js/tasks.js?v=60"></script>
-  <script src="js/voice-console.js?v=60"></script>
+  <script src="config.js?v=71"></script>
+  <script src="js/app.js?v=71"></script>
+  <script src="js/tasks.js?v=71"></script>
+  <script src="js/voice-console.js?v=71"></script>
 </body>
 </html>

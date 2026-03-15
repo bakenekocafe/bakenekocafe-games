@@ -441,4 +441,38 @@
     loadAll();
     scheduleNextRefresh();
   })();
+
+  // ─── Diary preview ───
+  (function () {
+    var listEl = document.getElementById('diary-preview-list');
+    if (!listEl) return;
+
+    function esc(s) { return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;'); }
+
+    fetch('/diary/entries.json')
+      .then(function (r) { return r.ok ? r.json() : []; })
+      .then(function (entries) {
+        if (!entries || entries.length === 0) {
+          listEl.innerHTML = '<p class="diary-preview-empty">まだ日記がありません</p>';
+          return;
+        }
+        var sorted = entries.slice().sort(function (a, b) { return a.date > b.date ? -1 : 1; });
+        var show = sorted.slice(0, 3);
+        var html = '';
+        for (var i = 0; i < show.length; i++) {
+          var e = show[i];
+          var snippet = (e.body || '').replace(/\n/g, ' ').substring(0, 60);
+          if ((e.body || '').length > 60) snippet += '…';
+          html += '<a href="diary/' + e.date + '.html" class="diary-preview-card">'
+            + '<div class="diary-preview-date">' + e.date + '</div>'
+            + '<div class="diary-preview-title">' + esc(e.title) + '</div>'
+            + '<div class="diary-preview-snippet">' + esc(snippet) + '</div>'
+            + '</a>';
+        }
+        listEl.innerHTML = html;
+      })
+      .catch(function () {
+        listEl.innerHTML = '<p class="diary-preview-empty">日記の読み込みに失敗しました</p>';
+      });
+  })();
 })();

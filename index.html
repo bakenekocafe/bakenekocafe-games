@@ -20,7 +20,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Noto+Serif+JP:wght@400;700;900&family=Share+Tech+Mono&family=Zen+Old+Mincho:wght@400;700;900&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="portal.css">
+  <link rel="stylesheet" href="portal.css?v=20260315a">
 </head>
 <body>
 
@@ -62,6 +62,7 @@
     <a href="index.html" class="portal-logo">BAKENEKO GAMES</a>
     <nav class="portal-nav">
       <a href="#games">ゲーム</a>
+      <a href="#diary">日記</a>
       <a href="#support">猫支援</a>
       <a href="#updates">更新</a>
       <a href="support.html">仕組み</a>
@@ -249,6 +250,20 @@
         </div>
       </section>
 
+      <!-- ═══ DIARY ═══ -->
+      <section class="portal-section diary-section" id="diary">
+        <h2 class="section-title">こはだ日記</h2>
+        <p class="diary-section-desc">BAKENEKO CAFE 副店長・こはだが綴る日々の記録 🐾</p>
+        <div class="diary-preview-list" id="diary-preview-list">
+          <p class="diary-preview-loading" style="text-align:center;opacity:.4;font-size:.85rem">読込中…</p>
+        </div>
+        <div style="text-align:center;margin-top:18px">
+          <a href="diary/" class="portal-cta" style="display:inline-flex">
+            <span>📖</span><span>日記をもっと読む</span>
+          </a>
+        </div>
+      </section>
+
       <!-- ═══ HOW ═══ -->
       <section class="portal-section how-section" id="how">
         <h2 class="section-title">広告と応援の仕組み</h2>
@@ -325,6 +340,7 @@
       </div>
       <nav class="footer-links">
         <a href="about.html">About</a>
+        <a href="diary/">こはだ日記</a>
         <a href="howto.html">遊び方ガイド</a>
         <a href="nameko.html">次回作</a>
         <a href="status.html">サーバー状況</a>
@@ -337,6 +353,6 @@
     </footer>
   </main>
 
-  <script src="portal.js"></script>
+  <script src="portal.js?v=20260315a"></script>
 </body>
 </html>

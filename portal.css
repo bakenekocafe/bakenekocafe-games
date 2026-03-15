@@ -847,3 +847,40 @@ a.portal-logo:hover{color:var(--gold)}
   color:rgba(232,232,240,.85);
 }
 @media(max-width:768px){.portal-section--page{padding:48px 20px 64px}}
+
+/* ══════════════════════════════════════════
+   DIARY SECTION (Portal)
+══════════════════════════════════════════ */
+.diary-section{padding-top:60px}
+.diary-section-desc{
+  text-align:center;font-size:.9rem;opacity:.6;margin-bottom:28px;
+}
+.diary-preview-list{
+  display:flex;flex-direction:column;gap:14px;max-width:640px;margin:0 auto;
+}
+.diary-preview-card{
+  display:block;padding:16px 20px;
+  background:rgba(255,255,255,.03);
+  border:1px solid rgba(255,215,0,.08);
+  border-radius:6px;
+  text-decoration:none;color:inherit;
+  transition:border-color .3s,background .3s,transform .2s;
+}
+.diary-preview-card:hover{
+  border-color:rgba(255,215,0,.3);
+  background:rgba(255,215,0,.04);
+  transform:translateY(-2px);
+}
+.diary-preview-date{
+  font-size:.72rem;color:var(--gold);opacity:.7;
+  letter-spacing:.1em;margin-bottom:4px;
+}
+.diary-preview-title{
+  font-size:1rem;font-weight:700;margin-bottom:6px;line-height:1.4;
+}
+.diary-preview-snippet{
+  font-size:.82rem;opacity:.45;line-height:1.5;
+}
+.diary-preview-empty{
+  text-align:center;font-size:.85rem;opacity:.4;padding:20px 0;
+}

@@ -1,0 +1,86 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+  <title>NYAGI</title>
+  <link rel="manifest" href="manifest.json">
+  <meta name="theme-color" content="#1a1a2e">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <link rel="stylesheet" href="style.css">
+  <link rel="stylesheet" href="voice-console.css">
+</head>
+<body>
+
+  <div class="header">
+    <h1>NYAGI</h1>
+    <p>BAKENEKO 統合管理</p>
+  </div>
+
+  <div class="offline-banner" id="offlineBanner">
+    オフライン — 入力は自動保存され、復帰時に送信されます
+  </div>
+
+  <!-- ── ログイン ────────────────── -->
+  <div class="login-section" id="loginSection">
+    <h2>ログイン</h2>
+    <div class="form-group">
+      <label for="passwordInput">4桁パスワード</label>
+      <input type="password" id="passwordInput" placeholder="例: 3374（開発用）" inputmode="numeric" pattern="[0-9]*" maxlength="4" autocomplete="off">
+    </div>
+    <div id="loginAlert" class="login-alert" style="display:none;"></div>
+    <button class="btn btn-primary" id="loginBtn">ログイン</button>
+  </div>
+
+  <!-- ── メイン入力 ──────────────── -->
+  <div class="input-section" id="inputSection">
+
+    <!-- 音声入力 -->
+    <div class="card">
+      <h3>🎤 音声入力</h3>
+      <button class="btn btn-record" id="recordBtn">🎤 録音開始</button>
+      <div class="transcript-preview" id="transcriptPreview" style="margin-top:12px;display:none;"></div>
+      <div style="margin-top:12px;display:none;" id="editArea">
+        <textarea class="transcript-edit" id="transcriptEdit" rows="2" placeholder="認識結果を編集..."></textarea>
+        <button class="btn btn-primary" id="submitVoiceBtn" style="margin-top:8px;">送信</button>
+      </div>
+    </div>
+
+    <!-- テキスト入力 -->
+    <div class="card">
+      <h3>⌨️ テキスト入力</h3>
+      <div class="text-input-row">
+        <input type="text" id="textInput" placeholder="例: こはだ うんちした 普通">
+        <button class="btn btn-primary" id="submitTextBtn" style="width:auto;padding:10px 16px;">送信</button>
+      </div>
+    </div>
+
+    <!-- 結果表示 -->
+    <div id="resultArea"></div>
+
+    <!-- 履歴 -->
+    <div class="history-section visible" id="historySection">
+      <h2>入力履歴</h2>
+      <div id="historyList"></div>
+    </div>
+
+    <div style="margin-top:16px;display:flex;gap:10px;flex-wrap:wrap;">
+      <a href="dashboard.html" class="btn btn-outline" style="text-decoration:none;text-align:center;flex:1;">ダッシュボード</a>
+      <a href="cats.html" class="btn btn-outline" style="text-decoration:none;text-align:center;flex:1;">猫一覧</a>
+      <a href="staff.html" class="btn btn-outline" style="text-decoration:none;text-align:center;flex:1;">スタッフ登録</a>
+    </div>
+    <div style="margin-top:8px;">
+      <button class="btn btn-outline" id="logoutBtn" style="width:100%;">ログアウト</button>
+    </div>
+  </div>
+
+  <div class="footer">
+    &copy; BAKENEKO GAMES
+  </div>
+
+  <script src="config.js"></script>
+  <script src="js/app.js"></script>
+  <script src="js/voice-console.js"></script>
+</body>
+</html>

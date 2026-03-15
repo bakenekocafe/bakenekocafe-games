@@ -1,0 +1,887 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
+  <meta http-equiv="Pragma" content="no-cache">
+  <meta http-equiv="Expires" content="0">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+  <title>NYAGI タスク</title>
+  <link rel="manifest" href="manifest.json">
+  <meta name="theme-color" content="#1a1a2e">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <link rel="stylesheet" href="style.css">
+  <link rel="stylesheet" href="voice-console.css">
+  <style>
+    /* ── タブ ─────────────────────────────────── */
+    .tab-bar {
+      display: flex;
+      gap: 6px;
+      margin-bottom: 14px;
+    }
+    .tab-btn {
+      flex: 1;
+      background: var(--surface);
+      border: none;
+      border-radius: 8px;
+      padding: 9px 4px;
+      color: var(--text-dim);
+      font-size: 11px;
+      cursor: pointer;
+      white-space: nowrap;
+    }
+    .tab-btn.active {
+      background: var(--primary);
+      color: #fff;
+      font-weight: 700;
+    }
+
+    /* ── フィルタ ─────────────────────────────── */
+    .filter-row {
+      display: flex;
+      gap: 6px;
+      margin-bottom: 12px;
+      flex-wrap: wrap;
+    }
+    .filter-select, .filter-date {
+      flex: 1;
+      min-width: 0;
+      background: var(--surface);
+      border: 1px solid var(--surface-alt);
+      border-radius: 6px;
+      padding: 7px 8px;
+      color: var(--text-main);
+      font-size: 12px;
+    }
+    .filter-btn {
+      background: var(--primary);
+      color: #fff;
+      border: none;
+      border-radius: 6px;
+      padding: 7px 12px;
+      font-size: 12px;
+      cursor: pointer;
+      flex-shrink: 0;
+    }
+
+    /* ── 属性進捗サマリー ─────────────────────── */
+    .attr-progress-wrap {
+      background: var(--surface);
+      border-radius: 10px;
+      padding: 12px 14px;
+      margin-bottom: 14px;
+    }
+    .attr-progress-total {
+      display: flex;
+      justify-content: space-between;
+      font-size: 13px;
+      font-weight: 700;
+      margin-bottom: 10px;
+    }
+    .attr-progress-item {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      margin-bottom: 6px;
+      cursor: pointer;
+    }
+    .attr-progress-item:last-child { margin-bottom: 0; }
+    .attr-icon { font-size: 14px; width: 20px; text-align: center; flex-shrink: 0; }
+    .attr-label { font-size: 12px; width: 72px; flex-shrink: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .attr-bar-bg {
+      flex: 1;
+      background: var(--surface-alt);
+      border-radius: 3px;
+      height: 6px;
+      overflow: hidden;
+    }
+    .attr-bar-fill {
+      height: 100%;
+      border-radius: 3px;
+      transition: width 0.4s;
+    }
+    .attr-bar-fill.green  { background: #4ade80; }
+    .attr-bar-fill.yellow { background: #facc15; }
+    .attr-bar-fill.red    { background: #f87171; }
+    .attr-count { font-size: 11px; color: var(--text-dim); width: 44px; text-align: right; flex-shrink: 0; }
+    .attr-complete-mark { font-size: 10px; margin-left: 2px; }
+
+    /* ── 属性グループヘッダ ───────────────────── */
+    .attr-group-header {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 10px 4px 6px;
+      margin-top: 8px;
+    }
+    .attr-group-header .attr-avatar {
+      width: 28px;
+      height: 28px;
+      border-radius: 50%;
+      background: var(--surface-alt);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 13px;
+      flex-shrink: 0;
+    }
+    .attr-group-header .attr-group-name {
+      font-size: 14px;
+      font-weight: 700;
+      color: var(--text-main);
+    }
+    .attr-group-header .attr-group-count {
+      font-size: 11px;
+      color: var(--text-dim);
+      margin-left: auto;
+    }
+
+    /* ── タスクアイテム ───────────────────────── */
+    .task-item {
+      background: var(--surface);
+      border-radius: 8px;
+      padding: 12px;
+      margin-bottom: 6px;
+      display: flex;
+      align-items: flex-start;
+      gap: 10px;
+    }
+    .task-item.done { opacity: 0.5; }
+    .task-item.skipped { opacity: 0.4; }
+    .task-check {
+      font-size: 18px;
+      line-height: 1;
+      cursor: pointer;
+      flex-shrink: 0;
+      padding-top: 1px;
+    }
+    .task-body { flex: 1; min-width: 0; }
+    .task-title {
+      font-size: 14px;
+      font-weight: 600;
+      word-break: break-all;
+    }
+    .task-meta {
+      font-size: 11px;
+      color: var(--text-dim);
+      margin-top: 3px;
+      display: flex;
+      flex-wrap: wrap;
+      gap: 6px;
+      align-items: center;
+    }
+    .task-done-info {
+      font-size: 11px;
+      color: #4ade80;
+      margin-top: 2px;
+    }
+    .task-note-preview {
+      font-size: 11px;
+      color: var(--text-dim);
+      margin-top: 4px;
+      background: var(--surface-alt);
+      border-radius: 4px;
+      padding: 4px 8px;
+      white-space: pre-line;
+      max-height: 60px;
+      overflow: hidden;
+    }
+    .task-actions-row {
+      display: flex;
+      gap: 6px;
+      margin-top: 6px;
+    }
+    .task-action-btn {
+      background: var(--surface-alt);
+      border: none;
+      border-radius: 4px;
+      padding: 3px 8px;
+      font-size: 11px;
+      color: var(--text-dim);
+      cursor: pointer;
+    }
+    .task-action-btn:hover { background: var(--primary); color: #fff; }
+
+    /* ── バッジ ───────────────────────────────── */
+    .task-priority-badge {
+      display: inline-block;
+      font-size: 10px;
+      padding: 2px 6px;
+      border-radius: 4px;
+      font-weight: 700;
+    }
+    .task-priority-badge.urgent { background: #7f1d1d; color: #fca5a5; }
+    .task-priority-badge.high   { background: #431407; color: #fb923c; }
+    .task-priority-badge.normal { display: none; }
+    .task-priority-badge.low    { background: var(--surface-alt); color: var(--text-dim); opacity: 0.6; }
+
+    .task-type-badge {
+      display: inline-block;
+      font-size: 10px;
+      padding: 2px 6px;
+      border-radius: 4px;
+      font-weight: 600;
+    }
+    .task-type-badge.routine   { background: #1e3a5f; color: #93c5fd; }
+    .task-type-badge.event     { background: #3b0764; color: #d8b4fe; }
+    .task-type-badge.monitoring { background: #14532d; color: #86efac; }
+
+    /* ── テンプレート管理 ─────────────────────── */
+    .template-item {
+      background: var(--surface);
+      border-radius: 8px;
+      padding: 12px;
+      margin-bottom: 6px;
+    }
+    .template-name { font-size: 14px; font-weight: 600; }
+    .template-meta { font-size: 11px; color: var(--text-dim); margin-top: 4px; display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
+    .template-recurrence {
+      display: inline-block;
+      font-size: 10px;
+      padding: 2px 6px;
+      border-radius: 4px;
+      background: var(--surface-alt);
+      color: var(--text-dim);
+    }
+
+    /* ── プロジェクト ─────────────────────────── */
+    .project-card {
+      background: var(--surface);
+      border-radius: 10px;
+      padding: 14px;
+      margin-bottom: 10px;
+      cursor: pointer;
+    }
+    .project-card:hover { background: var(--surface-alt); }
+    .project-title-row {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    .project-title-row .icon { font-size: 16px; }
+    .project-title-row .name { font-size: 14px; font-weight: 700; flex: 1; }
+    .project-due { font-size: 11px; color: var(--text-dim); }
+    .project-progress-row {
+      margin-top: 8px;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    .project-progress-row .bar-bg {
+      flex: 1;
+      background: var(--surface-alt);
+      border-radius: 3px;
+      height: 6px;
+      overflow: hidden;
+    }
+    .project-progress-row .bar-fill {
+      height: 100%;
+      border-radius: 3px;
+      background: #4ade80;
+      transition: width 0.4s;
+    }
+    .project-progress-row .pct {
+      font-size: 11px;
+      color: var(--text-dim);
+      width: 42px;
+      text-align: right;
+    }
+
+    /* ── プロジェクトツリー ───────────────────── */
+    .tree-back-btn {
+      background: var(--surface-alt);
+      border: none;
+      border-radius: 6px;
+      padding: 6px 12px;
+      font-size: 12px;
+      color: var(--text-dim);
+      cursor: pointer;
+      margin-bottom: 12px;
+    }
+    .tree-header {
+      margin-bottom: 14px;
+    }
+    .tree-header h2 { font-size: 16px; font-weight: 700; margin: 0 0 4px; }
+    .tree-node {
+      padding-left: 20px;
+      margin-bottom: 2px;
+    }
+    .tree-node-root { padding-left: 0; }
+    .tree-node-item {
+      display: flex;
+      align-items: flex-start;
+      gap: 6px;
+      padding: 6px 8px;
+      border-radius: 6px;
+      cursor: pointer;
+    }
+    .tree-node-item:hover { background: var(--surface); }
+    .tree-node-item .node-icon { font-size: 14px; flex-shrink: 0; padding-top: 1px; }
+    .tree-node-item .node-title { font-size: 13px; flex: 1; }
+    .tree-node-item .node-title.done { text-decoration: line-through; opacity: 0.5; }
+    .tree-node-item .node-meta { font-size: 10px; color: var(--text-dim); }
+    .tree-node-toggle {
+      font-size: 10px;
+      color: var(--text-dim);
+      cursor: pointer;
+      user-select: none;
+      padding: 2px 4px;
+    }
+    .tree-actions {
+      display: flex;
+      gap: 6px;
+      margin-top: 12px;
+    }
+
+    /* ── 監視タスク ───────────────────────────── */
+    .monitoring-section {
+      background: var(--surface);
+      border-radius: 10px;
+      padding: 14px;
+      margin-bottom: 14px;
+      border-left: 3px solid #86efac;
+    }
+
+    /* ── モーダル ─────────────────────────────── */
+    .modal-overlay {
+      display: none;
+      position: fixed;
+      inset: 0;
+      background: rgba(0,0,0,.6);
+      z-index: 1000;
+      align-items: center;
+      justify-content: center;
+    }
+    .modal-overlay.open { display: flex; }
+    .modal-box {
+      background: var(--bg);
+      border-radius: 12px;
+      padding: 20px;
+      width: 90%;
+      max-width: 420px;
+      max-height: 85vh;
+      overflow-y: auto;
+    }
+    .modal-title { font-size: 16px; font-weight: 700; margin-bottom: 16px; }
+    .form-group { margin-bottom: 12px; }
+    .form-label { font-size: 12px; color: var(--text-dim); margin-bottom: 4px; display: block; }
+    .form-input, .form-select, .form-textarea {
+      width: 100%;
+      box-sizing: border-box;
+      background: var(--surface);
+      border: 1px solid var(--surface-alt);
+      border-radius: 6px;
+      padding: 8px 10px;
+      color: var(--text-main);
+      font-size: 13px;
+    }
+    .form-textarea { resize: vertical; min-height: 60px; }
+    .modal-actions { display: flex; gap: 8px; margin-top: 16px; }
+    .modal-actions .btn { flex: 1; font-size: 13px; padding: 10px; }
+
+    .section-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 10px;
+    }
+    .detail-title {
+      font-size: 15px;
+      font-weight: 700;
+      padding-left: 4px;
+    }
+    .btn-add {
+      background: var(--primary);
+      color: #fff;
+      border: none;
+      border-radius: 6px;
+      padding: 6px 12px;
+      font-size: 12px;
+      cursor: pointer;
+    }
+
+    /* ── スキップ理由チップ ───────────────────── */
+    .skip-reason-chips {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 6px;
+      margin-bottom: 8px;
+    }
+    .skip-chip {
+      background: var(--surface);
+      border: 1px solid var(--surface-alt);
+      border-radius: 16px;
+      padding: 4px 12px;
+      font-size: 12px;
+      color: var(--text-dim);
+      cursor: pointer;
+    }
+    .skip-chip.selected { background: var(--primary); color: #fff; border-color: var(--primary); }
+
+    /* ── トースト ─────────────────────────────── */
+    .toast {
+      position: fixed;
+      bottom: 20px;
+      left: 50%;
+      transform: translateX(-50%);
+      background: #1e293b;
+      color: #fff;
+      padding: 10px 20px;
+      border-radius: 8px;
+      font-size: 13px;
+      z-index: 2000;
+      opacity: 0;
+      transition: opacity 0.3s;
+      pointer-events: none;
+    }
+    .toast.show { opacity: 1; }
+
+    /* ── 業務終了 ─────────────────────────────── */
+    .close-day-task {
+      background: var(--surface);
+      border-radius: 6px;
+      padding: 10px;
+      margin-bottom: 6px;
+    }
+    .close-day-task-title { font-size: 13px; font-weight: 600; margin-bottom: 6px; }
+    .close-day-task .streak-warn { color: #f87171; font-size: 11px; margin-left: 6px; }
+    .close-day-reason-select {
+      width: 100%;
+      background: var(--surface-alt);
+      border: 1px solid var(--surface-alt);
+      border-radius: 4px;
+      padding: 6px 8px;
+      color: var(--text-main);
+      font-size: 12px;
+    }
+    .close-day-reason-text {
+      width: 100%;
+      box-sizing: border-box;
+      background: var(--surface-alt);
+      border: 1px solid var(--surface-alt);
+      border-radius: 4px;
+      padding: 6px 8px;
+      color: var(--text-main);
+      font-size: 12px;
+      margin-top: 4px;
+      display: none;
+    }
+  </style>
+</head>
+<body>
+
+  <div class="header">
+    <h1>NYAGI</h1>
+    <p>タスク管理</p>
+  </div>
+
+  <div class="offline-banner" id="offlineBanner">
+    オフライン — 入力は自動保存され、復帰時に送信されます
+  </div>
+
+  <div id="loginGate" style="display:none;">
+    <div class="card">
+      <p style="text-align:center;color:var(--text-dim);font-size:14px;">先にログインしてください</p>
+      <a href="index.html" class="btn btn-primary" style="margin-top:12px;text-decoration:none;text-align:center;">ログイン画面へ</a>
+    </div>
+  </div>
+
+  <div id="taskContent" style="display:none;">
+
+    <!-- 拠点セレクター -->
+    <div style="display:flex;gap:6px;margin-bottom:10px;align-items:center;">
+      <select id="locationSelect" class="filter-select" style="flex:1;" onchange="onLocationChange()">
+        <option value="both">全拠点</option>
+        <option value="cafe">🐱 BAKENEKO CAFE</option>
+        <option value="nekomata">🏥 猫又療養所</option>
+      </select>
+      <button id="closeDayBtn" class="btn-add" onclick="startCloseDay()" style="background:#7f1d1d;color:#fca5a5;font-size:11px;padding:8px 12px;white-space:nowrap;">🔒 業務終了</button>
+    </div>
+
+    <div class="tab-bar">
+      <button class="tab-btn active" id="tabToday" onclick="switchTab('today')">今日のタスク</button>
+      <button class="tab-btn" id="tabProjects" onclick="switchTab('projects')">プロジェクト</button>
+      <button class="tab-btn" id="tabMonitoring" onclick="switchTab('monitoring')">監視中</button>
+      <button class="tab-btn" id="tabTemplates" onclick="switchTab('templates')">テンプレート</button>
+    </div>
+
+    <!-- 今日のタスクビュー -->
+    <div id="todayView">
+      <div class="filter-row">
+        <input type="date" id="filterDate" class="filter-date">
+        <select id="filterStatus" class="filter-select">
+          <option value="">すべて</option>
+          <option value="pending">未完了</option>
+          <option value="done">完了</option>
+          <option value="skipped">スキップ</option>
+        </select>
+        <button class="filter-btn" onclick="loadTasks()">更新</button>
+      </div>
+      <div id="progressArea"></div>
+      <div id="taskListArea"><div class="loading"><span class="spinner"></span> 読み込み中...</div></div>
+      <div style="margin-top:12px;">
+        <button class="btn btn-outline" style="width:100%;font-size:13px;" onclick="openNewTaskModal()">+ タスクを追加</button>
+      </div>
+    </div>
+
+    <!-- プロジェクトビュー -->
+    <div id="projectsView" style="display:none;">
+      <div id="projectListArea"><div class="loading"><span class="spinner"></span> 読み込み中...</div></div>
+      <div id="projectDetailArea" style="display:none;"></div>
+      <div id="projectListActions" style="margin-top:12px;">
+        <button class="btn btn-outline" style="width:100%;font-size:13px;" onclick="openNewProjectModal()">+ 新規プロジェクト</button>
+      </div>
+    </div>
+
+    <!-- 監視タスクビュー -->
+    <div id="monitoringView" style="display:none;">
+      <div id="monitoringListArea"><div class="loading"><span class="spinner"></span> 読み込み中...</div></div>
+      <div style="margin-top:12px;">
+        <button class="btn btn-outline" style="width:100%;font-size:13px;" onclick="openNewTaskModal('monitoring')">+ 監視タスクを追加</button>
+      </div>
+    </div>
+
+    <!-- テンプレートビュー -->
+    <div id="templateView" style="display:none;">
+      <div class="section-header">
+        <div class="detail-title">テンプレート一覧</div>
+        <div style="display:flex;gap:6px;">
+          <button class="btn-add" onclick="generateFromTemplates()" style="background:#14532d;color:#86efac;">⚡ 一括生成</button>
+          <button class="btn-add" onclick="openNewTemplateModal()">+ 追加</button>
+        </div>
+      </div>
+      <div id="templateListArea"><div class="loading"><span class="spinner"></span> 読み込み中...</div></div>
+    </div>
+
+  </div>
+
+  <!-- アドホックタスク追加モーダル -->
+  <div id="newTaskModal" class="modal-overlay">
+    <div class="modal-box">
+      <div class="modal-title" id="ntModalTitle">+ タスクを追加</div>
+      <div class="form-group">
+        <label class="form-label">タイトル *</label>
+        <input type="text" id="ntTitle" class="form-input" placeholder="例: 消毒液補充">
+      </div>
+      <div class="form-group">
+        <label class="form-label">タスク種類</label>
+        <select id="ntTaskType" class="form-select">
+          <option value="routine">ルーティン</option>
+          <option value="event">イベント</option>
+          <option value="monitoring">監視</option>
+        </select>
+      </div>
+      <div class="form-group">
+        <label class="form-label">属性</label>
+        <select id="ntAttribute" class="form-select">
+          <option value="opening">🌅 開店準備</option>
+          <option value="cat_care">🐱 猫のお世話</option>
+          <option value="medical">💊 医療・投薬</option>
+          <option value="cleaning">🧹 清掃</option>
+          <option value="closing">🌙 閉店作業</option>
+          <option value="other">📋 その他</option>
+        </select>
+      </div>
+      <div class="form-group">
+        <label class="form-label">対象の猫</label>
+        <select id="ntCatId" class="form-select">
+          <option value="">共通（猫なし）</option>
+        </select>
+      </div>
+      <div class="form-group">
+        <label class="form-label">依頼先</label>
+        <select id="ntAssignedTo" class="form-select">
+          <option value="">指定なし</option>
+        </select>
+      </div>
+      <div class="form-group">
+        <label class="form-label">優先度</label>
+        <select id="ntPriority" class="form-select">
+          <option value="normal">通常</option>
+          <option value="high">高</option>
+          <option value="urgent">緊急</option>
+          <option value="low">低</option>
+        </select>
+      </div>
+      <div class="form-group" id="ntDateGroup">
+        <label class="form-label">期日</label>
+        <input type="date" id="ntDueDate" class="form-input">
+      </div>
+      <div class="form-group" id="ntTimeGroup">
+        <label class="form-label">時間帯</label>
+        <select id="ntDueTime" class="form-select">
+          <option value="">指定なし</option>
+          <option value="morning">朝</option>
+          <option value="afternoon">昼</option>
+          <option value="evening">夕</option>
+        </select>
+      </div>
+      <div class="form-group" id="ntExpiresGroup" style="display:none;">
+        <label class="form-label">監視期限</label>
+        <input type="date" id="ntExpiresAt" class="form-input">
+      </div>
+      <div class="form-group">
+        <label class="form-label">メモ（任意）</label>
+        <textarea id="ntNote" class="form-textarea" placeholder="詳細を記入..."></textarea>
+      </div>
+      <div class="modal-actions">
+        <button class="btn btn-outline" onclick="closeNewTaskModal()">キャンセル</button>
+        <button class="btn btn-primary" onclick="submitNewTask()">追加</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- スキップ理由モーダル -->
+  <div id="skipModal" class="modal-overlay">
+    <div class="modal-box">
+      <div class="modal-title">スキップ理由</div>
+      <input type="hidden" id="skipTaskId" value="">
+      <div class="skip-reason-chips">
+        <div class="skip-chip" onclick="selectSkipReason(this)">猫が嫌がった</div>
+        <div class="skip-chip" onclick="selectSkipReason(this)">体調不良で延期</div>
+        <div class="skip-chip" onclick="selectSkipReason(this)">在庫切れ</div>
+        <div class="skip-chip" onclick="selectSkipReason(this)">不要と判断</div>
+        <div class="skip-chip" onclick="selectSkipReason(this)">時間切れ</div>
+      </div>
+      <div class="form-group">
+        <label class="form-label">自由入力（任意）</label>
+        <input type="text" id="skipReasonText" class="form-input" placeholder="その他の理由...">
+      </div>
+      <div class="modal-actions">
+        <button class="btn btn-outline" onclick="closeSkipModal()">キャンセル</button>
+        <button class="btn btn-primary" onclick="submitSkip()">スキップ</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- メモ追記モーダル -->
+  <div id="noteModal" class="modal-overlay">
+    <div class="modal-box">
+      <div class="modal-title">メモ追記</div>
+      <input type="hidden" id="noteTaskId" value="">
+      <div class="form-group">
+        <label class="form-label">内容 *</label>
+        <textarea id="noteText" class="form-textarea" placeholder="気づきや変化を記入..."></textarea>
+      </div>
+      <div class="form-group" id="noteCatNoteGroup" style="display:none;">
+        <label style="font-size:12px;color:var(--text-dim);display:flex;align-items:center;gap:6px;">
+          <input type="checkbox" id="noteAlsoCat" checked> 猫の注意事項にも記録
+        </label>
+      </div>
+      <div class="modal-actions">
+        <button class="btn btn-outline" onclick="closeNoteModal()">キャンセル</button>
+        <button class="btn btn-primary" onclick="submitNote()">保存</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- テンプレート追加/編集モーダル -->
+  <div id="newTemplateModal" class="modal-overlay">
+    <div class="modal-box">
+      <div class="modal-title" id="tmplModalTitle">+ テンプレートを追加</div>
+      <input type="hidden" id="tmplEditMode" value="">
+      <div class="form-group" id="tmplIdGroup">
+        <label class="form-label">テンプレートID *</label>
+        <input type="text" id="tmplId" class="form-input" placeholder="例: tmpl_morning_water">
+      </div>
+      <div class="form-group">
+        <label class="form-label">タイトル *</label>
+        <input type="text" id="tmplTitle" class="form-input" placeholder="例: 朝の水換え">
+      </div>
+      <div class="form-group">
+        <label class="form-label">タスク種類 *</label>
+        <select id="tmplTaskType" class="form-select">
+          <option value="routine">ルーティン</option>
+          <option value="event">イベント</option>
+          <option value="monitoring">監視</option>
+        </select>
+      </div>
+      <div class="form-group">
+        <label class="form-label">属性 *</label>
+        <select id="tmplAttribute" class="form-select">
+          <option value="opening">🌅 開店準備</option>
+          <option value="cat_care">🐱 猫のお世話</option>
+          <option value="medical">💊 医療・投薬</option>
+          <option value="cleaning">🧹 清掃</option>
+          <option value="closing">🌙 閉店作業</option>
+          <option value="other">📋 その他</option>
+        </select>
+      </div>
+      <div class="form-group">
+        <label class="form-label">対象の猫</label>
+        <select id="tmplCatId" class="form-select">
+          <option value="">共通（猫なし）</option>
+        </select>
+      </div>
+      <div class="form-group">
+        <label class="form-label">依頼先（デフォルト）</label>
+        <select id="tmplAssignedTo" class="form-select">
+          <option value="">指定なし</option>
+        </select>
+      </div>
+      <div class="form-group">
+        <label class="form-label">繰り返し *</label>
+        <select id="tmplRecurrence" class="form-select">
+          <option value="daily">毎日</option>
+          <option value="weekly:1">毎週月曜</option>
+          <option value="weekly:2">毎週火曜</option>
+          <option value="weekly:3">毎週水曜</option>
+          <option value="weekly:4">毎週木曜</option>
+          <option value="weekly:5">毎週金曜</option>
+          <option value="weekly:6">毎週土曜</option>
+          <option value="weekly:0">毎週日曜</option>
+          <option value="weekly:1,3">毎週月・水</option>
+          <option value="weekly:2,4">毎週火・木</option>
+          <option value="weekly:1,2,3,4,5">平日</option>
+          <option value="weekly:0,6">土日</option>
+          <option value="monthly:1">毎月1日</option>
+          <option value="monthly:1,15">毎月1・15日</option>
+          <option value="once">1回のみ</option>
+        </select>
+      </div>
+      <div class="form-group">
+        <label class="form-label">時間帯</label>
+        <select id="tmplTimeSlot" class="form-select">
+          <option value="">指定なし</option>
+          <option value="morning">朝</option>
+          <option value="afternoon">昼</option>
+          <option value="evening">夕</option>
+        </select>
+      </div>
+      <div class="form-group">
+        <label class="form-label">優先度</label>
+        <select id="tmplPriority" class="form-select">
+          <option value="normal">通常</option>
+          <option value="high">高</option>
+          <option value="urgent">緊急</option>
+          <option value="low">低</option>
+        </select>
+      </div>
+      <div class="form-group">
+        <label class="form-label">並び順</label>
+        <input type="number" id="tmplSortOrder" class="form-input" value="0" min="0">
+      </div>
+      <div class="form-group">
+        <label class="form-label">説明（任意）</label>
+        <input type="text" id="tmplDescription" class="form-input" placeholder="補足説明">
+      </div>
+      <div class="modal-actions">
+        <button class="btn btn-outline" onclick="closeNewTemplateModal()">キャンセル</button>
+        <button class="btn btn-primary" id="tmplSubmitBtn" onclick="submitNewTemplate()">保存</button>
+      </div>
+      <div id="tmplDeleteArea" style="display:none;margin-top:12px;text-align:center;">
+        <button onclick="deleteTemplate()" style="background:none;border:none;color:#f87171;font-size:12px;cursor:pointer;padding:6px 12px;">このテンプレートを削除</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- 業務終了モーダル -->
+  <div id="closeDayModal" class="modal-overlay">
+    <div class="modal-box" style="max-height:90vh;">
+      <div class="modal-title">🔒 業務終了</div>
+      <div id="closeDayLocationLabel" style="font-size:13px;color:var(--primary);font-weight:700;margin-bottom:12px;"></div>
+      <div id="closeDayStats" style="font-size:13px;margin-bottom:12px;"></div>
+      <div id="closeDayPendingList" style="margin-bottom:12px;max-height:40vh;overflow-y:auto;"></div>
+      <div class="form-group">
+        <label class="form-label">特記事項（任意）</label>
+        <textarea id="closeDayNotes" class="form-textarea" placeholder="引継ぎ事項や特記メモ..."></textarea>
+      </div>
+      <div id="closeDayPreviewArea" style="display:none;margin-bottom:12px;background:var(--surface);border-radius:8px;padding:12px;font-size:12px;white-space:pre-line;max-height:30vh;overflow-y:auto;"></div>
+      <div class="modal-actions">
+        <button class="btn btn-outline" onclick="closeCloseDayModal()">キャンセル</button>
+        <button class="btn btn-primary" id="closeDayPreviewBtn" onclick="previewCloseDay()" style="background:#7f1d1d;color:#fca5a5;">確認画面へ</button>
+        <button class="btn btn-primary" id="closeDayConfirmBtn" onclick="confirmCloseDay()" style="display:none;background:#991b1b;color:#fca5a5;">送信して業務終了</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- 新規プロジェクトモーダル -->
+  <div id="newProjectModal" class="modal-overlay">
+    <div class="modal-box">
+      <div class="modal-title">+ 新規プロジェクト</div>
+      <div class="form-group">
+        <label class="form-label">プロジェクト名 *</label>
+        <input type="text" id="npTitle" class="form-input" placeholder="例: こはだ誕生日イベント">
+      </div>
+      <div class="form-group">
+        <label class="form-label">概要</label>
+        <textarea id="npDescription" class="form-textarea" placeholder="プロジェクトの概要..."></textarea>
+      </div>
+      <div class="form-group">
+        <label class="form-label">期限</label>
+        <input type="date" id="npDueDate" class="form-input">
+      </div>
+      <div class="modal-actions">
+        <button class="btn btn-outline" onclick="closeNewProjectModal()">キャンセル</button>
+        <button class="btn btn-primary" onclick="submitNewProject()">作成</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ノード追加モーダル -->
+  <div id="newNodeModal" class="modal-overlay">
+    <div class="modal-box">
+      <div class="modal-title" id="nnModalTitle">+ ノード追加</div>
+      <input type="hidden" id="nnProjectId" value="">
+      <input type="hidden" id="nnParentId" value="">
+      <div class="form-group">
+        <label class="form-label">種類 *</label>
+        <select id="nnNodeType" class="form-select" onchange="toggleNodeFields()">
+          <option value="thought">💭 思考・メモ</option>
+          <option value="task">☐ タスク</option>
+        </select>
+      </div>
+      <div class="form-group">
+        <label class="form-label">タイトル *</label>
+        <input type="text" id="nnTitle" class="form-input" placeholder="ノード名">
+      </div>
+      <div class="form-group">
+        <label class="form-label">詳細（任意）</label>
+        <textarea id="nnBody" class="form-textarea" placeholder="詳細テキスト..."></textarea>
+      </div>
+      <div id="nnTaskFields" style="display:none;">
+        <div class="form-group">
+          <label class="form-label">担当</label>
+          <select id="nnAssignedTo" class="form-select">
+            <option value="">未割当</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label class="form-label">期限</label>
+          <input type="date" id="nnDueDate" class="form-input">
+        </div>
+        <div class="form-group">
+          <label class="form-label">優先度</label>
+          <select id="nnPriority" class="form-select">
+            <option value="normal">通常</option>
+            <option value="high">高</option>
+            <option value="urgent">緊急</option>
+          </select>
+        </div>
+      </div>
+      <div class="modal-actions">
+        <button class="btn btn-outline" onclick="closeNewNodeModal()">キャンセル</button>
+        <button class="btn btn-primary" onclick="submitNewNode()">追加</button>
+      </div>
+    </div>
+  </div>
+
+  <div id="toast" class="toast"></div>
+
+  <div class="footer" style="margin-top:24px;">
+    <a href="dashboard.html" style="color:var(--text-dim);font-size:13px;">← ダッシュボードに戻る</a>
+    <span style="color:var(--surface-alt);margin:0 8px;">|</span>
+    <a href="cats.html" style="color:var(--text-dim);font-size:13px;">猫一覧</a>
+  </div>
+
+  <script>
+    caches.keys().then(function(n){n.forEach(function(k){caches.delete(k)})});
+    navigator.serviceWorker.getRegistrations().then(function(r){r.forEach(function(s){s.unregister()})});
+  </script>
+  <script src="config.js?v=60"></script>
+  <script src="js/app.js?v=60"></script>
+  <script src="js/tasks.js?v=60"></script>
+  <script src="js/voice-console.js?v=60"></script>
+</body>
+</html>

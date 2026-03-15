@@ -1,0 +1,357 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+  <title>NYAGI 薬マスター</title>
+  <link rel="manifest" href="manifest.json">
+  <meta name="theme-color" content="#1a1a2e">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <link rel="stylesheet" href="style.css">
+  <style>
+    .tab-bar {
+      display: flex;
+      gap: 6px;
+      margin-bottom: 14px;
+    }
+    .tab-btn {
+      flex: 1;
+      background: var(--surface);
+      border: none;
+      border-radius: 8px;
+      padding: 9px 4px;
+      color: var(--text-dim);
+      font-size: 12px;
+      cursor: pointer;
+      white-space: nowrap;
+    }
+    .tab-btn.active {
+      background: var(--primary);
+      color: #fff;
+      font-weight: 700;
+    }
+
+    .search-bar {
+      display: flex;
+      gap: 6px;
+      margin-bottom: 12px;
+    }
+    .search-input {
+      flex: 1;
+      background: var(--surface);
+      border: 1px solid var(--surface-alt);
+      border-radius: 8px;
+      padding: 10px 12px;
+      color: var(--text);
+      font-size: 13px;
+    }
+    .search-input::placeholder { color: var(--text-dim); }
+    .search-input:focus { border-color: var(--primary); outline: none; }
+
+    .med-count {
+      font-size: 12px;
+      color: var(--text-dim);
+      margin-bottom: 10px;
+    }
+    .med-grid {
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+    .med-item {
+      background: var(--surface);
+      border-radius: 10px;
+      padding: 12px 14px;
+      display: flex;
+      align-items: flex-start;
+      gap: 10px;
+      cursor: pointer;
+      transition: background 0.15s;
+    }
+    .med-item:active { background: var(--surface-alt); }
+    .med-item.inactive { opacity: 0.5; }
+    .med-icon {
+      font-size: 20px;
+      min-width: 28px;
+      text-align: center;
+      padding-top: 2px;
+    }
+    .med-info { flex: 1; min-width: 0; }
+    .med-name {
+      font-size: 13px;
+      font-weight: 700;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+    .med-meta {
+      font-size: 11px;
+      color: var(--text-dim);
+      margin-top: 2px;
+    }
+    .med-badge {
+      display: inline-block;
+      font-size: 10px;
+      padding: 1px 6px;
+      border-radius: 4px;
+      margin-right: 4px;
+    }
+    .med-badge.cat { background: #e94560; color: #fff; }
+    .med-badge.dog { background: #3b82f6; color: #fff; }
+    .med-badge.both { background: #8b5cf6; color: #fff; }
+    .med-badge.cat-form { background: #b45309; color: #fef3c7; }
+    .med-badge.antibiotic { background: #dc2626; color: #fef2f2; }
+    .med-badge.supplement { background: #059669; color: #d1fae5; }
+    .med-badge.painkiller { background: #d97706; color: #fef3c7; }
+    .med-badge.other { background: #2563eb; color: #eff6ff; }
+
+    .modal-overlay {
+      display: none;
+      position: fixed;
+      top: 0; left: 0; right: 0; bottom: 0;
+      background: rgba(0,0,0,0.7);
+      z-index: 1000;
+      justify-content: center;
+      align-items: flex-end;
+    }
+    .modal-overlay.open { display: flex; }
+    .modal-box {
+      background: var(--surface);
+      border-radius: 16px 16px 0 0;
+      padding: 20px;
+      width: 100%;
+      max-width: 500px;
+      max-height: 80vh;
+      overflow-y: auto;
+    }
+    .modal-title {
+      font-size: 16px;
+      font-weight: 700;
+      margin-bottom: 14px;
+    }
+    .detail-row {
+      display: flex;
+      justify-content: space-between;
+      padding: 6px 0;
+      border-bottom: 1px solid var(--surface-alt);
+      font-size: 13px;
+    }
+    .detail-label { color: var(--text-dim); }
+    .detail-value { font-weight: 600; text-align: right; }
+    .modal-actions {
+      display: flex;
+      gap: 8px;
+      margin-top: 14px;
+    }
+    .modal-actions .btn { flex: 1; }
+
+    .form-group {
+      margin-bottom: 12px;
+    }
+    .form-label {
+      font-size: 11px;
+      color: var(--text-dim);
+      margin-bottom: 4px;
+      display: block;
+    }
+    .form-input, .form-select {
+      width: 100%;
+      box-sizing: border-box;
+      background: var(--bg);
+      border: 1px solid var(--surface-alt);
+      border-radius: 6px;
+      padding: 9px 10px;
+      color: var(--text);
+      font-size: 13px;
+    }
+    .form-input:focus, .form-select:focus { border-color: var(--primary); outline: none; }
+    .form-row {
+      display: flex;
+      gap: 8px;
+    }
+    .form-row .form-group { flex: 1; }
+
+    .fab {
+      position: fixed;
+      bottom: 80px;
+      right: 20px;
+      width: 52px;
+      height: 52px;
+      border-radius: 50%;
+      background: var(--primary);
+      color: #fff;
+      border: none;
+      font-size: 24px;
+      cursor: pointer;
+      box-shadow: 0 4px 14px rgba(233,69,96,0.4);
+      z-index: 100;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+    .fab:active { transform: scale(0.95); }
+
+    .toast {
+      position: fixed;
+      top: 20px;
+      left: 50%;
+      transform: translateX(-50%) translateY(-80px);
+      padding: 12px 20px;
+      border-radius: 10px;
+      font-size: 13px;
+      font-weight: 600;
+      color: #fff;
+      z-index: 9999;
+      transition: transform 0.3s ease;
+      max-width: 90%;
+      text-align: center;
+    }
+    .toast.show { transform: translateX(-50%) translateY(0); }
+    .toast.success { background: var(--success); }
+    .toast.error { background: var(--danger); }
+    .toast.warning { background: var(--warning); color: #1a1a2e; }
+    .toast.info { background: var(--surface-alt); }
+
+    .loading { text-align: center; padding: 30px; color: var(--text-dim); font-size: 13px; }
+    .empty-msg { text-align: center; padding: 30px; color: var(--text-dim); font-size: 13px; }
+  </style>
+</head>
+<body>
+
+  <div class="header">
+    <h1>NYAGI</h1>
+    <p>💊 薬マスター</p>
+  </div>
+
+  <div id="loginGate" style="display:none;">
+    <div class="card">
+      <p style="text-align:center;color:var(--text-dim);font-size:14px;">先にログインしてください</p>
+      <a href="index.html" class="btn btn-primary" style="margin-top:12px;text-decoration:none;text-align:center;">ログイン画面へ</a>
+    </div>
+  </div>
+
+  <div id="medContent" style="display:none;">
+    <div class="search-bar">
+      <input type="text" id="searchInput" class="search-input" placeholder="薬名を検索..."
+             oninput="filterByText()">
+    </div>
+
+    <div class="tab-bar">
+      <button class="tab-btn active" id="tabAll" onclick="filterSpecies('all')">全て</button>
+      <button class="tab-btn" id="tabCat" onclick="filterSpecies('cat')">🐱 猫用</button>
+      <button class="tab-btn" id="tabDog" onclick="filterSpecies('dog')">🐶 犬用</button>
+      <button class="tab-btn" id="tabBoth" onclick="filterSpecies('both')">🐾 共通</button>
+    </div>
+
+    <div class="med-count" id="medCount"></div>
+    <div class="med-grid" id="medGrid">
+      <div class="loading">読み込み中...</div>
+    </div>
+  </div>
+
+  <button class="fab" id="fabAdd" style="display:none;" onclick="openAddModal()">＋</button>
+
+  <!-- 詳細モーダル -->
+  <div class="modal-overlay" id="detailModal">
+    <div class="modal-box">
+      <div class="modal-title" id="detailTitle"></div>
+      <div id="detailBody"></div>
+      <div class="modal-actions">
+        <button class="btn btn-outline" onclick="closeDetailModal()">閉じる</button>
+        <button class="btn btn-primary" id="detailEditBtn" onclick="editFromDetail()">編集</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- 追加/編集モーダル -->
+  <div class="modal-overlay" id="editModal">
+    <div class="modal-box">
+      <div class="modal-title" id="editTitle">💊 薬を登録</div>
+      <input type="hidden" id="editId" value="">
+
+      <div class="form-group">
+        <label class="form-label">薬名 *</label>
+        <input type="text" id="fName" class="form-input" placeholder="アモキシシリン">
+      </div>
+      <div class="form-group">
+        <label class="form-label">一般名</label>
+        <input type="text" id="fGenericName" class="form-input" placeholder="Amoxicillin">
+      </div>
+      <div class="form-row">
+        <div class="form-group">
+          <label class="form-label">カテゴリ</label>
+          <select id="fCategory" class="form-select">
+            <option value="antibiotic">抗生物質</option>
+            <option value="anti_inflammatory">抗炎症薬</option>
+            <option value="painkiller">鎮痛剤</option>
+            <option value="antifungal">抗真菌薬</option>
+            <option value="antiparasitic">駆虫薬</option>
+            <option value="heart">心臓薬</option>
+            <option value="kidney">腎臓薬</option>
+            <option value="thyroid">甲状腺薬</option>
+            <option value="steroid">ステロイド</option>
+            <option value="supplement">サプリメント</option>
+            <option value="eye">点眼薬</option>
+            <option value="ear">点耳薬</option>
+            <option value="skin">皮膚薬</option>
+            <option value="gastrointestinal">消化器薬</option>
+            <option value="other">その他</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label class="form-label">対象動物 *</label>
+          <select id="fSpecies" class="form-select">
+            <option value="cat">🐱 猫用</option>
+            <option value="dog">🐶 犬用</option>
+            <option value="both">🐾 犬猫共通</option>
+          </select>
+        </div>
+      </div>
+      <div class="form-row">
+        <div class="form-group">
+          <label class="form-label">剤型</label>
+          <select id="fForm" class="form-select">
+            <option value="tablet">錠剤</option>
+            <option value="capsule">カプセル</option>
+            <option value="powder">粉末</option>
+            <option value="liquid">液剤</option>
+            <option value="injection">注射</option>
+            <option value="ointment">軟膏</option>
+            <option value="eye_drop">点眼薬</option>
+            <option value="ear_drop">点耳薬</option>
+            <option value="patch">パッチ</option>
+            <option value="other">その他</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label class="form-label">単位</label>
+          <input type="text" id="fUnit" class="form-input" placeholder="mg, ml, 錠">
+        </div>
+      </div>
+      <div class="form-group">
+        <label class="form-label">備考</label>
+        <input type="text" id="fNotes" class="form-input" placeholder="冷蔵保存、食後投与 等">
+      </div>
+
+      <div class="modal-actions">
+        <button class="btn btn-outline" onclick="closeEditModal()">キャンセル</button>
+        <button class="btn btn-primary" id="saveBtn" onclick="saveMedicine()">保存</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="toast" id="toast"></div>
+
+  <div class="footer-actions">
+    <a href="dashboard.html" class="btn btn-outline">ダッシュボード</a>
+    <a href="foods.html" class="btn btn-outline">フードDB</a>
+    <a href="cats.html" class="btn btn-outline">猫一覧</a>
+  </div>
+
+  <footer class="footer">&copy; BAKENEKO GAMES</footer>
+
+  <script src="js/app.js"></script>
+  <script src="js/medicines.js"></script>
+</body>
+</html>

@@ -209,29 +209,9 @@
     html += '<div class="section-title">💊 今日の投薬</div>';
     html += renderMedCardsBySlot(medBySlot);
 
-    // 3. ✅ タスク
-    var tp = m.task_progress || {};
-    var tc = e.task_completion || {};
-    var taskProg = tp.total > 0 ? tp : tc;
-    var pendingTasks = m.pending_tasks || [];
+    // 3. ✅ タスク（タスクAPIから進捗バーを取得して表示）
     html += '<div class="section-title">✅ タスク</div>';
-    if (taskProg.total > 0) {
-      html += '<div class="card" style="margin-bottom:10px;">';
-      html += '<div style="display:flex;justify-content:space-between;font-size:12px;color:var(--text-dim);margin-bottom:6px;">';
-      html += '<span>今日のタスク: ' + (taskProg.done || 0) + '/' + (taskProg.total || 0) + ' 完了</span>';
-      html += '<span>' + (taskProg.pct || 0) + '%</span></div>';
-      var barColor = (taskProg.pct || 0) >= 80 ? '#4ade80' : (taskProg.pct || 0) >= 50 ? '#facc15' : '#f87171';
-      html += '<div style="background:var(--surface-alt);border-radius:4px;height:6px;">';
-      html += '<div style="background:' + barColor + ';width:' + (taskProg.pct || 0) + '%;height:100%;border-radius:4px;"></div>';
-      html += '</div></div>';
-    }
-    if (pendingTasks.length > 0) {
-      for (var i = 0; i < pendingTasks.length; i++) html += renderDashTaskItem(pendingTasks[i]);
-    } else if (taskProg.total > 0) {
-      html += '<div class="empty-msg" style="font-size:12px;">未完了タスクなし 🎉</div>';
-    } else {
-      html += '<div class="empty-msg">タスクなし</div>';
-    }
+    html += '<div id="dashTaskProgress"><div class="loading" style="padding:12px;font-size:12px;"><span class="spinner"></span> 読み込み中...</div></div>';
     html += '<a href="tasks.html" style="display:block;text-align:center;font-size:12px;color:var(--primary);margin-top:8px;text-decoration:none;">タスク一覧を見る →</a>';
 
     // 5. 📋 未完了アクション
@@ -338,6 +318,7 @@
     bindDashFolds();
     bindTodayRecordAnomaly();
     bindDashMedActions();
+    loadTaskProgressBars();
   }
 
   function bindTodayRecordAnomaly() {
@@ -614,6 +595,66 @@
     html += '<div class="anomaly-text">' + escapeHtml(item.raw_transcript || '') + '</div>';
     html += '</div>';
     return html;
+  }
+
+  function loadTaskProgressBars() {
+    var container = document.getElementById('dashTaskProgress');
+    if (!container) return;
+    var today = new Date();
+    var y = today.getFullYear();
+    var mo = ('0' + (today.getMonth() + 1)).slice(-2);
+    var d = ('0' + today.getDate()).slice(-2);
+    var dateStr = y + '-' + mo + '-' + d;
+    var url = window.NYAGI_API_ORIGIN + '/api/ops/tasks?date=' + dateStr + '&group_by=attribute';
+    fetch(url, { headers: { 'X-Staff-Id': credentials.id } })
+      .then(function (r) { return r.json(); })
+      .then(function (data) {
+        var prog = data.progress || {};
+        var groups = data.attribute_groups || [];
+        var html = '';
+
+        if (prog.total > 0) {
+          var pct = prog.pct || 0;
+          var barColor = pct >= 80 ? '#4ade80' : pct >= 50 ? '#facc15' : '#f87171';
+          html += '<div class="card" style="margin-bottom:10px;padding:10px 12px;">';
+          html += '<div style="display:flex;justify-content:space-between;font-size:13px;margin-bottom:6px;">';
+          html += '<span>全体: ' + (prog.done || 0) + '/' + prog.total + ' 完了</span>';
+          html += '<span style="font-weight:600;">' + pct + '%</span></div>';
+          html += '<div style="background:var(--surface-alt);border-radius:4px;height:8px;">';
+          html += '<div style="background:' + barColor + ';width:' + pct + '%;height:100%;border-radius:4px;transition:width .3s;"></div>';
+          html += '</div></div>';
+        }
+
+        if (groups.length > 0) {
+          html += '<div class="card" style="padding:10px 12px;">';
+          for (var i = 0; i < groups.length; i++) {
+            var g = groups[i];
+            var gp = g.progress || {};
+            var gpct = gp.pct || 0;
+            var gc = gpct >= 80 ? '#4ade80' : gpct >= 50 ? '#facc15' : '#f87171';
+            if (gp.total === 0) continue;
+            html += '<div style="display:flex;align-items:center;gap:8px;margin-bottom:8px;">';
+            html += '<span style="font-size:16px;width:22px;text-align:center;">' + (g.icon || '📋') + '</span>';
+            html += '<div style="flex:1;min-width:0;">';
+            html += '<div style="display:flex;justify-content:space-between;font-size:11px;color:var(--text-dim);margin-bottom:2px;">';
+            html += '<span>' + escapeHtml(g.label) + '</span>';
+            html += '<span>' + (gp.done || 0) + '/' + gp.total + (gpct === 100 ? ' ✨' : '') + '</span></div>';
+            html += '<div style="background:var(--surface-alt);border-radius:3px;height:5px;">';
+            html += '<div style="background:' + gc + ';width:' + gpct + '%;height:100%;border-radius:3px;transition:width .3s;"></div>';
+            html += '</div></div></div>';
+          }
+          html += '</div>';
+        }
+
+        if (!prog.total) {
+          html = '<div class="empty-msg">タスクなし</div>';
+        }
+
+        container.innerHTML = html;
+      })
+      .catch(function () {
+        container.innerHTML = '<div class="empty-msg" style="font-size:12px;">タスク読み込み失敗</div>';
+      });
   }
 
   function renderDashTaskItem(task) {

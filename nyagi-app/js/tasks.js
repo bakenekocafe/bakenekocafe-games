@@ -163,15 +163,21 @@
     else if (currentTab === 'monitoring') loadMonitoringTasks();
   };
 
-  var taskListFolded = true;
+  var foldedGroups = {};
 
-  window.toggleTaskList = function () {
-    var area = document.getElementById('taskListArea');
-    var btn = document.getElementById('taskFoldToggle');
-    if (!area || !btn) return;
-    taskListFolded = !taskListFolded;
-    area.style.display = taskListFolded ? 'none' : '';
-    btn.textContent = taskListFolded ? '▼ タスク一覧を表示' : '▲ タスク一覧を閉じる';
+  window.toggleAttrGroup = function (attr) {
+    var body = document.getElementById('attr-tasks-' + attr);
+    var header = document.getElementById('attr-header-' + attr);
+    if (!body || !header) return;
+    var folded = !foldedGroups[attr];
+    foldedGroups[attr] = folded;
+    if (folded) {
+      body.classList.add('hidden');
+      header.classList.add('folded');
+    } else {
+      body.classList.remove('hidden');
+      header.classList.remove('folded');
+    }
   };
 
   window.loadTasks = function () {
@@ -231,6 +237,13 @@
   }
 
   window.scrollToAttrGroup = function (attr) {
+    if (foldedGroups[attr]) {
+      foldedGroups[attr] = false;
+      var body = document.getElementById('attr-tasks-' + attr);
+      var header = document.getElementById('attr-header-' + attr);
+      if (body) body.classList.remove('hidden');
+      if (header) header.classList.remove('folded');
+    }
     var el = document.getElementById('attr-group-' + attr);
     if (el) el.scrollIntoView({ behavior: 'smooth', block: 'start' });
   };
@@ -245,19 +258,26 @@
     for (var g = 0; g < groups.length; g++) {
       var grp = groups[g];
       var tasks = grp.tasks || [];
+      var attr = escapeHtml(grp.attribute);
+      var allDone = grp.progress.pct === 100;
+      var isFolded = allDone || !!foldedGroups[grp.attribute];
+      if (allDone) foldedGroups[grp.attribute] = true;
 
-      html += '<div id="attr-group-' + escapeHtml(grp.attribute) + '">';
-      html += '<div class="attr-group-header">';
+      html += '<div id="attr-group-' + attr + '">';
+      html += '<div id="attr-header-' + attr + '" class="attr-group-header' + (isFolded ? ' folded' : '') + '" onclick="toggleAttrGroup(\'' + attr + '\')">';
       html += '<div class="attr-avatar">' + escapeHtml(grp.icon) + '</div>';
       html += '<div class="attr-group-name">' + escapeHtml(grp.label) + '</div>';
       html += '<div class="attr-group-count">' + grp.progress.done + '/' + grp.progress.total;
-      if (grp.progress.pct === 100) html += ' ✨';
+      if (allDone) html += ' ✨';
       html += '</div>';
+      html += '<span class="attr-fold-icon">▲</span>';
       html += '</div>';
 
+      html += '<div id="attr-tasks-' + attr + '" class="attr-group-tasks' + (isFolded ? ' hidden' : '') + '">';
       for (var j = 0; j < tasks.length; j++) {
         html += renderTaskItem(tasks[j]);
       }
+      html += '</div>';
       html += '</div>';
     }
 

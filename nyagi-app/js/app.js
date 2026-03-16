@@ -181,10 +181,12 @@
       headers: apiHeaders(),
       body: JSON.stringify(payload),
     }).then(function (res) {
-      return res.json();
+      return res.json().then(function (data) { data._httpStatus = res.status; return data; });
     }).then(function (data) {
       setSubmitting(false);
-      if (data.error) {
+      if (data._httpStatus === 422 || data.error_type) {
+        showResult(data);
+      } else if (data.error) {
         showResult({ error: true, message: data.message || data.error });
       } else {
         showResult(data);
@@ -238,6 +240,26 @@
       html += '<div class="result-parsed">' + escapeHtml(data.raw_transcript) + '</div>';
       html += '<div class="result-records">オンライン復帰時に自動送信されます</div>';
       html += '</div>';
+    } else if (data.error_type === 'cat_not_found') {
+      html += '<div class="result-card error" style="border-left:4px solid #f87171;">';
+      html += '<div class="result-cat">🚫 猫名を認識できませんでした</div>';
+      html += '<div class="result-parsed">' + escapeHtml(data.message || '') + '</div>';
+      if (data.suggestions && data.suggestions.length > 0) {
+        html += '<div style="margin-top:8px;font-size:13px;">もしかして：</div>';
+        html += '<div style="display:flex;flex-wrap:wrap;gap:6px;margin-top:4px;">';
+        for (var si = 0; si < data.suggestions.length; si++) {
+          html += '<button class="btn btn-sm voice-suggest-btn" style="font-size:12px;padding:4px 10px;" data-name="' + escapeHtml(data.suggestions[si]) + '">' + escapeHtml(data.suggestions[si]) + '</button>';
+        }
+        html += '</div>';
+      }
+      html += '<div style="font-size:11px;color:var(--text-dim);margin-top:6px;">元の入力: ' + escapeHtml(data.raw_transcript || '') + '</div>';
+      html += '</div>';
+    } else if (data.error_type === 'parse_failed') {
+      html += '<div class="result-card warning" style="border-left:4px solid #facc15;">';
+      html += '<div class="result-cat">⚠️ 記録内容を認識できませんでした</div>';
+      html += '<div class="result-parsed">' + escapeHtml(data.message || '') + '</div>';
+      html += '<div style="font-size:11px;color:var(--text-dim);margin-top:6px;">元の入力: ' + escapeHtml(data.raw_transcript || '') + '</div>';
+      html += '</div>';
     } else if (data.error) {
       html += '<div class="result-card error">';
       html += '<div class="result-cat">エラー</div>';
@@ -270,7 +292,23 @@
       html += '</div>';
     }
 
-    if (resultArea) resultArea.innerHTML = html + resultArea.innerHTML;
+    if (resultArea) {
+      resultArea.innerHTML = html + resultArea.innerHTML;
+
+      var suggestBtns = resultArea.querySelectorAll('.voice-suggest-btn');
+      for (var b = 0; b < suggestBtns.length; b++) {
+        suggestBtns[b].addEventListener('click', function () {
+          var chosenName = this.getAttribute('data-name');
+          var origRaw = data.raw_transcript || '';
+          var attempted = data.attempted || '';
+          var newText = attempted ? origRaw.replace(attempted, chosenName) : chosenName + ' ' + origRaw;
+          if (textArea) {
+            textArea.value = newText;
+            textArea.focus();
+          }
+        });
+      }
+    }
   }
 
   // ── 音声入力（index.html ページ内UI用、他ページではスキップ） ──

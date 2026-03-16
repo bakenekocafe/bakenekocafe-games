@@ -154,6 +154,7 @@ function toggleFold(id, btn) {
           loadFeedingSection();
           loadFeedingMemo();
           loadCatNotes();
+          loadCatTasks();
         })
         .catch(function (err) {
           clearTimeout(timeoutId);
@@ -2102,6 +2103,65 @@ function toggleFold(id, btn) {
     if (parts.length >= 3) return Number(parts[1]) + '/' + Number(parts[2]);
     return str;
   }
+
+  // ── この猫のタスク ──────────────────────────────────────────────────────
+
+  function loadCatTasks() {
+    var area = document.getElementById('catTasksArea');
+    if (!area) return;
+    area.innerHTML = '<div class="detail-section"><div class="section-header"><div class="detail-title">✅ この猫のタスク</div></div><div class="loading" style="padding:8px;font-size:12px;"><span class="spinner"></span> 読み込み中...</div></div>';
+
+    var today = new Date();
+    var y = today.getFullYear();
+    var mo = ('0' + (today.getMonth() + 1)).slice(-2);
+    var d = ('0' + today.getDate()).slice(-2);
+    var dateStr = y + '-' + mo + '-' + d;
+    var url = API_BASE + '/tasks?date=' + dateStr + '&cat_id=' + encodeURIComponent(catId);
+
+    fetch(url, { headers: apiHeaders() })
+      .then(function (res) { return res.json(); })
+      .then(function (data) {
+        var tasks = data.tasks || [];
+        if (tasks.length === 0) {
+          area.innerHTML = '<div class="detail-section"><div class="section-header"><div class="detail-title">✅ この猫のタスク</div></div><div class="empty-msg" style="font-size:12px;padding:8px;">今日の指定タスクなし</div></div>';
+          return;
+        }
+        var html = '<div class="detail-section"><div class="section-header"><div class="detail-title">✅ この猫のタスク（' + tasks.length + '件）</div></div>';
+        html += '<div style="padding:0 8px 8px;">';
+        for (var i = 0; i < tasks.length; i++) {
+          var t = tasks[i];
+          var isDone = t.status === 'done' || t.status === 'skipped';
+          var icon = t.status === 'done' ? '✅' : t.status === 'skipped' ? '⏭️' : '⬜';
+          html += '<div style="display:flex;align-items:center;gap:8px;padding:6px 0;border-bottom:1px solid var(--border);' + (isDone ? 'opacity:0.5;' : '') + '">';
+          html += '<span style="font-size:14px;">' + icon + '</span>';
+          html += '<div style="flex:1;min-width:0;">';
+          html += '<div style="font-size:13px;' + (isDone ? 'text-decoration:line-through;' : '') + '">' + escapeHtml(t.title) + '</div>';
+          if (t.assigned_name) {
+            html += '<div style="font-size:11px;color:var(--text-dim);">担当: ' + escapeHtml(t.assigned_name) + '</div>';
+          }
+          html += '</div>';
+          if (!isDone) {
+            html += '<button class="btn btn-sm" style="font-size:11px;padding:2px 8px;" onclick="catTaskDone(' + t.id + ')">完了</button>';
+          }
+          html += '</div>';
+        }
+        html += '</div></div>';
+        area.innerHTML = html;
+      })
+      .catch(function () {
+        area.innerHTML = '<div class="detail-section"><div class="section-header"><div class="detail-title">✅ この猫のタスク</div></div><div class="empty-msg" style="font-size:12px;padding:8px;">読み込み失敗</div></div>';
+      });
+  }
+
+  window.catTaskDone = function (taskId) {
+    fetch(API_BASE + '/tasks/' + taskId + '/done', {
+      method: 'POST',
+      headers: apiHeaders(),
+      body: JSON.stringify({}),
+    }).then(function (res) {
+      if (res.ok) loadCatTasks();
+    });
+  };
 
   // ── 猫注意事項（P5.7）──────────────────────────────────────────────────────
 

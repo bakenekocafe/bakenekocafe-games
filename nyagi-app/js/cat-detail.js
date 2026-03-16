@@ -1262,6 +1262,35 @@ function toggleFold(id, btn) {
       html += '<div style="background:' + covColor + ';width:' + barPct + '%;height:100%;border-radius:4px;"></div>';
       html += '</div>';
       html += '<div style="font-size:10px;color:var(--text-dim);margin-top:4px;">' + escapeHtml(lifeStageLabel(calc.life_stage)) + '</div>';
+
+      var t = calc.today;
+      if (t) {
+        var ePct = t.pct || 0;
+        var eColor = ePct >= 90 ? '#4ade80' : ePct >= 50 ? '#facc15' : '#94a3b8';
+        var eBarPct = Math.min(ePct, 100);
+        html += '<div style="margin-top:10px;padding-top:8px;border-top:1px solid rgba(255,255,255,0.06);">';
+        html += '<div style="display:flex;justify-content:space-between;font-size:12px;margin-bottom:4px;">';
+        html += '<span style="color:var(--text-dim);">📊 本日の摂取</span>';
+        html += '<b style="color:' + eColor + ';">' + (t.eaten_kcal || 0) + ' / ' + calc.required_kcal + ' kcal (' + ePct + '%)</b>';
+        html += '</div>';
+        html += '<div style="background:var(--surface-alt);border-radius:4px;height:6px;">';
+        html += '<div style="background:' + eColor + ';width:' + eBarPct + '%;height:100%;border-radius:4px;"></div>';
+        html += '</div>';
+        var remainInfo = '';
+        var served = t.served_slots ? t.served_slots.length : 0;
+        var planned = t.planned_meals || 0;
+        var remMeals = Math.max(0, planned - served);
+        if (remMeals > 0 && t.remaining_kcal > 0) {
+          var perMeal = Math.round(t.remaining_kcal / remMeals);
+          remainInfo = '残り' + remMeals + '食 × 約' + perMeal + 'kcal/食';
+        } else if (t.remaining_kcal <= 0) {
+          remainInfo = '目標達成';
+        } else {
+          remainInfo = '残り' + (t.remaining_kcal || 0) + 'kcal';
+        }
+        html += '<div style="font-size:10px;color:var(--text-dim);margin-top:4px;">' + remainInfo + '</div>';
+        html += '</div>';
+      }
     } else {
       html += '<div style="padding:8px 0;font-size:13px;color:var(--accent);">📏 体重を記録すると必要カロリーが計算されます</div>';
       html += '<a href="#healthRecordsArea" style="font-size:11px;color:var(--accent);margin-top:4px;display:inline-block;">⚖️ 体重記録へ</a>';

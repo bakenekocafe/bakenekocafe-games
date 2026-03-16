@@ -605,8 +605,8 @@
     var mo = ('0' + (today.getMonth() + 1)).slice(-2);
     var d = ('0' + today.getDate()).slice(-2);
     var dateStr = y + '-' + mo + '-' + d;
-    var url = window.NYAGI_API_ORIGIN + '/api/ops/tasks?date=' + dateStr + '&group_by=attribute';
-    fetch(url, { headers: { 'X-Staff-Id': credentials.id } })
+    var url = _origin + '/api/ops/tasks?date=' + dateStr + '&group_by=attribute';
+    fetch(url, { headers: apiHeaders() })
       .then(function (r) { return r.json(); })
       .then(function (data) {
         var prog = data.progress || {};

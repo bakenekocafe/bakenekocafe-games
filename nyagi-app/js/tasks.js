@@ -163,6 +163,17 @@
     else if (currentTab === 'monitoring') loadMonitoringTasks();
   };
 
+  var taskListFolded = true;
+
+  window.toggleTaskList = function () {
+    var area = document.getElementById('taskListArea');
+    var btn = document.getElementById('taskFoldToggle');
+    if (!area || !btn) return;
+    taskListFolded = !taskListFolded;
+    area.style.display = taskListFolded ? 'none' : '';
+    btn.textContent = taskListFolded ? '▼ タスク一覧を表示' : '▲ タスク一覧を閉じる';
+  };
+
   window.loadTasks = function () {
     var date = document.getElementById('filterDate').value || new Date().toISOString().slice(0, 10);
     var status = document.getElementById('filterStatus').value;

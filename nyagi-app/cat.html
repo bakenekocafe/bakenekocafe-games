@@ -685,6 +685,23 @@
     </div>
   </div>
 
+  <!-- 名前変更モーダル -->
+  <div id="renameModal" class="modal-overlay">
+    <div class="modal-box">
+      <div class="modal-title">✏️ 名前を変更</div>
+      <div id="renameOldName" style="font-size:12px;color:var(--text-dim);margin-bottom:12px;"></div>
+      <div class="form-group">
+        <label class="form-label">新しい名前 *</label>
+        <input type="text" id="renameNewName" class="form-input" placeholder="新しい名前を入力" style="font-size:18px;font-weight:700;">
+      </div>
+      <div style="font-size:11px;color:var(--text-dim);margin-bottom:8px;">※ 旧名は音声認識辞書に自動登録されます</div>
+      <div class="modal-actions">
+        <button class="btn btn-outline" onclick="closeRenameModal()">キャンセル</button>
+        <button class="btn btn-primary" onclick="submitRename()">変更する</button>
+      </div>
+    </div>
+  </div>
+
   <!-- ロケーション・ステータス編集モーダル -->
   <div id="locationStatusModal" class="modal-overlay">
     <div class="modal-box">

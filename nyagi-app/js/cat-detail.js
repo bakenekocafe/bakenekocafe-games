@@ -184,7 +184,8 @@ function toggleFold(id, btn) {
     } else {
       html += '<div class="cat-header-emoji">🐱</div>';
     }
-    html += '<div class="cat-header-name">' + escapeHtml(cat.name || catId) + '</div>';
+    html += '<div class="cat-header-name">' + escapeHtml(cat.name || catId) +
+      ' <button type="button" class="btn-edit-loc" onclick="openRenameModal()" style="font-size:13px;">✏️</button></div>';
     html += '<span class="cat-header-status ' + level + '">' + escapeHtml(level.toUpperCase()) + '</span>';
     var locLabel = LOCATION_LABELS[cat.location_id] || cat.location_id || '—';
     var statusLabel = STATUS_LABELS[cat.status] || cat.status || '—';
@@ -1828,6 +1829,54 @@ function toggleFold(id, btn) {
         locEl.innerHTML = '<span>' + escapeHtml(locLabel) + ' / ' + escapeHtml(statusLabel) + '</span>' +
           '<button type="button" class="btn-edit-loc" onclick="openLocationStatusModal()">編集</button>';
       }
+    })
+    .catch(function () {
+      alert('通信エラーです');
+    });
+  };
+
+  // ── 名前変更モーダル ─────────────────────────────────────────────────────────
+
+  window.openRenameModal = function () {
+    if (!currentCatData) return;
+    document.getElementById('renameOldName').textContent = '現在の名前: ' + (currentCatData.name || '');
+    document.getElementById('renameNewName').value = currentCatData.name || '';
+    document.getElementById('renameModal').classList.add('open');
+    setTimeout(function () {
+      var inp = document.getElementById('renameNewName');
+      inp.focus();
+      inp.select();
+    }, 100);
+  };
+
+  window.closeRenameModal = function () {
+    document.getElementById('renameModal').classList.remove('open');
+  };
+
+  window.submitRename = function () {
+    var newName = document.getElementById('renameNewName').value.trim();
+    if (!newName) { alert('名前を入力してください'); return; }
+    if (newName === currentCatData.name) { closeRenameModal(); return; }
+
+    fetch(API_BASE + '/cats/' + encodeURIComponent(catId), {
+      method: 'PUT',
+      headers: apiHeaders(),
+      body: JSON.stringify({ name: newName }),
+    })
+    .then(function (res) { return res.json(); })
+    .then(function (data) {
+      if (data.error) {
+        alert(data.message || '名前の変更に失敗しました');
+        return;
+      }
+      closeRenameModal();
+      currentCatData.name = newName;
+      var nameEl = catHeaderArea.querySelector('.cat-header-name');
+      if (nameEl) {
+        nameEl.innerHTML = escapeHtml(newName) +
+          ' <button type="button" class="btn-edit-loc" onclick="openRenameModal()" style="font-size:13px;">✏️</button>';
+      }
+      document.title = 'NYAGI ' + newName;
     })
     .catch(function () {
       alert('通信エラーです');

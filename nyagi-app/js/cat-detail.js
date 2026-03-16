@@ -923,6 +923,7 @@ function toggleFold(id, btn) {
         html += '<div class="med-card-actions">';
         html += '<button class="btn-med-edit" onclick="openMedScheduleModal(' + med.id + ')">編集</button>';
         html += '<button class="btn-med-stop" onclick="stopMedSchedule(' + med.id + ')">終了</button>';
+        html += '<button class="btn-med-stop" style="color:#f87171;" onclick="deleteMedSchedule(' + med.id + ')">削除</button>';
         html += '</div>';
 
         html += '</div>';
@@ -1190,6 +1191,18 @@ function toggleFold(id, btn) {
       if (data.error) { alert('エラー: ' + (data.message || data.error)); return; }
       loadMedicationSchedule();
     }).catch(function () { alert('終了に失敗しました'); });
+  };
+
+  window.deleteMedSchedule = function (medId) {
+    if (!confirm('この投薬スケジュールと関連する投薬ログをすべて削除しますか？\nこの操作は取り消せません。')) return;
+    fetch(API_BASE + '/health/medications/' + medId, {
+      method: 'DELETE',
+      headers: apiHeaders(),
+    }).then(function (r) { return r.json(); })
+    .then(function (data) {
+      if (data.error) { alert('削除エラー: ' + (data.message || data.error)); return; }
+      loadMedicationSchedule();
+    }).catch(function () { alert('削除に失敗しました'); });
   };
 
   // ── 給餌セクション（P5）──────────────────────────────────────────────────────

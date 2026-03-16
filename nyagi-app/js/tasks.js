@@ -1188,6 +1188,7 @@
         html += '<div class="close-day-task" data-task-id="' + t.id + '">';
         html += '<div class="close-day-task-title">' + escapeHtml(t.title) + streakHtml + '</div>';
         html += '<select class="close-day-reason-select" onchange="toggleCloseDayFreeText(this)">';
+        html += '<option value="店休日">店休日</option>';
         html += '<option value="時間不足">時間不足</option>';
         html += '<option value="材料不足">材料不足</option>';
         html += '<option value="__other">その他（自由入力）</option>';

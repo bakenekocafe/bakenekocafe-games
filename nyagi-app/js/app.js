@@ -1,21 +1,4 @@
 /**
- * NYAGI グローバル API Origin
- * localhost/127.0.0.1: Wrangler dev (8787) 直
- * LAN/Tailscale: 同一オリジン（serve-lan.py プロキシ経由）
- * 本番: 同一オリジン（''）
- */
-window.NYAGI_API_ORIGIN = (function () {
-  var h = location.hostname;
-  if (h === 'localhost' || h === '127.0.0.1') {
-    return 'http://' + h + ':8787';
-  }
-  if (h.indexOf('192.168.') === 0 || h.indexOf('10.') === 0) {
-    return location.protocol + '//' + h + ':' + location.port;
-  }
-  return 'https://api.bakenekocafe.studio';
-})();
-
-/**
  * NYAGI PWA — メインアプリ (ES5 互換)
  *
  * Web Speech API + API 通信 + IndexedDB オフラインバッファ

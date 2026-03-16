@@ -2,6 +2,9 @@
 <html lang="ja">
 <head>
   <meta charset="UTF-8">
+  <script>
+  (function(){if(!navigator.serviceWorker)return;navigator.serviceWorker.getRegistrations().then(function(r){for(var i=0;i<r.length;i++){r[i].update();if(r[i].waiting)r[i].waiting.postMessage({type:'SKIP_WAITING'})}});var f=!1;navigator.serviceWorker.addEventListener('controllerchange',function(){if(!f){f=!0;location.reload()}})})();
+  </script>
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
   <title>NYAGI ダッシュボード</title>
   <link rel="manifest" href="manifest.json">
@@ -229,6 +232,27 @@
       <a href="medicines.html" class="btn btn-outline" style="text-decoration:none;text-align:center;">💊薬</a>
       <a href="staff.html" class="btn btn-outline" style="text-decoration:none;text-align:center;">スタッフ</a>
     </div>
+
+    <button id="forceClearBtn" onclick="forceClearCache()" style="width:100%;margin-top:8px;padding:10px;background:transparent;border:1px dashed rgba(255,255,255,0.15);border-radius:8px;color:var(--text-dim);font-size:12px;cursor:pointer;">🔄 表示がおかしい場合：キャッシュクリア</button>
+    <script>
+    function forceClearCache() {
+      var btn = document.getElementById('forceClearBtn');
+      btn.textContent = 'クリア中...';
+      btn.disabled = true;
+      var p1 = navigator.serviceWorker ? navigator.serviceWorker.getRegistrations().then(function (regs) {
+        return Promise.all(regs.map(function (r) { return r.unregister(); }));
+      }) : Promise.resolve();
+      var p2 = caches.keys().then(function (names) {
+        return Promise.all(names.map(function (n) { return caches.delete(n); }));
+      });
+      Promise.all([p1, p2]).then(function () {
+        btn.textContent = '✅ クリア完了 — リロードします';
+        setTimeout(function () { location.reload(true); }, 800);
+      }).catch(function () {
+        btn.textContent = 'エラー — 手動でリロードしてください';
+      });
+    }
+    </script>
   </div>
 
   <div class="footer">

@@ -2,6 +2,9 @@
 <html lang="ja">
 <head>
   <meta charset="UTF-8">
+  <script>
+  (function(){if(!navigator.serviceWorker)return;navigator.serviceWorker.getRegistrations().then(function(r){for(var i=0;i<r.length;i++){r[i].update();if(r[i].waiting)r[i].waiting.postMessage({type:'SKIP_WAITING'})}});var f=!1;navigator.serviceWorker.addEventListener('controllerchange',function(){if(!f){f=!0;location.reload()}})})();
+  </script>
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
   <title>NYAGI 猫詳細</title>
   <link rel="manifest" href="manifest.json">

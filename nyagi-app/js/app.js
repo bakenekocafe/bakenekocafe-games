@@ -54,10 +54,11 @@ window.NYAGI_API_ORIGIN = (function () {
   var isRecording = false;
   var credentials = null;
 
-  // ── Service Worker 登録（本番のみ） ──
+  // ── Service Worker 登録（本番のみ・毎回更新チェック） ──
   if ('serviceWorker' in navigator && location.hostname !== 'localhost' && location.hostname !== '127.0.0.1') {
-    navigator.serviceWorker.register('sw.js').then(function (reg) {
+    navigator.serviceWorker.register('sw.js', { updateViaCache: 'none' }).then(function (reg) {
       console.log('SW registered:', reg.scope);
+      reg.update();
     }).catch(function (err) {
       console.warn('SW registration failed:', err);
     });

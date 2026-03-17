@@ -198,6 +198,11 @@
       cardArea.innerHTML = '<div class="empty-msg">猫データがありません</div>';
       return;
     }
+    catsData.sort(function (a, b) {
+      var sa = a.health_score !== null && a.health_score !== undefined ? a.health_score : 999;
+      var sb = b.health_score !== null && b.health_score !== undefined ? b.health_score : 999;
+      return sa - sb;
+    });
     if (currentMode === 'perCat') {
       renderPerCat();
     } else {

@@ -1388,7 +1388,8 @@ function toggleFold(id, btn) {
       html += '<span style="font-size:12px;color:var(--text-dim);">1日の給餌回数</span>';
       html += '<div style="display:flex;align-items:center;gap:6px;">';
       html += '<select id="mealsPerDaySelect" style="background:var(--surface-alt);color:var(--text-main);border:1px solid var(--surface-alt);border-radius:6px;padding:4px 8px;font-size:13px;">';
-      var mpdOptions = [{ v: '', l: '未設定' }, { v: '1', l: '1回' }, { v: '2', l: '2回' }, { v: '3', l: '3回' }, { v: '4', l: '4回' }, { v: '5', l: '5回' }];
+      var mpdOptions = [{ v: '', l: '未設定' }];
+      for (var mpdI = 1; mpdI <= 16; mpdI++) { mpdOptions.push({ v: String(mpdI), l: mpdI + '回' }); }
       for (var mi = 0; mi < mpdOptions.length; mi++) {
         var sel = (mpd !== null && String(mpd) === mpdOptions[mi].v) || (!mpd && mpdOptions[mi].v === '') ? ' selected' : '';
         html += '<option value="' + mpdOptions[mi].v + '"' + sel + '>' + mpdOptions[mi].l + '</option>';

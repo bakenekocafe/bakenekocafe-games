@@ -621,6 +621,36 @@
     </div>
   </div>
 
+  <!-- 病院予定モーダル -->
+  <div id="vetScheduleModal" class="modal-overlay">
+    <div class="modal-box">
+      <div class="modal-title">📅 病院の予定を登録</div>
+      <div class="form-group">
+        <label class="form-label">種別</label>
+        <select id="vsType" class="form-select">
+          <option value="checkup">健康診断</option>
+          <option value="vaccine">ワクチン</option>
+          <option value="surgery">手術</option>
+          <option value="dental">歯科</option>
+          <option value="test">検査</option>
+          <option value="observation">経過観察</option>
+        </select>
+      </div>
+      <div class="form-group">
+        <label class="form-label">予定日 *</label>
+        <input type="date" id="vsDate" class="form-input">
+      </div>
+      <div class="form-group">
+        <label class="form-label">メモ（任意） <button type="button" class="inline-mic-btn" data-voice-for="vsMemo" onclick="startInlineVoice('vsMemo')">🎤</button></label>
+        <textarea id="vsMemo" class="form-textarea" rows="3" placeholder="予約内容、注意事項など"></textarea>
+      </div>
+      <div class="modal-actions">
+        <button class="btn btn-outline" onclick="closeVetScheduleModal()">キャンセル</button>
+        <button class="btn btn-primary" onclick="submitVetSchedule()">登録</button>
+      </div>
+    </div>
+  </div>
+
   <!-- 排便記録モーダル -->
   <div id="stoolRecordModal" class="modal-overlay">
     <div class="modal-box">

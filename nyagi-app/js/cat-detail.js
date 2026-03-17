@@ -815,15 +815,48 @@ function toggleFold(id, btn) {
     var html = '<div class="detail-section">';
     html += '<div class="section-header">';
     html += '<div class="detail-title">🏥 病院記録</div>';
-    html += '<button class="btn-add" onclick="openClinicRecordModal()">+ 追加</button>';
+    html += '<div style="display:flex;gap:6px;">';
+    html += '<button class="btn-add" onclick="openVetScheduleModal()" style="background:rgba(99,102,241,0.15);color:#a78bfa;">📅 予定</button>';
+    html += '<button class="btn-add" onclick="openClinicRecordModal()">+ 記録</button>';
+    html += '</div>';
     html += '</div>';
 
-    if (records.length === 0) {
-      html += '<div class="empty-msg">記録なし</div>';
-    } else {
-      var typeLabels = { vaccine: 'ワクチン', checkup: '健診', surgery: '手術', dental: '歯科', emergency: '緊急', test: '検査', observation: '経過観察' };
-      for (var i = 0; i < records.length; i++) {
-        var r = records[i];
+    var typeLabels = { vaccine: 'ワクチン', checkup: '健診', surgery: '手術', dental: '歯科', emergency: '緊急', test: '検査', observation: '経過観察' };
+    var todayStr = new Date().toISOString().slice(0, 10);
+
+    var upcoming = [];
+    for (var u = 0; u < records.length; u++) {
+      if (records[u].next_due && records[u].next_due >= todayStr) upcoming.push(records[u]);
+    }
+    if (upcoming.length > 0) {
+      upcoming.sort(function (a, b) { return a.next_due < b.next_due ? -1 : 1; });
+      html += '<div style="margin-bottom:10px;">';
+      for (var ui = 0; ui < upcoming.length; ui++) {
+        var up = upcoming[ui];
+        var upLabel = typeLabels[up.record_type] || up.record_type;
+        var daysLeft = Math.ceil((new Date(up.next_due) - new Date(todayStr)) / 86400000);
+        var urgColor = daysLeft <= 7 ? '#f87171' : daysLeft <= 30 ? '#facc15' : '#4ade80';
+        var daysText = daysLeft === 0 ? '今日' : daysLeft + '日後';
+        html += '<div style="display:flex;align-items:center;gap:8px;padding:8px 10px;background:rgba(99,102,241,0.08);border-radius:8px;margin-bottom:4px;border-left:3px solid ' + urgColor + ';">';
+        html += '<span style="font-size:16px;">📅</span>';
+        html += '<div style="flex:1;">';
+        html += '<div style="font-size:13px;font-weight:600;color:var(--text-main);">' + escapeHtml(up.next_due) + ' ' + escapeHtml(upLabel) + '</div>';
+        if (up.value) html += '<div style="font-size:11px;color:var(--text-dim);margin-top:2px;">' + escapeHtml(up.value) + '</div>';
+        html += '</div>';
+        html += '<span style="font-size:12px;font-weight:700;color:' + urgColor + ';">' + daysText + '</span>';
+        html += '</div>';
+      }
+      html += '</div>';
+    }
+
+    var pastRecords = [];
+    for (var p = 0; p < records.length; p++) pastRecords.push(records[p]);
+
+    if (pastRecords.length === 0 && upcoming.length === 0) {
+      html += '<div class="empty-msg">記録・予定なし</div>';
+    } else if (pastRecords.length > 0) {
+      for (var i = 0; i < pastRecords.length; i++) {
+        var r = pastRecords[i];
         var typeLabel = typeLabels[r.record_type] || r.record_type;
         var badgeClass = 'hr-type-badge' + (r.record_type === 'emergency' ? ' emergency' : r.record_type === 'vaccine' ? ' vaccine' : '');
         html += '<div class="health-record-item">';
@@ -1873,6 +1906,54 @@ function toggleFold(id, btn) {
       loadScoreCard();
     }).catch(function () {
       alert('病院記録の保存に失敗しました');
+    });
+  };
+
+  // ── 病院予定モーダル ─────────────────────────────────────────────────────────────
+
+  window.openVetScheduleModal = function () {
+    document.getElementById('vsType').value = 'checkup';
+    document.getElementById('vsDate').value = '';
+    document.getElementById('vsMemo').value = '';
+    document.getElementById('vetScheduleModal').classList.add('open');
+  };
+
+  window.closeVetScheduleModal = function () {
+    document.getElementById('vetScheduleModal').classList.remove('open');
+  };
+
+  window.submitVetSchedule = function () {
+    var schedType = document.getElementById('vsType').value;
+    var schedDate = document.getElementById('vsDate').value;
+    var memo = document.getElementById('vsMemo').value.trim();
+
+    if (!schedDate) { alert('予定日を入力してください'); return; }
+
+    var typeLabels = { vaccine: 'ワクチン', checkup: '健康診断', surgery: '手術', dental: '歯科', test: '検査', observation: '経過観察' };
+    var label = typeLabels[schedType] || schedType;
+    var valueSummary = schedDate + ' ' + label + (memo ? '（' + memo.slice(0, 50) + '）' : '');
+
+    var body = {
+      cat_id: catId,
+      record_type: schedType,
+      record_date: new Date().toISOString().slice(0, 10),
+      value: valueSummary,
+      details: memo ? JSON.stringify({ note: memo }) : null,
+      next_due: schedDate,
+    };
+
+    fetch(API_BASE + '/health/records', {
+      method: 'POST',
+      headers: apiHeaders(),
+      body: JSON.stringify(body),
+    }).then(function (r) { return r.json(); })
+    .then(function (data) {
+      if (data.error) { alert('エラー: ' + (data.message || data.error)); return; }
+      closeVetScheduleModal();
+      loadClinicRecords();
+      loadScoreCard();
+    }).catch(function () {
+      alert('予定の登録に失敗しました');
     });
   };
 

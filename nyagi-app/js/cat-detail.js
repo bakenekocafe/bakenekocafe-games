@@ -1884,13 +1884,19 @@ function toggleFold(id, btn) {
   };
 
   window.markVetVisited = function (recordId, recordType, scheduledDate) {
-    _clearScheduleId = recordId;
-    var today = new Date().toISOString().slice(0, 10);
-    document.getElementById('crDate').value = today;
-    document.getElementById('crType').value = recordType || 'checkup';
-    document.getElementById('crContent').value = '';
-    document.getElementById('crNextDue').value = '';
-    document.getElementById('clinicRecordModal').classList.add('open');
+    if (!confirm('この予定を受診済みにしますか？')) return;
+    fetch(API_BASE + '/health/records/' + recordId, {
+      method: 'PUT',
+      headers: apiHeaders(),
+      body: JSON.stringify({ next_due: null, value: (scheduledDate || '') + ' 受診済み' }),
+    }).then(function (r) { return r.json(); })
+    .then(function (data) {
+      if (data.error) { alert('エラー: ' + (data.message || data.error)); return; }
+      loadClinicRecords();
+      loadScoreCard();
+    }).catch(function () {
+      alert('更新に失敗しました');
+    });
   };
 
   window.submitClinicRecord = function () {

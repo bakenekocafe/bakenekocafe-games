@@ -1892,6 +1892,11 @@ function toggleFold(id, btn) {
     }).then(function (r) { return r.json(); })
     .then(function (data) {
       if (data.error) { alert('エラー: ' + (data.message || data.error)); return; }
+      if (data.auto_created && data.auto_created.next_due) {
+        var typeLabels = { vaccine: 'ワクチン', checkup: '健康診断' };
+        var label = typeLabels[data.auto_created.record_type] || data.auto_created.record_type;
+        alert('受診済みにしました\n\n次回の' + label + '予定を自動登録しました:\n📅 ' + data.auto_created.next_due);
+      }
       loadClinicRecords();
       loadScoreCard();
     }).catch(function () {

@@ -311,6 +311,20 @@
 
       html += '</div>'; // pcc-metrics
 
+      // 健康コメント
+      var hComments = c.health_comments || [];
+      if (hComments.length > 0) {
+        html += '<div class="pcc-health-comments">';
+        for (var hci = 0; hci < hComments.length; hci++) {
+          var hc = hComments[hci];
+          html += '<div class="pcc-hc-item">';
+          html += '<span class="pcc-hc-area">' + esc(hc.area) + '</span>';
+          html += '<span class="pcc-hc-reason">' + esc(hc.reason) + '</span>';
+          html += '</div>';
+        }
+        html += '</div>';
+      }
+
       // ケア実施状況（1行カード）
       var care = c.care_latest || [];
       if (care.length > 0) {

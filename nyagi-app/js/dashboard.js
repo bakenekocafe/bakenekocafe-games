@@ -314,6 +314,26 @@
       }
     }
 
+    // 10. 🏥 30日以内の病院予定
+    var vetScheds = e.vet_schedules || [];
+    if (vetScheds.length > 0) {
+      var vetTypeLabels = { vaccine: 'ワクチン', checkup: '健診', surgery: '手術', dental: '歯科', test: '検査', observation: '経過観察' };
+      html += '<div class="section-title">🏥 病院の予定（30日以内）</div>';
+      for (var vi = 0; vi < vetScheds.length; vi++) {
+        var vs = vetScheds[vi];
+        var vtLabel = vetTypeLabels[vs.record_type] || vs.record_type;
+        var urgColor = vs.days_left <= 3 ? '#f87171' : vs.days_left <= 7 ? '#fb923c' : vs.days_left <= 14 ? '#facc15' : '#4ade80';
+        var daysText = vs.days_left === 0 ? '今日' : vs.days_left + '日後';
+        html += '<div style="display:flex;align-items:center;gap:8px;padding:8px 10px;background:var(--surface);border-radius:8px;margin-bottom:4px;border-left:3px solid ' + urgColor + ';">';
+        html += '<div style="flex:1;">';
+        html += '<div style="font-size:13px;font-weight:600;color:var(--text-main);">' + escapeHtml(vs.cat_name) + ' — ' + escapeHtml(vtLabel) + '</div>';
+        html += '<div style="font-size:11px;color:var(--text-dim);margin-top:2px;">' + escapeHtml(vs.next_due) + '</div>';
+        html += '</div>';
+        html += '<span style="font-size:12px;font-weight:700;color:' + urgColor + ';white-space:nowrap;">' + daysText + '</span>';
+        html += '</div>';
+      }
+    }
+
     dashView.innerHTML = html;
     bindDashFolds();
     bindTodayRecordAnomaly();

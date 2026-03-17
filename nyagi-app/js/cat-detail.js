@@ -592,7 +592,7 @@ function toggleFold(id, btn) {
     html += '</div>';
     html += '<div class="stool-list">';
     html += renderDailyRows(days, byDate, function (r) {
-      var status = r.value || '—';
+      var status = STOOL_EN_TO_JA[r.value] || r.value || '—';
       var isNormal = status === '健康' || status === '普通';
       var isBaseline = status === '血便小';
       return '<span class="stool-chip ' + (isNormal ? 'stool-normal' : isBaseline ? 'stool-baseline' : 'stool-warn') + '">'
@@ -618,6 +618,9 @@ function toggleFold(id, btn) {
     });
   }
 
+  var URINE_EN_TO_JA = { normal: '普通', hard: '多い', soft: '少量', liquid: 'なし（異常）', recorded: '記録あり' };
+  var STOOL_EN_TO_JA = { normal: '健康', hard: '硬い', soft: '軟便', liquid: '下痢', recorded: '記録あり' };
+
   function renderUrineSection(records) {
     var days = buildRecentDays(14);
     var byDate = groupByDate(records);
@@ -628,7 +631,7 @@ function toggleFold(id, btn) {
     html += '</div>';
     html += '<div class="stool-list">';
     html += renderDailyRows(days, byDate, function (r) {
-      var status = r.value || '—';
+      var status = URINE_EN_TO_JA[r.value] || r.value || '—';
       var isNormal = status === 'なし' || status === '少量' || status === '普通' || status === '多い' || status === '正常' || status === 'あり' || status === '健康';
       var isBaseline = status === '血尿小';
       return '<span class="stool-chip ' + (isNormal ? 'stool-normal' : isBaseline ? 'stool-baseline' : 'stool-warn') + '">'

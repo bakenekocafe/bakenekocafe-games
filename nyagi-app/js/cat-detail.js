@@ -824,21 +824,23 @@ function toggleFold(id, btn) {
     var typeLabels = { vaccine: 'ワクチン', checkup: '健診', surgery: '手術', dental: '歯科', emergency: '緊急', test: '検査', observation: '経過観察' };
     var todayStr = new Date().toISOString().slice(0, 10);
 
-    var upcoming = [];
+    var scheduled = [];
     for (var u = 0; u < records.length; u++) {
-      if (records[u].next_due && records[u].next_due >= todayStr) upcoming.push(records[u]);
+      if (records[u].next_due) scheduled.push(records[u]);
     }
-    if (upcoming.length > 0) {
-      upcoming.sort(function (a, b) { return a.next_due < b.next_due ? -1 : 1; });
+    if (scheduled.length > 0) {
+      scheduled.sort(function (a, b) { return a.next_due < b.next_due ? -1 : 1; });
       html += '<div style="margin-bottom:10px;">';
-      for (var ui = 0; ui < upcoming.length; ui++) {
-        var up = upcoming[ui];
+      for (var ui = 0; ui < scheduled.length; ui++) {
+        var up = scheduled[ui];
         var upLabel = typeLabels[up.record_type] || up.record_type;
-        var daysLeft = Math.ceil((new Date(up.next_due) - new Date(todayStr)) / 86400000);
-        var urgColor = daysLeft <= 7 ? '#f87171' : daysLeft <= 30 ? '#facc15' : '#4ade80';
-        var daysText = daysLeft === 0 ? '今日' : daysLeft + '日後';
-        html += '<div style="display:flex;align-items:center;gap:8px;padding:8px 10px;background:rgba(99,102,241,0.08);border-radius:8px;margin-bottom:4px;border-left:3px solid ' + urgColor + ';">';
-        html += '<span style="font-size:16px;">📅</span>';
+        var diffDays = Math.ceil((new Date(up.next_due) - new Date(todayStr)) / 86400000);
+        var isOverdue = diffDays < 0;
+        var urgColor = isOverdue ? '#f87171' : diffDays <= 7 ? '#fb923c' : diffDays <= 30 ? '#facc15' : '#4ade80';
+        var daysText = diffDays === 0 ? '今日' : isOverdue ? Math.abs(diffDays) + '日超過' : diffDays + '日後';
+        var bgColor = isOverdue ? 'rgba(248,113,113,0.1)' : 'rgba(99,102,241,0.08)';
+        html += '<div style="display:flex;align-items:center;gap:8px;padding:8px 10px;background:' + bgColor + ';border-radius:8px;margin-bottom:4px;border-left:3px solid ' + urgColor + ';">';
+        html += '<span style="font-size:16px;">' + (isOverdue ? '⚠️' : '📅') + '</span>';
         html += '<div style="flex:1;">';
         html += '<div style="font-size:13px;font-weight:600;color:var(--text-main);">' + escapeHtml(up.next_due) + ' ' + escapeHtml(upLabel) + '</div>';
         if (up.value) html += '<div style="font-size:11px;color:var(--text-dim);margin-top:2px;">' + escapeHtml(up.value) + '</div>';

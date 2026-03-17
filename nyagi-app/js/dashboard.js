@@ -327,16 +327,25 @@
         if (vetScheds[vi].days_left <= 30) { within30.push(vetScheds[vi]); }
         else { later.push(vetScheds[vi]); }
       }
+      var weekdays = ['日','月','火','水','木','金','土'];
+      function formatVetDate(isoDate) {
+        var d = new Date(isoDate + 'T00:00:00');
+        var m = d.getMonth() + 1;
+        var day = d.getDate();
+        var w = weekdays[d.getDay()];
+        return m + '月' + day + '日（' + w + '）';
+      }
       function renderVetCard(vs) {
         var vtLabel = vetTypeLabels[vs.record_type] || vs.record_type;
         var isOverdue = vs.days_left < 0;
         var urgColor = isOverdue ? '#f87171' : vs.days_left <= 3 ? '#fb923c' : vs.days_left <= 7 ? '#facc15' : vs.days_left <= 30 ? '#4ade80' : '#94a3b8';
         var daysText = vs.days_left === 0 ? '今日' : isOverdue ? Math.abs(vs.days_left) + '日超過' : vs.days_left + '日後';
+        var dateStr = formatVetDate(vs.next_due);
         var bgStyle = isOverdue ? 'background:rgba(248,113,113,0.08)' : 'background:var(--surface)';
-        var card = '<div style="display:flex;align-items:center;gap:8px;padding:8px 10px;' + bgStyle + ';border-radius:8px;margin-bottom:4px;border-left:3px solid ' + urgColor + ';">';
+        var card = '<div style="display:flex;align-items:center;gap:8px;padding:10px 12px;' + bgStyle + ';border-radius:8px;margin-bottom:4px;border-left:3px solid ' + urgColor + ';">';
         card += '<div style="flex:1;">';
         card += '<div style="font-size:13px;font-weight:600;color:var(--text-main);">' + (isOverdue ? '⚠️ ' : '') + escapeHtml(vs.cat_name) + ' — ' + escapeHtml(vtLabel) + '</div>';
-        card += '<div style="font-size:11px;color:var(--text-dim);margin-top:2px;">' + escapeHtml(vs.next_due) + '</div>';
+        card += '<div style="font-size:12px;color:var(--text-main);margin-top:3px;">📅 ' + escapeHtml(dateStr) + '</div>';
         card += '</div>';
         card += '<span style="font-size:12px;font-weight:700;color:' + urgColor + ';white-space:nowrap;">' + daysText + '</span>';
         card += '</div>';

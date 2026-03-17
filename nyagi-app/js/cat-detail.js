@@ -1376,6 +1376,42 @@ function toggleFold(id, btn) {
     html += '</div>';
 
     if (calc && !calc.error) {
+      var mpd = calc.meals_per_day;
+      var fedCnt = calc.fed_count || 0;
+      var remain = mpd ? Math.max(0, mpd - fedCnt) : null;
+
+      html += '<div style="background:var(--surface);border-radius:8px;padding:10px 12px;margin-bottom:8px;">';
+      html += '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;">';
+      html += '<span style="font-size:12px;color:var(--text-dim);">1日の給餌回数</span>';
+      html += '<div style="display:flex;align-items:center;gap:6px;">';
+      html += '<select id="mealsPerDaySelect" style="background:var(--surface-alt);color:var(--text-main);border:1px solid var(--surface-alt);border-radius:6px;padding:4px 8px;font-size:13px;">';
+      var mpdOptions = [{ v: '', l: '未設定' }, { v: '1', l: '1回' }, { v: '2', l: '2回' }, { v: '3', l: '3回' }, { v: '4', l: '4回' }, { v: '5', l: '5回' }];
+      for (var mi = 0; mi < mpdOptions.length; mi++) {
+        var sel = (mpd !== null && String(mpd) === mpdOptions[mi].v) || (!mpd && mpdOptions[mi].v === '') ? ' selected' : '';
+        html += '<option value="' + mpdOptions[mi].v + '"' + sel + '>' + mpdOptions[mi].l + '</option>';
+      }
+      html += '</select>';
+      html += '<button class="btn-outline" style="font-size:11px;padding:4px 8px;" onclick="saveMealsPerDay()">保存</button>';
+      html += '</div></div>';
+
+      if (mpd) {
+        var progressColor = fedCnt >= mpd ? '#4ade80' : fedCnt > 0 ? '#facc15' : '#f87171';
+        html += '<div style="display:flex;justify-content:space-between;align-items:center;font-size:13px;">';
+        html += '<span>今日の進捗</span>';
+        html += '<span style="color:' + progressColor + ';font-weight:700;">' + fedCnt + ' / ' + mpd + ' 回';
+        if (remain > 0) html += ' <span style="font-size:11px;color:var(--text-dim);">（残り ' + remain + ' 回）</span>';
+        else html += ' ✅';
+        html += '</span></div>';
+
+        if (calc.meal_suggestion && calc.meal_suggestion.remaining_meals > 0) {
+          var ms = calc.meal_suggestion;
+          html += '<div style="margin-top:6px;padding:8px;background:rgba(168,139,250,0.1);border-radius:6px;font-size:12px;color:#c4b5fd;">';
+          html += '💡 残り <b>' + ms.remaining_meals + '回</b> で <b>' + ms.remaining_kcal + 'kcal</b> → ';
+          html += '1回あたり <b style="color:#a78bfa;">' + ms.kcal_per_meal + 'kcal</b> が目安です';
+          html += '</div>';
+        }
+      }
+      html += '</div>';
       var plans = calc.plans || [];
       if (plans.length === 0) {
         html += '<div class="empty-msg">給餌プランなし</div>';
@@ -1448,6 +1484,21 @@ function toggleFold(id, btn) {
     feedingArea.innerHTML = html;
     _feedingLogsCache = logs;
   }
+
+  window.saveMealsPerDay = function () {
+    var sel = document.getElementById('mealsPerDaySelect');
+    if (!sel) return;
+    var val = sel.value ? parseInt(sel.value, 10) : null;
+    fetch(API_BASE + '/cats/' + encodeURIComponent(catId), {
+      method: 'PUT',
+      headers: apiHeaders(),
+      body: JSON.stringify({ meals_per_day: val }),
+    }).then(function (r) { return r.json(); })
+    .then(function (data) {
+      if (data.error) { alert('エラー: ' + (data.message || data.error)); return; }
+      loadFeedingSection();
+    }).catch(function () { alert('保存に失敗しました'); });
+  };
 
   window.openFeedingLogModalForEdit = function (logId) {
     var log = null;

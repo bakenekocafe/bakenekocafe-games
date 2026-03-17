@@ -250,10 +250,15 @@
       }
       html += '</div>';
 
-      // 食欲
+      // 給餌
       html += '<div>';
-      html += '<div class="pcc-metric-label">食欲</div>';
-      if (c.feeding_today_pct !== null && c.feeding_today_pct !== undefined) {
+      html += '<div class="pcc-metric-label">給餌</div>';
+      if (c.meals_per_day) {
+        var feedColor = c.fed_count >= c.meals_per_day ? 'score-color-green' :
+          c.fed_count > 0 ? 'score-color-yellow' : 'score-color-red';
+        var feedIcon = c.fed_count >= c.meals_per_day ? '✅' : '🍽';
+        html += '<div class="pcc-metric-value ' + feedColor + '">' + feedIcon + ' ' + (c.fed_count || 0) + '/' + c.meals_per_day + '回</div>';
+      } else if (c.feeding_today_pct !== null && c.feeding_today_pct !== undefined) {
         var apColor = c.feeding_today_pct >= 80 ? 'score-color-green' :
           c.feeding_today_pct >= 50 ? 'score-color-yellow' : 'score-color-red';
         html += '<div class="pcc-metric-value ' + apColor + '">' + c.feeding_today_pct + '%</div>';

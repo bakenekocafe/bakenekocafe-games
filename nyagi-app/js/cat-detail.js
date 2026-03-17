@@ -1396,11 +1396,10 @@ function toggleFold(id, btn) {
         else html += ' ✅';
         html += '</span></div>';
 
-        if (calc.meal_suggestion && calc.meal_suggestion.remaining_meals > 0) {
-          var ms = calc.meal_suggestion;
+        if (calc.remaining_meals && calc.remaining_meals > 0 && calc.remaining_kcal > 0 && calc.kcal_per_meal) {
           html += '<div style="margin-top:6px;padding:8px;background:rgba(168,139,250,0.1);border-radius:6px;font-size:12px;color:#c4b5fd;">';
-          html += '💡 残り <b>' + ms.remaining_meals + '回</b> で <b>' + ms.remaining_kcal + 'kcal</b> → ';
-          html += '1回あたり <b style="color:#a78bfa;">' + ms.kcal_per_meal + 'kcal</b> が目安です';
+          html += '💡 残り <b>' + calc.remaining_meals + '回</b> で <b>' + calc.remaining_kcal + 'kcal</b> → ';
+          html += '1回あたり <b style="color:#a78bfa;">' + calc.kcal_per_meal + 'kcal</b> が目安です';
           html += '</div>';
         }
       }

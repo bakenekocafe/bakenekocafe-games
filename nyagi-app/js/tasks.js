@@ -169,9 +169,9 @@
     var body = document.getElementById('attr-tasks-' + attr);
     var header = document.getElementById('attr-header-' + attr);
     if (!body || !header) return;
-    var folded = !foldedGroups[attr];
-    foldedGroups[attr] = folded;
-    if (folded) {
+    var isCurrentlyFolded = foldedGroups[attr] !== false;
+    foldedGroups[attr] = isCurrentlyFolded ? false : true;
+    if (foldedGroups[attr]) {
       body.classList.add('hidden');
       header.classList.add('folded');
     } else {
@@ -237,7 +237,7 @@
   }
 
   window.scrollToAttrGroup = function (attr) {
-    if (foldedGroups[attr]) {
+    if (foldedGroups[attr] !== false) {
       foldedGroups[attr] = false;
       var body = document.getElementById('attr-tasks-' + attr);
       var header = document.getElementById('attr-header-' + attr);
@@ -260,8 +260,7 @@
       var tasks = grp.tasks || [];
       var attr = escapeHtml(grp.attribute);
       var allDone = grp.progress.pct === 100;
-      var isFolded = allDone || !!foldedGroups[grp.attribute];
-      if (allDone) foldedGroups[grp.attribute] = true;
+      var isFolded = allDone || (foldedGroups[grp.attribute] !== false);
 
       html += '<div id="attr-group-' + attr + '">';
       html += '<div id="attr-header-' + attr + '" class="attr-group-header' + (isFolded ? ' folded' : '') + '" onclick="toggleAttrGroup(\'' + attr + '\')">';

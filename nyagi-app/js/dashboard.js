@@ -314,25 +314,42 @@
       }
     }
 
-    // 10. 🏥 病院の予定
+    // 10. 🏥 病院の予定（常に表示）
     var vetScheds = e.vet_schedules || [];
-    if (vetScheds.length > 0) {
-      var vetTypeLabels = { vaccine: 'ワクチン', checkup: '健診', surgery: '手術', dental: '歯科', test: '検査', observation: '経過観察' };
-      html += '<div class="section-title">🏥 病院の予定</div>';
+    var vetTypeLabels = { vaccine: 'ワクチン', checkup: '健診', surgery: '手術', dental: '歯科', test: '検査', observation: '経過観察' };
+    html += '<div class="section-title">🏥 病院の予定</div>';
+    if (vetScheds.length === 0) {
+      html += '<div style="padding:12px;background:var(--surface);border-radius:8px;text-align:center;color:var(--text-dim);font-size:13px;">直近の予定はありません</div>';
+    } else {
+      var within30 = [];
+      var later = [];
       for (var vi = 0; vi < vetScheds.length; vi++) {
-        var vs = vetScheds[vi];
+        if (vetScheds[vi].days_left <= 30) { within30.push(vetScheds[vi]); }
+        else { later.push(vetScheds[vi]); }
+      }
+      function renderVetCard(vs) {
         var vtLabel = vetTypeLabels[vs.record_type] || vs.record_type;
         var isOverdue = vs.days_left < 0;
-        var urgColor = isOverdue ? '#f87171' : vs.days_left <= 3 ? '#fb923c' : vs.days_left <= 7 ? '#facc15' : '#4ade80';
+        var urgColor = isOverdue ? '#f87171' : vs.days_left <= 3 ? '#fb923c' : vs.days_left <= 7 ? '#facc15' : vs.days_left <= 30 ? '#4ade80' : '#94a3b8';
         var daysText = vs.days_left === 0 ? '今日' : isOverdue ? Math.abs(vs.days_left) + '日超過' : vs.days_left + '日後';
         var bgStyle = isOverdue ? 'background:rgba(248,113,113,0.08)' : 'background:var(--surface)';
-        html += '<div style="display:flex;align-items:center;gap:8px;padding:8px 10px;' + bgStyle + ';border-radius:8px;margin-bottom:4px;border-left:3px solid ' + urgColor + ';">';
-        html += '<div style="flex:1;">';
-        html += '<div style="font-size:13px;font-weight:600;color:var(--text-main);">' + (isOverdue ? '⚠️ ' : '') + escapeHtml(vs.cat_name) + ' — ' + escapeHtml(vtLabel) + '</div>';
-        html += '<div style="font-size:11px;color:var(--text-dim);margin-top:2px;">' + escapeHtml(vs.next_due) + '</div>';
-        html += '</div>';
-        html += '<span style="font-size:12px;font-weight:700;color:' + urgColor + ';white-space:nowrap;">' + daysText + '</span>';
-        html += '</div>';
+        var card = '<div style="display:flex;align-items:center;gap:8px;padding:8px 10px;' + bgStyle + ';border-radius:8px;margin-bottom:4px;border-left:3px solid ' + urgColor + ';">';
+        card += '<div style="flex:1;">';
+        card += '<div style="font-size:13px;font-weight:600;color:var(--text-main);">' + (isOverdue ? '⚠️ ' : '') + escapeHtml(vs.cat_name) + ' — ' + escapeHtml(vtLabel) + '</div>';
+        card += '<div style="font-size:11px;color:var(--text-dim);margin-top:2px;">' + escapeHtml(vs.next_due) + '</div>';
+        card += '</div>';
+        card += '<span style="font-size:12px;font-weight:700;color:' + urgColor + ';white-space:nowrap;">' + daysText + '</span>';
+        card += '</div>';
+        return card;
+      }
+      if (within30.length > 0) {
+        for (var w = 0; w < within30.length; w++) { html += renderVetCard(within30[w]); }
+      }
+      if (later.length > 0) {
+        if (within30.length > 0) {
+          html += '<div style="font-size:11px;color:var(--text-dim);margin:8px 0 4px;padding-left:4px;">▽ 30日以降の予定</div>';
+        }
+        for (var l = 0; l < later.length; l++) { html += renderVetCard(later[l]); }
       }
     }
 

@@ -843,7 +843,8 @@ function toggleFold(id, btn) {
         html += '<div style="font-size:13px;font-weight:600;color:var(--text-main);">' + escapeHtml(up.next_due) + ' ' + escapeHtml(upLabel) + '</div>';
         if (up.value) html += '<div style="font-size:11px;color:var(--text-dim);margin-top:2px;">' + escapeHtml(up.value) + '</div>';
         html += '</div>';
-        html += '<span style="font-size:12px;font-weight:700;color:' + urgColor + ';">' + daysText + '</span>';
+        html += '<button class="btn-add" onclick="markVetVisited(' + up.id + ',\'' + escapeHtml(up.record_type) + '\',\'' + escapeHtml(up.next_due) + '\')" style="background:rgba(74,222,128,0.15);color:#4ade80;font-size:11px;padding:4px 8px;white-space:nowrap;">✅ 受診済み</button>';
+        html += '<span style="font-size:12px;font-weight:700;color:' + urgColor + ';white-space:nowrap;">' + daysText + '</span>';
         html += '</div>';
       }
       html += '</div>';
@@ -1863,17 +1864,31 @@ function toggleFold(id, btn) {
 
   // ── 病院記録モーダル ───────────────────────────────────────────────────────────
 
-  window.openClinicRecordModal = function () {
+  var _clearScheduleId = null;
+
+  window.openClinicRecordModal = function (prefillType, prefillDate) {
+    _clearScheduleId = null;
     var today = new Date().toISOString().slice(0, 10);
-    document.getElementById('crDate').value = today;
-    document.getElementById('crType').value = 'checkup';
+    document.getElementById('crDate').value = prefillDate || today;
+    document.getElementById('crType').value = prefillType || 'checkup';
     document.getElementById('crContent').value = '';
     document.getElementById('crNextDue').value = '';
     document.getElementById('clinicRecordModal').classList.add('open');
   };
 
   window.closeClinicRecordModal = function () {
+    _clearScheduleId = null;
     document.getElementById('clinicRecordModal').classList.remove('open');
+  };
+
+  window.markVetVisited = function (recordId, recordType, scheduledDate) {
+    _clearScheduleId = recordId;
+    var today = new Date().toISOString().slice(0, 10);
+    document.getElementById('crDate').value = today;
+    document.getElementById('crType').value = recordType || 'checkup';
+    document.getElementById('crContent').value = '';
+    document.getElementById('crNextDue').value = '';
+    document.getElementById('clinicRecordModal').classList.add('open');
   };
 
   window.submitClinicRecord = function () {
@@ -1894,6 +1909,8 @@ function toggleFold(id, btn) {
       next_due: nextDue,
     };
 
+    var scheduleIdToClear = _clearScheduleId;
+
     fetch(API_BASE + '/health/records', {
       method: 'POST',
       headers: apiHeaders(),
@@ -1901,6 +1918,15 @@ function toggleFold(id, btn) {
     }).then(function (r) { return r.json(); })
     .then(function (data) {
       if (data.error) { alert('エラー: ' + (data.message || data.error)); return; }
+      if (scheduleIdToClear) {
+        return fetch(API_BASE + '/health/records/' + scheduleIdToClear, {
+          method: 'PUT',
+          headers: apiHeaders(),
+          body: JSON.stringify({ next_due: null }),
+        });
+      }
+    }).then(function () {
+      _clearScheduleId = null;
       closeClinicRecordModal();
       loadClinicRecords();
       loadScoreCard();

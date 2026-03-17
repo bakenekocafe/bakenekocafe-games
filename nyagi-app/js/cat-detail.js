@@ -1291,6 +1291,9 @@ function toggleFold(id, btn) {
         } else {
           remainInfo = '残り' + (t.remaining_kcal || 0) + 'kcal';
         }
+        if (t.data_source === 'health_records') {
+          remainInfo += ' (記録ベースの推定値)';
+        }
         html += '<div style="font-size:10px;color:var(--text-dim);margin-top:4px;">' + remainInfo + '</div>';
         html += '</div>';
       }

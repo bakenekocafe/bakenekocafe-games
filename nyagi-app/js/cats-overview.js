@@ -262,9 +262,9 @@
       }
       html += '</div>';
 
-      // 排泄
+      // 排便
       html += '<div>';
-      html += '<div class="pcc-metric-label">排泄</div>';
+      html += '<div class="pcc-metric-label">排便</div>';
       var stoolCount = (c.stool_today || []).length;
       if (stoolCount > 0) {
         var stoolSummary = stoolCount + '回';
@@ -274,6 +274,23 @@
         }
         if (statuses.length > 0) stoolSummary += ' (' + statuses.join('/') + ')';
         html += '<div class="pcc-metric-value">' + esc(stoolSummary) + '</div>';
+      } else {
+        html += '<div class="pcc-metric-value dim">--</div>';
+      }
+      html += '</div>';
+
+      // 排尿
+      html += '<div>';
+      html += '<div class="pcc-metric-label">排尿</div>';
+      var urineArr = c.urine_today || [];
+      if (urineArr.length > 0) {
+        var urineSummary = urineArr.length + '回';
+        var uStatuses = [];
+        for (var uj = 0; uj < urineArr.length; uj++) {
+          if (uStatuses.indexOf(urineArr[uj].status) === -1) uStatuses.push(urineArr[uj].status);
+        }
+        if (uStatuses.length > 0) urineSummary += ' (' + uStatuses.join('/') + ')';
+        html += '<div class="pcc-metric-value">' + esc(urineSummary) + '</div>';
       } else {
         html += '<div class="pcc-metric-value dim">--</div>';
       }
@@ -344,6 +361,7 @@
   function renderPerItem() {
     var html = '';
     html += renderItemCard_Stool();
+    html += renderItemCard_Urine();
     html += renderItemCard_Weight();
     html += renderItemCard_Meds();
     html += renderItemCard_Care();
@@ -383,7 +401,7 @@
 
   function renderItemCard_Stool() {
     var html = '<div class="item-card">';
-    html += '<div class="item-card-title">🚽 排泄</div>';
+    html += '<div class="item-card-title">💩 排便</div>';
     html += '<div class="item-card-body">';
     for (var i = 0; i < catsData.length; i++) {
       var c = catsData[i];
@@ -391,6 +409,22 @@
       var vals = '';
       if (stool.length === 0) vals = '<span class="dim">未記録</span>';
       else { for (var j = 0; j < stool.length; j++) vals += '<span>' + esc(stool[j].time) + ' ' + esc(stool[j].status) + '</span>'; }
+      html += itemRow(c, '<div class="item-cat-name">' + alertDot(c.alert_level) + esc(c.name) + '</div><div class="item-values">' + vals + '</div>');
+    }
+    html += '</div></div>';
+    return html;
+  }
+
+  function renderItemCard_Urine() {
+    var html = '<div class="item-card">';
+    html += '<div class="item-card-title">🚽 排尿</div>';
+    html += '<div class="item-card-body">';
+    for (var i = 0; i < catsData.length; i++) {
+      var c = catsData[i];
+      var urine = c.urine_today || [];
+      var vals = '';
+      if (urine.length === 0) vals = '<span class="dim">未記録</span>';
+      else { for (var j = 0; j < urine.length; j++) vals += '<span>' + esc(urine[j].time) + ' ' + esc(urine[j].status) + '</span>'; }
       html += itemRow(c, '<div class="item-cat-name">' + alertDot(c.alert_level) + esc(c.name) + '</div><div class="item-values">' + vals + '</div>');
     }
     html += '</div></div>';

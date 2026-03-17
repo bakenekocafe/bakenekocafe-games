@@ -336,6 +336,19 @@
         var w = weekdays[d.getDay()];
         return m + '/' + day + '（' + w + '）';
       }
+      function formatVetDateTime(val) {
+        if (!val) return '';
+        var parts = val.split(' ');
+        var datePart = parts[0];
+        var timePart = parts[1] || '';
+        var d = new Date(datePart + 'T00:00:00');
+        var m = d.getMonth() + 1;
+        var day = d.getDate();
+        var w = weekdays[d.getDay()];
+        var result = m + '/' + day + '（' + w + '）';
+        if (timePart) result += ' ' + timePart;
+        return result;
+      }
       function renderVetCard(vs) {
         var vtLabel = vetTypeLabels[vs.record_type] || vs.record_type;
         var isOverdue = vs.days_left < 0;
@@ -349,11 +362,15 @@
         card += '</div>';
         card += '<div style="margin-top:4px;font-size:12px;color:var(--text-dim);">次回目安: ' + escapeHtml(formatVetDate(vs.next_due)) + '</div>';
         if (vs.booked_date) {
-          card += '<div style="margin-top:2px;font-size:12px;color:#4ade80;font-weight:600;">✅ 予約済み: ' + escapeHtml(formatVetDate(vs.booked_date)) + '</div>';
+          var bookedDisplay = formatVetDateTime(vs.booked_date);
+          card += '<div style="margin-top:2px;display:flex;align-items:center;gap:6px;">';
+          card += '<span style="font-size:12px;color:#4ade80;font-weight:600;">✅ 予約: ' + escapeHtml(bookedDisplay) + '</span>';
+          card += '<button class="dash-vet-book-btn" data-record-id="' + vs.id + '" data-current="' + escapeHtml(vs.booked_date) + '" style="font-size:10px;padding:1px 6px;border:1px solid rgba(99,102,241,0.3);border-radius:3px;background:rgba(99,102,241,0.1);color:#a78bfa;cursor:pointer;">変更</button>';
+          card += '</div>';
         } else {
           card += '<div style="margin-top:4px;display:flex;align-items:center;gap:6px;">';
           card += '<span style="font-size:11px;color:#fb923c;">📞 未予約</span>';
-          card += '<button class="dash-vet-book-btn" data-record-id="' + vs.id + '" style="font-size:11px;padding:2px 8px;border:1px solid rgba(99,102,241,0.3);border-radius:4px;background:rgba(99,102,241,0.1);color:#a78bfa;cursor:pointer;">予約日を入力</button>';
+          card += '<button class="dash-vet-book-btn" data-record-id="' + vs.id + '" style="font-size:11px;padding:2px 8px;border:1px solid rgba(99,102,241,0.3);border-radius:4px;background:rgba(99,102,241,0.1);color:#a78bfa;cursor:pointer;">予約日時を入力</button>';
           card += '</div>';
         }
         card += '</div>';
@@ -414,37 +431,59 @@
   }
 
   function promptVetBookDate(recordId, btnEl) {
+    var currentVal = btnEl.getAttribute('data-current') || '';
+    var currentDate = '';
+    var currentTime = '';
+    if (currentVal) {
+      var cv = currentVal.split(' ');
+      currentDate = cv[0] || '';
+      currentTime = cv[1] || '';
+    }
+
     var dateInput = document.createElement('input');
     dateInput.type = 'date';
-    dateInput.style.cssText = 'font-size:12px;padding:2px 4px;border:1px solid rgba(99,102,241,0.4);border-radius:4px;background:var(--surface);color:var(--text-main);';
-    var today = new Date();
-    dateInput.value = today.getFullYear() + '-' + String(today.getMonth() + 1).padStart(2, '0') + '-' + String(today.getDate()).padStart(2, '0');
+    dateInput.style.cssText = 'font-size:12px;padding:2px 4px;border:1px solid rgba(99,102,241,0.4);border-radius:4px;background:var(--surface);color:var(--text-main);width:130px;';
+    if (currentDate) {
+      dateInput.value = currentDate;
+    } else {
+      var today = new Date();
+      dateInput.value = today.getFullYear() + '-' + String(today.getMonth() + 1).padStart(2, '0') + '-' + String(today.getDate()).padStart(2, '0');
+    }
+
+    var timeInput = document.createElement('input');
+    timeInput.type = 'time';
+    timeInput.style.cssText = 'font-size:12px;padding:2px 4px;border:1px solid rgba(99,102,241,0.4);border-radius:4px;background:var(--surface);color:var(--text-main);width:90px;';
+    timeInput.value = currentTime || '10:00';
 
     var saveBtn = document.createElement('button');
     saveBtn.textContent = '保存';
-    saveBtn.style.cssText = 'font-size:11px;padding:2px 8px;border:none;border-radius:4px;background:#6366f1;color:#fff;cursor:pointer;margin-left:4px;';
+    saveBtn.style.cssText = 'font-size:11px;padding:3px 10px;border:none;border-radius:4px;background:#6366f1;color:#fff;cursor:pointer;';
 
     var cancelBtn = document.createElement('button');
     cancelBtn.textContent = '×';
-    cancelBtn.style.cssText = 'font-size:11px;padding:2px 6px;border:none;border-radius:4px;background:rgba(255,255,255,0.1);color:var(--text-dim);cursor:pointer;margin-left:2px;';
+    cancelBtn.style.cssText = 'font-size:12px;padding:2px 6px;border:none;border-radius:4px;background:rgba(255,255,255,0.1);color:var(--text-dim);cursor:pointer;';
 
     var container = btnEl.parentElement;
+    container.style.cssText = 'margin-top:4px;display:flex;flex-wrap:wrap;align-items:center;gap:4px;';
     container.innerHTML = '';
     container.appendChild(dateInput);
+    container.appendChild(timeInput);
     container.appendChild(saveBtn);
     container.appendChild(cancelBtn);
 
     cancelBtn.addEventListener('click', function () { loadDashboard(); });
 
     saveBtn.addEventListener('click', function () {
-      var val = dateInput.value;
-      if (!val) { alert('日付を選択してください'); return; }
+      var dateVal = dateInput.value;
+      if (!dateVal) { alert('日付を選択してください'); return; }
+      var timeVal = timeInput.value || '';
+      var bookedValue = timeVal ? dateVal + ' ' + timeVal : dateVal;
       saveBtn.disabled = true;
       saveBtn.textContent = '保存中…';
       fetch(_origin + '/api/ops/health/records/' + recordId, {
         method: 'PUT',
         headers: apiHeaders(),
-        body: JSON.stringify({ booked_date: val }),
+        body: JSON.stringify({ booked_date: bookedValue }),
       }).then(function (r) { return r.json(); })
       .then(function (data) {
         if (data.error) { alert('エラー: ' + (data.message || data.error)); return; }

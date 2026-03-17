@@ -6,7 +6,7 @@
  * - /api/ops/* → Network First → 失敗時はエラーレスポンス（アプリ側で IndexedDB 保存）
  */
 
-var CACHE_NAME = 'nyagi-v82';
+var CACHE_NAME = 'nyagi-v83';
 
 self.addEventListener('message', function (event) {
   if (event.data && event.data.type === 'SKIP_WAITING') {

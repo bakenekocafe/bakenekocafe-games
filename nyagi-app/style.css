@@ -61,6 +61,29 @@ body {
   margin-top: 4px;
 }
 
+.header-nav {
+  display: flex;
+  justify-content: center;
+  gap: 6px;
+  margin-top: 10px;
+  flex-wrap: wrap;
+}
+.header-nav a {
+  font-size: 11px;
+  padding: 4px 10px;
+  border-radius: 6px;
+  background: var(--surface);
+  color: var(--text-dim);
+  text-decoration: none;
+  transition: background .15s, color .15s;
+}
+.header-nav a:active { opacity: .7; }
+.header-nav a.nav-current {
+  background: var(--primary);
+  color: #fff;
+  pointer-events: none;
+}
+
 /* ── ログイン ─────────────────── */
 
 .login-section {

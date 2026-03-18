@@ -1,0 +1,449 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+  <title>NYAGI 操作マニュアル</title>
+  <link rel="stylesheet" href="style.css">
+  <style>
+    .manual-container {
+      max-width: 680px;
+      margin: 0 auto;
+    }
+    .manual-section {
+      background: var(--surface);
+      border-radius: 12px;
+      padding: 16px;
+      margin-bottom: 14px;
+    }
+    .manual-section h2 {
+      font-size: 16px;
+      margin-bottom: 10px;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      cursor: pointer;
+      user-select: none;
+      -webkit-user-select: none;
+    }
+    .manual-section h2::after {
+      content: '▲';
+      font-size: 10px;
+      opacity: 0.4;
+      transition: transform 0.2s;
+      margin-left: auto;
+    }
+    .manual-section h2.folded::after {
+      transform: rotate(180deg);
+    }
+    .manual-body { line-height: 1.7; font-size: 14px; }
+    .manual-body.hidden { display: none; }
+    .manual-body p { margin-bottom: 8px; }
+    .manual-body ul { padding-left: 20px; margin-bottom: 8px; }
+    .manual-body li { margin-bottom: 4px; }
+    .manual-body .step {
+      background: var(--surface-alt);
+      border-radius: 8px;
+      padding: 10px 12px;
+      margin-bottom: 8px;
+    }
+    .manual-body .step-num {
+      display: inline-block;
+      background: var(--primary);
+      color: #fff;
+      width: 22px;
+      height: 22px;
+      border-radius: 50%;
+      text-align: center;
+      line-height: 22px;
+      font-size: 12px;
+      font-weight: 700;
+      margin-right: 6px;
+    }
+    .manual-body .tip {
+      background: rgba(168,139,250,0.1);
+      border-left: 3px solid #a78bfa;
+      padding: 8px 12px;
+      border-radius: 0 8px 8px 0;
+      font-size: 13px;
+      margin-bottom: 8px;
+    }
+    .manual-body .warn {
+      background: rgba(250,204,21,0.1);
+      border-left: 3px solid #facc15;
+      padding: 8px 12px;
+      border-radius: 0 8px 8px 0;
+      font-size: 13px;
+      margin-bottom: 8px;
+    }
+    .manual-body code {
+      background: rgba(255,255,255,0.08);
+      padding: 1px 5px;
+      border-radius: 4px;
+      font-size: 13px;
+    }
+    .toc { margin-bottom: 20px; }
+    .toc a {
+      display: block;
+      padding: 6px 0;
+      color: var(--primary);
+      text-decoration: none;
+      font-size: 14px;
+      border-bottom: 1px solid rgba(255,255,255,0.05);
+    }
+    .toc a:active { opacity: 0.7; }
+    .version-info {
+      text-align: center;
+      font-size: 11px;
+      color: var(--text-dim);
+      margin-top: 20px;
+    }
+  </style>
+</head>
+<body>
+
+  <div class="header">
+    <h1>📖 NYAGI 操作マニュアル</h1>
+    <p>スタッフ向け操作ガイド</p>
+    <nav class="header-nav">
+      <a href="dashboard.html">ダッシュボード</a>
+      <a href="cats.html">猫一覧</a>
+      <a href="manual.html" class="nav-current">マニュアル</a>
+    </nav>
+  </div>
+
+  <div class="manual-container">
+
+    <div class="toc" id="toc">
+      <b style="font-size:13px;color:var(--text-dim);">目次（タップで移動）</b>
+      <a href="#sec-login">1. ログイン</a>
+      <a href="#sec-dashboard">2. ダッシュボード</a>
+      <a href="#sec-catlist">3. 猫一覧</a>
+      <a href="#sec-catdetail">4. 猫詳細</a>
+      <a href="#sec-feeding">5. 給餌プラン（3種類）</a>
+      <a href="#sec-quickfed">6. ワンクリック「あげた」</a>
+      <a href="#sec-preset">7. プリセット管理</a>
+      <a href="#sec-health">8. 健康記録</a>
+      <a href="#sec-meds">9. 投薬管理</a>
+      <a href="#sec-vet">10. 病院スケジュール</a>
+      <a href="#sec-voice">11. 音声入力</a>
+      <a href="#sec-score">12. 健康スコア</a>
+      <a href="#sec-tasks">13. タスク</a>
+      <a href="#sec-foods">14. フードDB</a>
+      <a href="#sec-trouble">15. トラブルシューティング</a>
+    </div>
+
+    <!-- 1. ログイン -->
+    <div class="manual-section" id="sec-login">
+      <h2>🔑 1. ログイン</h2>
+      <div class="manual-body">
+        <p>初回アクセス時にログイン画面が表示されます。</p>
+        <div class="step"><span class="step-num">1</span>管理キーとスタッフIDを入力</div>
+        <div class="step"><span class="step-num">2</span>「ログイン」をタップ</div>
+        <p>ログイン情報はブラウザに保存されるので、次回以降は自動ログインです。</p>
+        <div class="tip">💡 ログアウトしたい場合は、ブラウザの「サイトデータを削除」を使います。</div>
+      </div>
+    </div>
+
+    <!-- 2. ダッシュボード -->
+    <div class="manual-section" id="sec-dashboard">
+      <h2>📊 2. ダッシュボード</h2>
+      <div class="manual-body">
+        <p>全猫の今日の状況を一覧で確認できるメイン画面です。</p>
+        <ul>
+          <li><b>拠点フィルタ</b>: BAKENEKO CAFE / 猫又療養所 / 遠藤宅 / 預かり隊 で絞り込み</li>
+          <li><b>ステータスフィルタ</b>: 在籍 / 卒業 / トライアル中</li>
+          <li><b>アラート</b>: 🔴 要注意 / 🟡 経過観察の猫が上部に表示</li>
+          <li><b>猫カード</b>: 健康スコア順（低い＝要注意が上）。タップで猫詳細へ</li>
+          <li><b>🏥 病院スケジュール</b>: 30日以内の予定 + それ以降の予定</li>
+        </ul>
+        <div class="tip">💡 拠点・ステータスの選択はブラウザに記憶されます。</div>
+      </div>
+    </div>
+
+    <!-- 3. 猫一覧 -->
+    <div class="manual-section" id="sec-catlist">
+      <h2>🐱 3. 猫一覧</h2>
+      <div class="manual-body">
+        <p>2つの表示モードがあります。</p>
+        <ul>
+          <li><b>猫ごと</b>: 1カード＝1匹。体重・給餌・排便・排尿・投薬・ケアをまとめて表示</li>
+          <li><b>項目ごと</b>: 排便・排尿・体重・投薬・ケア・タスク・異常・ごはん・医療の項目別に全猫を表示</li>
+        </ul>
+        <p>健康スコアが低い（要注意な）猫が上に表示されます。</p>
+      </div>
+    </div>
+
+    <!-- 4. 猫詳細 -->
+    <div class="manual-section" id="sec-catdetail">
+      <h2>📋 4. 猫詳細ページ</h2>
+      <div class="manual-body">
+        <p>各猫の全情報が集まるページです。上から順に：</p>
+        <ul>
+          <li>⭐ 健康スコアカード（総合点 + 内訳）</li>
+          <li>📏 基本情報（名前・年齢・体重・拠点など）</li>
+          <li>📈 体重グラフ（推移を折れ線表示）</li>
+          <li>🔥 カロリー評価（必要量 vs 摂取量）</li>
+          <li>🍽 給餌プラン（← 今回追加された新機能！）</li>
+          <li>🩹 ケア実施記録</li>
+          <li>💩 排便・🚽 排尿記録</li>
+          <li>💊 投薬スケジュール</li>
+          <li>🏥 病院記録</li>
+          <li>📝 注意事項メモ</li>
+        </ul>
+      </div>
+    </div>
+
+    <!-- 5. 給餌プラン -->
+    <div class="manual-section" id="sec-feeding">
+      <h2>🍽 5. 給餌プラン（3種類）</h2>
+      <div class="manual-body">
+        <p>猫ごとに最大<b>16件</b>の給餌プランを登録できます。3つの方法があります。</p>
+
+        <h3 style="font-size:14px;margin:12px 0 6px;color:var(--primary);">① スタッフ指定メニュー</h3>
+        <p>スタッフが手動でフードと量を選んで登録します。</p>
+        <div class="step"><span class="step-num">1</span>猫詳細の給餌プランで「<b>+ 追加</b>」をタップ</div>
+        <div class="step"><span class="step-num">2</span>食事区分（朝/昼/夕/おやつ/サプリ）を選択</div>
+        <div class="step"><span class="step-num">3</span>フードDBから選択 → 量(g)を入力 → カロリーが自動表示</div>
+        <div class="step"><span class="step-num">4</span>予定時刻（任意）を設定</div>
+        <div class="step"><span class="step-num">5</span>保存</div>
+
+        <h3 style="font-size:14px;margin:12px 0 6px;color:#c4b5fd;">② プリセットメニュー</h3>
+        <p>あらかじめ作った献立テンプレートを猫に適用します。</p>
+        <div class="step"><span class="step-num">1</span>「<b>📋 プリセット</b>」ボタンをタップ</div>
+        <div class="step"><span class="step-num">2</span>一覧からプリセットを選んで「適用」</div>
+        <p>適用後は個別に編集・削除できます。<span style="font-size:9px;background:rgba(168,139,250,0.2);color:#c4b5fd;padding:1px 4px;border-radius:3px;">プリセット</span> タグが付きます。</p>
+
+        <h3 style="font-size:14px;margin:12px 0 6px;color:#4ade80;">③ NYAGI提案メニュー</h3>
+        <p>カロリー不足時にNYAGIが自動でフードを提案します。</p>
+        <p>カロリー評価セクションに表示される提案を採用すると、プランに追加されます。</p>
+
+        <div class="warn">⚠️ 1匹あたり合計16件まで。超える場合は不要なプランを削除してから追加してください。</div>
+      </div>
+    </div>
+
+    <!-- 6. ワンクリック「あげた」 -->
+    <div class="manual-section" id="sec-quickfed">
+      <h2>✅ 6. ワンクリック「あげた」</h2>
+      <div class="manual-body">
+        <p>給餌プランの各フード横にチェックボックスがあります。</p>
+        <div class="step"><span class="step-num">1</span>⬜ をタップ → 即座に「あげた」が記録されます</div>
+        <div class="step"><span class="step-num">2</span>実際の時刻が自動で記録されます</div>
+        <div class="step"><span class="step-num">3</span>あげた後は ✅ に変わります</div>
+
+        <h3 style="font-size:14px;margin:10px 0 6px;">食べ残しがあった場合</h3>
+        <div class="step"><span class="step-num">1</span>✅ の右にある 🍽 ボタンをタップ</div>
+        <div class="step"><span class="step-num">2</span>「食べた割合(%)」を修正（例: 70%）</div>
+        <div class="step"><span class="step-num">3</span>保存</div>
+
+        <h3 style="font-size:14px;margin:10px 0 6px;">プラン外のフードをあげた場合</h3>
+        <p>「<b>📝 記録</b>」ボタンから手動で給餌ログを追加できます。</p>
+      </div>
+    </div>
+
+    <!-- 7. プリセット管理 -->
+    <div class="manual-section" id="sec-preset">
+      <h2>📋 7. プリセット管理</h2>
+      <div class="manual-body">
+        <p>よく使う献立パターンをテンプレートとして保存できます。</p>
+
+        <h3 style="font-size:14px;margin:10px 0 6px;">プリセットを作る</h3>
+        <div class="step"><span class="step-num">1</span>「📋 プリセット」→ 画面下の「プリセット管理」</div>
+        <div class="step"><span class="step-num">2</span>「+ 新規プリセット」→ 名前と説明を入力</div>
+        <div class="step"><span class="step-num">3</span>「+ フード追加」でフード・量・時刻を登録（複数OK）</div>
+
+        <h3 style="font-size:14px;margin:10px 0 6px;">プリセットを猫に適用する</h3>
+        <div class="step"><span class="step-num">1</span>猫詳細 →「📋 プリセット」→ 適用したいプリセットの「適用」</div>
+        <p>プリセットの全フードが猫のプランに追加されます。</p>
+
+        <div class="tip">💡 プリセット例: 「腎臓ケアセット」「子猫スターター」「シニア療法食」など</div>
+      </div>
+    </div>
+
+    <!-- 8. 健康記録 -->
+    <div class="manual-section" id="sec-health">
+      <h2>🩺 8. 健康記録</h2>
+      <div class="manual-body">
+        <p>猫詳細ページから体重・排便・排尿・嘔吐・行動などを記録できます。</p>
+        <div class="step"><span class="step-num">1</span>各セクションの「+ 追加」をタップ</div>
+        <div class="step"><span class="step-num">2</span>値を選択 or 入力して保存</div>
+        <p>記録できる項目：</p>
+        <ul>
+          <li><b>体重</b>: 数値(kg) → 体重グラフに自動反映</li>
+          <li><b>排便</b>: 健康/軟便/下痢/血便/便秘 + 時刻</li>
+          <li><b>排尿</b>: 正常/頻尿/血尿 + 時刻</li>
+          <li><b>嘔吐</b>: 食物/毛玉/液体/泡</li>
+          <li><b>行動</b>: 元気/普通/ぐったり</li>
+        </ul>
+        <div class="tip">💡 音声入力にも対応。「なめこ うんち 普通」のように話すだけでOK。</div>
+      </div>
+    </div>
+
+    <!-- 9. 投薬管理 -->
+    <div class="manual-section" id="sec-meds">
+      <h2>💊 9. 投薬管理</h2>
+      <div class="manual-body">
+        <p>猫ごとの投薬スケジュールを管理します。</p>
+        <ul>
+          <li><b>スケジュール登録</b>: 薬名・用量・時間帯（朝/昼/夕/就寝前）・頻度</li>
+          <li><b>投薬ログ</b>: 毎日自動生成 → 「投薬済み」「スキップ」をタップで記録</li>
+          <li><b>猫一覧/ダッシュボード</b>: 投薬進捗(✅ 2/3 完了)が表示</li>
+        </ul>
+      </div>
+    </div>
+
+    <!-- 10. 病院スケジュール -->
+    <div class="manual-section" id="sec-vet">
+      <h2>🏥 10. 病院スケジュール</h2>
+      <div class="manual-body">
+        <p>ワクチン・健康診断などの予定を管理します。</p>
+
+        <h3 style="font-size:14px;margin:10px 0 6px;">ダッシュボードで確認</h3>
+        <p>30日以内の予定 + それ以降の予定が表示されます。</p>
+        <ul>
+          <li><b>次回目安</b>: 推奨される受診時期（自動計算）</li>
+          <li><b>予約</b>: 実際に病院で予約した日時</li>
+        </ul>
+
+        <h3 style="font-size:14px;margin:10px 0 6px;">予約を入力する</h3>
+        <div class="step"><span class="step-num">1</span>ダッシュボードの病院スケジュールで「予約日時を入力」をタップ</div>
+        <div class="step"><span class="step-num">2</span>日付と時刻を入力して保存</div>
+
+        <h3 style="font-size:14px;margin:10px 0 6px;">受診済みにする</h3>
+        <div class="step"><span class="step-num">1</span>猫詳細 → 病院記録セクション</div>
+        <div class="step"><span class="step-num">2</span>該当の予定で「受診済み」をタップ</div>
+        <div class="tip">💡 ワクチン・健康診断を「受診済み」にすると、<b>自動で1年後の次回予定</b>が作成されます。</div>
+      </div>
+    </div>
+
+    <!-- 11. 音声入力 -->
+    <div class="manual-section" id="sec-voice">
+      <h2>🎤 11. 音声入力</h2>
+      <div class="manual-body">
+        <p>スマホのマイクで話すだけで記録できます。</p>
+
+        <h3 style="font-size:14px;margin:10px 0 6px;">使い方</h3>
+        <div class="step"><span class="step-num">1</span>🎤 ボタンをタップ</div>
+        <div class="step"><span class="step-num">2</span>猫の名前 + 記録内容を話す</div>
+        <div class="step"><span class="step-num">3</span>認識結果を確認して記録</div>
+
+        <h3 style="font-size:14px;margin:10px 0 6px;">話し方の例</h3>
+        <ul>
+          <li>「<b>なめこ 朝ごはん あげた</b>」→ 給餌記録</li>
+          <li>「<b>こはだ うんち 普通</b>」→ 排便記録</li>
+          <li>「<b>おかき 体重 3.5キロ</b>」→ 体重記録</li>
+          <li>「<b>みたらし 薬 朝 あげた</b>」→ 投薬記録</li>
+          <li>「<b>きなこ 吐いた 毛玉</b>」→ 嘔吐記録</li>
+        </ul>
+
+        <h3 style="font-size:14px;margin:10px 0 6px;">給餌プランでの音声入力</h3>
+        <p>猫詳細の給餌プランセクションに「🎤 音声で記録」ボタンがあります。</p>
+        <p>猫名を省略して「<b>朝ごはん 1回目 あげた</b>」のように話せます。</p>
+
+        <div class="warn">⚠️ 音声認識はiOS Safari/Chrome/Androidに対応。一部のブラウザでは動作しません。</div>
+      </div>
+    </div>
+
+    <!-- 12. 健康スコア -->
+    <div class="manual-section" id="sec-score">
+      <h2>⭐ 12. 健康スコア</h2>
+      <div class="manual-body">
+        <p>各猫の健康状態を0〜100点で自動評価します。</p>
+        <ul>
+          <li><b>🟢 80〜100</b>: 良好</li>
+          <li><b>🟡 60〜79</b>: 注意</li>
+          <li><b>🟠 40〜59</b>: 要注意</li>
+          <li><b>🔴 0〜39</b>: 警告</li>
+        </ul>
+        <p>スコアの内訳：</p>
+        <ul>
+          <li>体重変動 / 食欲(給餌状況) / 投薬コンプライアンス / 通院状況 / 行動・異常</li>
+        </ul>
+        <p>毎日自動計算されます。猫一覧・ダッシュボードともにスコア順で表示されます。</p>
+        <div class="tip">💡 スコアが低い猫から優先的にケアしてください。</div>
+      </div>
+    </div>
+
+    <!-- 13. タスク -->
+    <div class="manual-section" id="sec-tasks">
+      <h2>✅ 13. タスク</h2>
+      <div class="manual-body">
+        <p>拠点ごとの日常タスクを管理します。</p>
+        <ul>
+          <li><b>ルーティンタスク</b>: 毎日自動生成（掃除・水交換・体重測定など）</li>
+          <li><b>単発タスク</b>: スタッフが手動で追加</li>
+        </ul>
+        <div class="step"><span class="step-num">1</span>タスク画面で未完了タスクを確認</div>
+        <div class="step"><span class="step-num">2</span>タスクをタップ → 「完了」にする</div>
+      </div>
+    </div>
+
+    <!-- 14. フードDB -->
+    <div class="manual-section" id="sec-foods">
+      <h2>🥫 14. フードDB</h2>
+      <div class="manual-body">
+        <p>猫用フードのデータベースです。カロリー・栄養素・ブランドなどを管理します。</p>
+        <ul>
+          <li><b>登録済み</b>: ロイヤルカナン / ヒルズ を中心に多数登録済み</li>
+          <li><b>検索</b>: ブランド・名前・カテゴリで絞り込み</li>
+          <li><b>新規登録</b>: URLを貼ると自動でカロリーを読み取り</li>
+        </ul>
+        <p>給餌プランでフードを選ぶとき、ここに登録されたデータが使われます。</p>
+      </div>
+    </div>
+
+    <!-- 15. トラブルシューティング -->
+    <div class="manual-section" id="sec-trouble">
+      <h2>🔧 15. トラブルシューティング</h2>
+      <div class="manual-body">
+        <h3 style="font-size:14px;margin:8px 0 6px;">画面が更新されない</h3>
+        <div class="step"><span class="step-num">1</span>ダッシュボード下部の「🔄 キャッシュクリア」をタップ</div>
+        <div class="step"><span class="step-num">2</span>自動でリロードされます</div>
+
+        <h3 style="font-size:14px;margin:8px 0 6px;">ログインできない</h3>
+        <p>管理キーとスタッフIDが正しいか確認してください。それでもダメな場合はブラウザのサイトデータを削除してやり直してください。</p>
+
+        <h3 style="font-size:14px;margin:8px 0 6px;">データが表示されない</h3>
+        <ul>
+          <li>インターネット接続を確認</li>
+          <li>拠点フィルタ・ステータスフィルタが正しいか確認</li>
+          <li>ページを下に引っ張ってリロード</li>
+        </ul>
+
+        <h3 style="font-size:14px;margin:8px 0 6px;">音声入力が動かない</h3>
+        <ul>
+          <li>ブラウザの「マイクのアクセス許可」が必要です</li>
+          <li>Safari/Chrome を推奨。Firefox は非対応の場合あり</li>
+        </ul>
+      </div>
+    </div>
+
+    <div class="version-info" id="versionInfo">
+      マニュアル最終更新: 2026-03-18<br>
+      NYAGI v85
+    </div>
+
+  </div>
+
+  <div class="footer">
+    <a href="dashboard.html" style="color:var(--primary);text-decoration:none;">← ダッシュボードに戻る</a>
+  </div>
+
+  <script>
+  (function () {
+    var titles = document.querySelectorAll('.manual-section h2');
+    for (var i = 0; i < titles.length; i++) {
+      (function (title) {
+        title.addEventListener('click', function () {
+          var body = title.nextElementSibling;
+          if (!body) return;
+          var isHidden = body.classList.toggle('hidden');
+          title.classList.toggle('folded', isHidden);
+        });
+      })(titles[i]);
+    }
+  })();
+  </script>
+
+</body>
+</html>

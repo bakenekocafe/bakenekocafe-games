@@ -1,0 +1,84 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head><meta charset="UTF-8"><title>キャッシュクリア</title>
+<meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
+</head>
+<body style="background:#1a1a2e;color:#fff;font-family:sans-serif;text-align:center;padding:40px">
+<h2>NYAGI キャッシュクリア &amp; 検証</h2>
+<div id="log" style="text-align:left;max-width:500px;margin:0 auto;font-size:14px;line-height:2;"></div>
+<script>
+(function(){
+  var log = document.getElementById('log');
+  function addLog(msg) { log.innerHTML += msg + '<br>'; }
+
+  var steps = [];
+
+  // Step 1: SW unregister
+  steps.push(
+    navigator.serviceWorker.getRegistrations().then(function(regs){
+      if (regs.length === 0) { addLog('1. Service Worker: なし（OK）'); return; }
+      return Promise.all(regs.map(function(r){ return r.unregister(); })).then(function(){
+        addLog('1. Service Worker: ' + regs.length + '件 解除 ✅');
+      });
+    }).catch(function(e){ addLog('1. SW解除エラー: ' + e.message); })
+  );
+
+  // Step 2: Cache API clear
+  steps.push(
+    caches.keys().then(function(names){
+      if (names.length === 0) { addLog('2. Cache API: なし（OK）'); return; }
+      return Promise.all(names.map(function(n){ return caches.delete(n); })).then(function(){
+        addLog('2. Cache API: ' + names.join(', ') + ' 削除 ✅');
+      });
+    }).catch(function(e){ addLog('2. Cache削除エラー: ' + e.message); })
+  );
+
+  Promise.all(steps).then(function(){
+    addLog('3. API 接続テスト中...');
+
+    var origin = (location.hostname === 'localhost' || location.hostname === '127.0.0.1')
+      ? 'http://' + location.hostname + ':8787' : '';
+    var creds = null;
+    try { creds = JSON.parse(localStorage.getItem('nyagi_creds')); } catch(e){}
+
+    if (!creds) {
+      addLog('3. 未ログイン（tasks.htmlでログインしてください）');
+      addLog('<br><b style="color:#4ade80;">クリア完了 — 3秒後にタスク画面へ</b>');
+      setTimeout(function(){ location.href = '/nyagi-app/tasks.html?t=' + Date.now(); }, 3000);
+      return;
+    }
+
+    var headers = {
+      'Content-Type': 'application/json',
+      'X-Admin-Key': creds.adminKey,
+      'X-Staff-Id': creds.staffId
+    };
+
+    fetch(origin + '/api/ops/tasks/templates', { headers: headers })
+      .then(function(r){ return r.json(); })
+      .then(function(data){
+        var templates = (data.templates || []);
+        addLog('3. テンプレートAPI: ' + templates.length + '件取得 ✅');
+
+        return fetch(origin + '/api/ops/tasks?date=' + new Date().toISOString().slice(0,10), { headers: headers })
+          .then(function(r){ return r.json(); })
+          .then(function(tdata){
+            var tasks = tdata.tasks || [];
+            var groups = tdata.attribute_groups || [];
+            var total = groups.length > 0 ? groups.reduce(function(s,g){ return s + g.tasks.length; }, 0) : tasks.length;
+            addLog('4. タスクAPI: ' + total + '件取得 ✅');
+          });
+      })
+      .then(function(){
+        addLog('<br><b style="color:#4ade80;font-size:16px;">全チェック OK — 3秒後にタスク画面へ</b>');
+        setTimeout(function(){ location.href = '/nyagi-app/tasks.html?t=' + Date.now(); }, 3000);
+      })
+      .catch(function(e){
+        addLog('API エラー: ' + e.message);
+        addLog('<br><a href="/nyagi-app/tasks.html?t=' + Date.now() + '" style="color:#93c5fd;">タスク画面へ（手動）</a>');
+      });
+  });
+})();
+</script>
+</body>
+</html>

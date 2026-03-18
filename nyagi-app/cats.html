@@ -1,0 +1,401 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <script>
+  (function(){if(!navigator.serviceWorker)return;navigator.serviceWorker.getRegistrations().then(function(r){for(var i=0;i<r.length;i++){r[i].update();if(r[i].waiting)r[i].waiting.postMessage({type:'SKIP_WAITING'})}});var f=!1;navigator.serviceWorker.addEventListener('controllerchange',function(){if(!f){f=!0;location.reload()}})})();
+  </script>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=5.0, viewport-fit=cover">
+  <title>NYAGI 猫一覧</title>
+  <link rel="manifest" href="manifest.json">
+  <meta name="theme-color" content="#1a1a2e">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <link rel="stylesheet" href="style.css">
+  <link rel="stylesheet" href="voice-console.css">
+  <style>
+    /* モバイルスクロール対応: 専用スクロールコンテナ */
+    html, body { height: 100%; overflow: hidden; margin: 0; }
+    body { max-width: 640px; margin: 0 auto; display: flex; flex-direction: column; }
+    .page-scroll {
+      flex: 1;
+      overflow-y: auto;
+      overflow-x: hidden;
+      -webkit-overflow-scrolling: touch;
+      padding: 0 16px 80px;
+      padding-bottom: calc(80px + env(safe-area-inset-bottom, 0px));
+    }
+
+    /* ── モード切替トグル ── */
+    .mode-toggle {
+      display: flex;
+      gap: 0;
+      margin-bottom: 16px;
+      border-radius: 8px;
+      overflow: hidden;
+      border: 2px solid var(--primary);
+    }
+    .mode-toggle button {
+      flex: 1;
+      padding: 10px;
+      border: none;
+      background: transparent;
+      color: var(--primary);
+      font-size: 14px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: background 0.15s, color 0.15s;
+    }
+    .mode-toggle button.active {
+      background: var(--primary);
+      color: #fff;
+    }
+
+    /* ── 猫ごとカード（モード1） ── */
+    .cat-grid {
+      display: grid;
+      grid-template-columns: 1fr;
+      gap: 10px;
+      margin-bottom: 20px;
+    }
+    .per-cat-card {
+      background: var(--surface);
+      border-radius: 10px;
+      padding: 14px;
+      cursor: pointer;
+      transition: transform 0.1s;
+      text-decoration: none;
+      color: inherit;
+      display: block;
+    }
+    .per-cat-card:active { transform: scale(0.98); }
+
+    .pcc-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 8px;
+    }
+    .pcc-name {
+      font-size: 16px;
+      font-weight: 700;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+    .pcc-score {
+      font-size: 20px;
+      font-weight: 700;
+    }
+
+    .pcc-metrics {
+      display: grid;
+      grid-template-columns: 1fr 1fr 1fr;
+      gap: 6px 10px;
+      font-size: 13px;
+    }
+    .pcc-metric-label {
+      color: var(--text-dim);
+      font-size: 11px;
+    }
+    .pcc-metric-value {
+      font-weight: 600;
+    }
+
+    .pcc-anomalies {
+      margin-top: 8px;
+    }
+
+    /* ── 項目ごとカード（モード2） ── */
+    .item-card {
+      background: var(--surface);
+      border-radius: 10px;
+      padding: 14px;
+      margin-bottom: 12px;
+    }
+    .item-card-title {
+      font-size: 15px;
+      font-weight: 700;
+      margin-bottom: 0;
+      padding-bottom: 6px;
+      border-bottom: 1px solid rgba(255,255,255,0.08);
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      user-select: none;
+      -webkit-user-select: none;
+    }
+    .item-card-title::after {
+      content: '▲';
+      font-size: 11px;
+      opacity: 0.5;
+      transition: transform 0.2s;
+    }
+    .item-card-title.collapsed::after {
+      transform: rotate(180deg);
+    }
+    .item-card-body {
+      overflow: hidden;
+      transition: max-height 0.25s ease, opacity 0.2s ease;
+      max-height: 2000px;
+      opacity: 1;
+      margin-top: 10px;
+    }
+    .item-card-body.hidden {
+      max-height: 0;
+      opacity: 0;
+      margin-top: 0;
+    }
+    .item-row {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 6px 0;
+      border-bottom: 1px solid rgba(255,255,255,0.04);
+      font-size: 13px;
+      cursor: pointer;
+    }
+    .item-row:last-child { border-bottom: none; }
+    .item-row:active { opacity: 0.7; }
+    .item-cat-name {
+      font-weight: 600;
+      min-width: 60px;
+      flex-shrink: 0;
+      display: flex;
+      align-items: center;
+      gap: 4px;
+    }
+    .item-values {
+      flex: 1;
+      display: flex;
+      flex-wrap: wrap;
+      gap: 4px 8px;
+    }
+
+    /* ── 共通パーツ ── */
+    .alert-dot {
+      display: inline-block;
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      flex-shrink: 0;
+    }
+    .alert-dot.normal { background: #4ade80; }
+    .alert-dot.watch { background: #facc15; }
+    .alert-dot.critical { background: #f87171; }
+
+    .score-color-green { color: #4ade80; }
+    .score-color-yellow { color: #facc15; }
+    .score-color-orange { color: #fb923c; }
+    .score-color-red { color: #f87171; }
+    .score-color-gray { color: #888; }
+
+    .trend-up { color: #f87171; }
+    .trend-up::before { content: '\2191'; }
+    .trend-down { color: #60a5fa; }
+    .trend-down::before { content: '\2193'; }
+    .trend-stable { color: #4ade80; }
+    .trend-stable::before { content: '\2192'; }
+
+    .badge {
+      display: inline-block;
+      font-size: 10px;
+      padding: 2px 6px;
+      border-radius: 4px;
+      margin-right: 2px;
+    }
+    .badge-green { background: #4ade80; color: #000; }
+    .badge-yellow { background: #facc15; color: #000; }
+    .badge-orange { background: #fb923c; color: #000; }
+    .badge-red { background: #f87171; color: #fff; }
+    .badge-gray { background: #555; color: #ccc; }
+
+    .bar {
+      height: 4px;
+      border-radius: 2px;
+      background: rgba(255,255,255,0.08);
+      overflow: hidden;
+      margin-top: 4px;
+    }
+    .bar-fill {
+      height: 100%;
+      border-radius: 2px;
+      transition: width 0.3s;
+    }
+
+    .dim { color: var(--text-dim); }
+
+    /* ── 健康コメント ── */
+    .pcc-health-comments {
+      margin-top: 6px;
+      padding-top: 6px;
+      border-top: 1px solid rgba(255,255,255,0.06);
+      display: flex;
+      flex-direction: column;
+      gap: 3px;
+    }
+    .pcc-hc-item {
+      display: flex;
+      align-items: baseline;
+      gap: 6px;
+      font-size: 11px;
+      line-height: 1.4;
+    }
+    .pcc-hc-area {
+      flex-shrink: 0;
+      color: #facc15;
+      font-weight: 600;
+      font-size: 10px;
+    }
+    .pcc-hc-reason {
+      color: var(--text-dim);
+    }
+
+    /* ── ケア実施カード ── */
+    .pcc-care {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      gap: 4px;
+      margin-top: 8px;
+      padding-top: 6px;
+      border-top: 1px solid rgba(255,255,255,0.06);
+    }
+    .pcc-care-label {
+      font-size: 10px;
+      color: var(--text-dim);
+      margin-right: 2px;
+    }
+    .care-chip {
+      display: inline-flex;
+      align-items: center;
+      gap: 2px;
+      font-size: 10px;
+      padding: 2px 6px;
+      border-radius: 4px;
+    }
+    .care-chip small {
+      font-size: 9px;
+      opacity: 0.7;
+    }
+    .care-chip.care-done {
+      background: rgba(74,222,128,0.15);
+      color: #4ade80;
+    }
+    .care-chip.care-skip {
+      background: rgba(248,113,113,0.15);
+      color: #f87171;
+    }
+    .med-item-done { color: #4ade80; }
+    .med-item-skip { color: #facc15; text-decoration: line-through; opacity: 0.7; }
+    .med-item-pending { color: #f87171; }
+
+    .footer-actions {
+      display: flex;
+      gap: 10px;
+      margin-top: 24px;
+      padding-bottom: 24px;
+    }
+    .footer-actions .btn { flex: 1; font-size: 14px; padding: 14px; }
+
+    /* ── 拠点・ステータスフィルター（二段階）──────────────── */
+    .filter-row { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin-bottom: 10px; }
+    .filter-label { font-size: 11px; color: var(--text-dim); min-width: 52px; }
+    .loc-bar {
+      display: flex;
+      flex-direction: column;
+      flex-wrap: wrap;
+      gap: 4px;
+      margin-bottom: 14px;
+    }
+    .loc-btn {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 7px 14px;
+      border-radius: 20px;
+      border: 1.5px solid rgba(255,255,255,0.15);
+      background: transparent;
+      color: var(--text-dim);
+      font-size: 13px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all 0.15s;
+    }
+    .loc-btn.active {
+      background: var(--primary);
+      color: #fff;
+      border-color: var(--primary);
+    }
+    .loc-count {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      min-width: 20px;
+      height: 20px;
+      border-radius: 10px;
+      background: rgba(255,255,255,0.12);
+      font-size: 11px;
+      font-weight: 700;
+    }
+    .loc-btn.active .loc-count {
+      background: rgba(255,255,255,0.25);
+    }
+
+    .empty-msg {
+      text-align: center;
+      color: var(--text-dim);
+      font-size: 13px;
+      padding: 24px;
+    }
+    .loading {
+      text-align: center;
+      padding: 40px;
+      color: var(--text-dim);
+    }
+  </style>
+</head>
+<body>
+
+  <div class="page-scroll">
+  <div class="header">
+    <h1>NYAGI</h1>
+    <p>猫一覧</p>
+    <nav class="header-nav">
+      <a href="dashboard.html">ダッシュボード</a>
+      <a href="cats.html" class="nav-current">猫一覧</a>
+      <a href="tasks.html">タスク</a>
+      <a href="foods.html">フード</a>
+      <a href="medicines.html">薬</a>
+      <a href="manual.html">📖</a>
+    </nav>
+  </div>
+
+  <div id="loginGate" style="display:none;"></div>
+
+  <div id="mainContent" style="display:none;">
+    <div class="loc-bar" id="locBar" style="display:none;"></div>
+    <div class="mode-toggle">
+      <button id="btnPerCat" class="active">猫ごと</button>
+      <button id="btnPerItem">項目ごと</button>
+    </div>
+    <div id="cardArea"></div>
+
+    <div class="footer-actions">
+      <a href="dashboard.html" class="btn btn-primary" style="text-decoration:none;text-align:center;">ダッシュボード</a>
+    </div>
+  </div>
+
+  <div class="footer">
+    &copy; BAKENEKO GAMES
+  </div>
+  </div><!-- .page-scroll -->
+
+  <script src="config.js"></script>
+  <script src="js/login-gate.js"></script>
+  <script src="js/app.js"></script>
+  <script src="js/cats-overview.js"></script>
+  <script src="js/voice-console.js"></script>
+</body>
+</html>

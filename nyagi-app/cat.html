@@ -1,0 +1,961 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <script>
+  (function(){if(!navigator.serviceWorker)return;navigator.serviceWorker.getRegistrations().then(function(r){for(var i=0;i<r.length;i++){r[i].update();if(r[i].waiting)r[i].waiting.postMessage({type:'SKIP_WAITING'})}});var f=!1;navigator.serviceWorker.addEventListener('controllerchange',function(){if(!f){f=!0;location.reload()}})})();
+  </script>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+  <title>NYAGI 猫詳細</title>
+  <link rel="manifest" href="manifest.json">
+  <meta name="theme-color" content="#1a1a2e">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <link rel="stylesheet" href="style.css">
+  <link rel="stylesheet" href="voice-console.css">
+  <style>
+    .cat-header {
+      text-align: center;
+      padding: 20px 0 12px;
+    }
+    .cat-header-emoji { font-size: 56px; }
+    .cat-header-name { font-size: 22px; font-weight: 700; margin-top: 8px; }
+    .cat-header-status {
+      display: inline-block;
+      font-size: 12px;
+      padding: 3px 10px;
+      border-radius: 12px;
+      margin-top: 6px;
+    }
+    .cat-header-status.normal { background: #4ade80; color: #000; }
+    .cat-header-status.watch { background: #facc15; color: #000; }
+    .cat-header-status.critical { background: #f87171; color: #fff; }
+    .cat-header-location {
+      font-size: 12px;
+      color: var(--text-dim);
+      margin-top: 4px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 6px;
+    }
+    .cat-header-location .btn-edit-loc {
+      background: transparent;
+      border: none;
+      padding: 2px 6px;
+      font-size: 11px;
+      color: var(--primary);
+      cursor: pointer;
+      opacity: 0.8;
+    }
+    .cat-header-location .btn-edit-loc:hover { opacity: 1; }
+
+    .alert-banner {
+      background: var(--surface);
+      border-radius: 10px;
+      padding: 16px;
+      margin-bottom: 16px;
+      border-left: 4px solid #f87171;
+    }
+    .alert-banner.watch { border-left-color: #facc15; }
+    .alert-banner-title {
+      font-weight: 700;
+      font-size: 14px;
+      margin-bottom: 4px;
+    }
+    .alert-banner-reason { font-size: 13px; color: var(--text-dim); }
+    .alert-banner-until { font-size: 12px; color: #facc15; margin-top: 4px; }
+    .alert-banner .btn { margin-top: 10px; padding: 8px 16px; font-size: 12px; width: auto; }
+
+    .detail-section {
+      margin-bottom: 16px;
+    }
+    .detail-title {
+      font-size: 15px;
+      font-weight: 700;
+      margin-bottom: 10px;
+      padding-left: 4px;
+    }
+
+    .info-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 8px;
+    }
+    .info-cell {
+      background: var(--surface);
+      border-radius: 8px;
+      padding: 10px;
+    }
+    .info-label {
+      font-size: 11px;
+      color: var(--text-dim);
+    }
+    .info-value {
+      font-size: 14px;
+      font-weight: 600;
+      margin-top: 2px;
+    }
+    .info-cell.full { grid-column: 1 / -1; }
+
+    .med-card {
+      background: var(--surface);
+      border-radius: 8px;
+      padding: 12px;
+      margin-bottom: 8px;
+    }
+    .med-card-name { font-weight: 600; font-size: 14px; }
+    .med-card-detail { font-size: 12px; color: var(--text-dim); margin-top: 4px; }
+    .med-card-tip { font-size: 11px; color: #fb923c; margin-top: 4px; }
+
+
+
+    .action-card {
+      background: var(--surface);
+      border-radius: 8px;
+      padding: 12px;
+      margin-bottom: 8px;
+      border-left: 4px solid #facc15;
+    }
+    .action-card-title { font-weight: 600; font-size: 14px; }
+    .action-card-meta { font-size: 11px; color: var(--text-dim); margin-top: 4px; }
+
+    .footer-actions {
+      display: flex;
+      gap: 10px;
+      margin-top: 24px;
+      padding-bottom: 24px;
+    }
+    .footer-actions .btn { flex: 1; font-size: 14px; padding: 14px; }
+
+    .loading {
+      text-align: center;
+      padding: 40px;
+      color: var(--text-dim);
+    }
+    .empty-msg {
+      text-align: center;
+      color: var(--text-dim);
+      font-size: 13px;
+      padding: 16px;
+    }
+
+    /* 体重グラフ */
+    .weight-canvas-wrap {
+      background: var(--surface);
+      border-radius: 10px;
+      padding: 12px;
+      overflow: hidden;
+    }
+    #weightCanvas { display: block; width: 100%; }
+
+    /* 健康記録 */
+    .section-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 10px;
+      padding-left: 4px;
+    }
+    .section-header .detail-title { margin-bottom: 0; }
+    .btn-add {
+      background: var(--primary);
+      color: #fff;
+      border: none;
+      border-radius: 6px;
+      padding: 6px 12px;
+      font-size: 12px;
+      cursor: pointer;
+    }
+    .btn-edit-small {
+      background: transparent;
+      border: 1px solid var(--surface-alt);
+      border-radius: 4px;
+      padding: 2px 6px;
+      font-size: 12px;
+      cursor: pointer;
+      opacity: 0.8;
+    }
+    .btn-edit-small:hover { opacity: 1; }
+    .health-record-item {
+      background: var(--surface);
+      border-radius: 8px;
+      padding: 10px 12px;
+      margin-bottom: 6px;
+    }
+    .hr-head {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      font-size: 12px;
+      color: var(--text-dim);
+      margin-bottom: 4px;
+    }
+    .hr-type-badge {
+      display: inline-block;
+      font-size: 10px;
+      padding: 2px 6px;
+      border-radius: 4px;
+      background: var(--surface-alt);
+      color: var(--text-dim);
+      margin-right: 6px;
+    }
+    .hr-type-badge.emergency { background: #7f1d1d; color: #fca5a5; }
+    .hr-type-badge.vaccine   { background: #1e3a5f; color: #93c5fd; }
+    .hr-type-badge.weight    { background: #1a3a2a; color: #86efac; }
+    .hr-value { font-size: 14px; font-weight: 600; }
+    .hr-next-due { font-size: 11px; color: #facc15; margin-top: 3px; }
+    .hr-details  { font-size: 11px; color: var(--text-dim); margin-top: 3px; }
+
+    /* 投薬スケジュール */
+    .med-schedule-card {
+      background: var(--surface);
+      border-radius: 8px;
+      padding: 12px;
+      margin-bottom: 10px;
+    }
+    .med-schedule-head {
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-start;
+    }
+    .med-schedule-name { font-weight: 600; font-size: 14px; }
+    .med-schedule-meta { font-size: 11px; color: var(--text-dim); margin-top: 4px; }
+    .med-schedule-tip  { font-size: 11px; color: #fb923c; margin-top: 4px; }
+    .med-log-list { margin-top: 10px; border-top: 1px solid var(--surface-alt); padding-top: 8px; }
+    .med-log-item {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      font-size: 12px;
+      padding: 4px 0;
+    }
+    .med-log-status {
+      width: 18px;
+      text-align: center;
+      font-size: 14px;
+      flex-shrink: 0;
+    }
+    .med-log-time { color: var(--text-dim); min-width: 44px; }
+    .med-log-label { flex: 1; }
+    .med-log-actions { display: flex; gap: 6px; }
+    .btn-log-action {
+      background: var(--surface-alt);
+      border: none;
+      border-radius: 4px;
+      padding: 3px 8px;
+      font-size: 11px;
+      cursor: pointer;
+      color: var(--text-main);
+    }
+    .btn-log-action.done { background: #1a3a2a; color: #86efac; }
+    .btn-log-action.skip { background: #3a1a1a; color: #f87171; }
+
+    /* 注意事項 */
+    .cat-note-item {
+      background: var(--surface);
+      border-radius: 8px;
+      padding: 10px 12px;
+      margin-bottom: 6px;
+      position: relative;
+    }
+    .cat-note-item.pinned {
+      border-left: 3px solid #facc15;
+    }
+    .cat-note-head {
+      display: flex;
+      justify-content: space-between;
+      font-size: 11px;
+      color: var(--text-dim);
+      margin-bottom: 4px;
+    }
+    .cat-note-category {
+      display: inline-block;
+      font-size: 10px;
+      padding: 1px 6px;
+      border-radius: 4px;
+      background: var(--surface-alt);
+      color: var(--text-dim);
+    }
+    .cat-note-category.health    { background: #1a3a2a; color: #86efac; }
+    .cat-note-category.warning   { background: #7f1d1d; color: #fca5a5; }
+    .cat-note-category.behavior  { background: #3b0764; color: #d8b4fe; }
+    .cat-note-category.feeding   { background: #431407; color: #fb923c; }
+    .cat-note-category.medication { background: #1e3a5f; color: #93c5fd; }
+    .cat-note-body {
+      font-size: 13px;
+      white-space: pre-line;
+      word-break: break-all;
+    }
+    .cat-note-pin {
+      position: absolute;
+      top: 6px;
+      right: 8px;
+      font-size: 12px;
+      cursor: pointer;
+      opacity: 0.5;
+    }
+    .cat-note-pin:hover { opacity: 1; }
+
+    /* モーダル */
+    .modal-overlay {
+      display: none;
+      position: fixed;
+      inset: 0;
+      background: rgba(0,0,0,.6);
+      z-index: 1000;
+      align-items: center;
+      justify-content: center;
+    }
+    .modal-overlay.open { display: flex; }
+    .modal-box {
+      background: var(--bg);
+      border-radius: 12px;
+      padding: 20px;
+      width: 90%;
+      max-width: 400px;
+      max-height: 80vh;
+      overflow-y: auto;
+    }
+    .modal-title {
+      font-size: 16px;
+      font-weight: 700;
+      margin-bottom: 16px;
+    }
+    .form-group { margin-bottom: 12px; }
+    .form-label { font-size: 12px; color: var(--text-dim); margin-bottom: 4px; display: block; }
+    .form-input, .form-select, .form-textarea {
+      width: 100%;
+      box-sizing: border-box;
+      background: var(--surface);
+      border: 1px solid var(--surface-alt);
+      border-radius: 6px;
+      padding: 8px 10px;
+      color: var(--text-main);
+      font-size: 13px;
+    }
+    .form-textarea { height: 64px; resize: vertical; }
+    .modal-actions { display: flex; gap: 8px; margin-top: 16px; }
+    .modal-actions .btn { flex: 1; font-size: 13px; padding: 10px; }
+    .ms-slot-checks { display: flex; flex-wrap: wrap; gap: 6px 12px; }
+    .ms-check { font-size: 13px; display: flex; align-items: center; gap: 4px; cursor: pointer; }
+    .ms-check input { margin: 0; }
+    .med-card-actions { display: flex; gap: 6px; margin-top: 8px; }
+    .med-card-actions button {
+      font-size: 11px; padding: 4px 10px; border-radius: 5px; border: none; cursor: pointer;
+    }
+    .btn-med-edit { background: rgba(96,165,250,0.18); color: #60a5fa; }
+    .btn-med-edit:active { opacity: 0.7; }
+    .btn-med-stop { background: rgba(248,113,113,0.18); color: #f87171; }
+    .btn-med-stop:active { opacity: 0.7; }
+    .btn-med-add {
+      font-size: 12px; padding: 5px 12px; border-radius: 6px; border: 1px dashed rgba(255,255,255,0.2);
+      background: none; color: var(--primary); cursor: pointer;
+    }
+    .btn-med-add:active { opacity: 0.7; }
+
+    /* ── ケアカード ── */
+    .care-date-group { margin-bottom: 8px; }
+    .care-date-label {
+      font-size: 11px; color: var(--text-dim);
+      margin-bottom: 4px; padding-left: 2px;
+    }
+    .care-row {
+      display: flex; flex-wrap: wrap; gap: 4px;
+    }
+    .care-chip {
+      display: inline-flex; align-items: center; gap: 2px;
+      font-size: 11px; padding: 3px 8px; border-radius: 4px;
+    }
+    .care-chip small { font-size: 9px; opacity: 0.7; }
+    .care-chip.care-done {
+      background: rgba(74,222,128,0.15); color: #4ade80;
+    }
+    .care-chip.care-skip {
+      background: rgba(248,113,113,0.15); color: #f87171;
+    }
+
+    /* ── 排便状況 ── */
+    .stool-list { display: flex; flex-direction: column; gap: 4px; }
+    .stool-row {
+      display: flex; align-items: center; gap: 6px;
+      padding: 5px 0;
+      border-bottom: 1px solid rgba(255,255,255,0.04);
+      font-size: 12px;
+    }
+    .stool-date {
+      min-width: 40px; color: var(--text-dim); font-size: 11px;
+    }
+    .stool-chip {
+      display: inline-block;
+      padding: 2px 8px; border-radius: 4px; font-size: 11px;
+      font-weight: 600;
+    }
+    .stool-chip.stool-normal {
+      background: rgba(74,222,128,0.15); color: #4ade80;
+    }
+    .stool-chip.stool-warn {
+      background: rgba(248,113,113,0.18); color: #f87171;
+    }
+    .stool-chip.stool-baseline {
+      background: rgba(251,191,36,0.18); color: #fbbf24;
+    }
+    .stool-time-slot {
+      font-size: 10px; color: var(--text-dim);
+      background: rgba(255,255,255,0.06);
+      padding: 1px 5px; border-radius: 3px;
+    }
+    .stool-meta {
+      margin-left: auto; font-size: 10px; color: var(--text-dim);
+      white-space: nowrap;
+    }
+    .stool-chip.stool-empty {
+      background: rgba(255,255,255,0.04); color: var(--text-dim);
+      font-weight: 400;
+    }
+    .stool-row.stool-none { opacity: 0.5; }
+    .stool-chip.med-chip {
+      background: rgba(129,140,248,0.18); color: #818cf8;
+      font-weight: 600;
+    }
+    .fold-toggle {
+      display: block;
+      width: 100%;
+      background: none;
+      border: 1px dashed rgba(255,255,255,0.12);
+      border-radius: 6px;
+      color: var(--text-dim);
+      font-size: 11px;
+      padding: 6px;
+      margin-top: 6px;
+      cursor: pointer;
+      text-align: center;
+    }
+    .fold-toggle:active { opacity: 0.6; }
+    .fm-row {
+      display: flex; gap: 6px; align-items: flex-start;
+      padding: 6px 0; border-bottom: 1px solid rgba(255,255,255,0.04);
+      font-size: 12px;
+    }
+    .fm-row:last-child { border-bottom: none; }
+    .fm-time { min-width: 38px; color: var(--text-dim); font-size: 10px; padding-top: 2px; }
+    .fm-tag {
+      display: inline-block; padding: 1px 6px; border-radius: 3px;
+      font-size: 10px; font-weight: 600; margin-right: 4px; white-space: nowrap;
+    }
+    .fm-tag.fm-leftover { background: rgba(251,191,36,0.18); color: #fbbf24; }
+    .fm-tag.fm-instruction { background: rgba(96,165,250,0.18); color: #60a5fa; }
+    .fm-tag.fm-calorie { background: rgba(74,222,128,0.15); color: #4ade80; }
+    .fm-tag.fm-amount { background: rgba(168,85,247,0.15); color: #a855f7; }
+    .fm-tag.fm-other { background: rgba(255,255,255,0.08); color: var(--text-dim); }
+    .fm-body { flex: 1; color: var(--text-main); word-break: break-all; }
+  </style>
+</head>
+<body>
+
+  <div class="header">
+    <h1>NYAGI</h1>
+    <p>猫詳細</p>
+    <nav class="header-nav">
+      <a href="dashboard.html">ダッシュボード</a>
+      <a href="cats.html">猫一覧</a>
+      <a href="tasks.html">タスク</a>
+      <a href="foods.html">フード</a>
+      <a href="medicines.html">薬</a>
+      <a href="manual.html">📖</a>
+    </nav>
+  </div>
+
+  <div id="loginGate" style="display:none;"></div>
+
+  <div id="catContent" style="display:none;">
+    <div id="catHeaderArea"></div>
+    <div id="alertBannerArea"></div>
+    <div id="scoreCardArea"></div>
+    <div id="basicInfoArea"></div>
+    <div id="weightChartArea"></div>
+    <div id="calorieArea" style="scroll-margin-top: 16px;"></div>
+    <div id="feedingArea"></div>
+    <div id="feedingMemoArea"></div>
+    <div id="careArea"></div>
+    <div id="stoolArea"></div>
+    <div id="urineArea"></div>
+    <div id="medRecordArea"></div>
+    <div id="healthRecordsArea"></div>
+    <div id="clinicRecordsArea"></div>
+    <div id="medicationScheduleArea"></div>
+    <div id="catNotesArea"></div>
+    <div id="actionsArea"></div>
+    <div id="catTasksArea"></div>
+
+    <div class="footer-actions">
+      <button id="reportLink" class="btn btn-primary" style="width:100%;" onclick="if(typeof switchMode==='function'){switchMode('full')}else{var fab=document.querySelector('.vc-fab');if(fab)fab.click();}">🎤 この猫について報告</button>
+      <a href="dashboard.html" class="btn btn-outline" style="text-decoration:none;text-align:center;">ダッシュボードに戻る</a>
+    </div>
+  </div>
+
+  <!-- 給餌ログ記録モーダル -->
+  <div id="feedingLogModal" class="modal-overlay">
+    <div class="modal-box">
+      <div class="modal-title">🍽 給餌ログを記録</div>
+      <div class="form-group">
+        <label class="form-label">日付</label>
+        <input type="date" id="flDate" class="form-input">
+      </div>
+      <div class="form-group">
+        <label class="form-label">食事区分</label>
+        <select id="flSlot" class="form-select">
+          <option value="morning">朝</option>
+          <option value="afternoon">昼</option>
+          <option value="evening">夕</option>
+          <option value="snack">おやつ</option>
+        </select>
+      </div>
+      <div class="form-group">
+        <label class="form-label">フード</label>
+        <select id="flFoodId" class="form-select" onchange="onFoodSelect()">
+          <option value="">-- 選択 --</option>
+        </select>
+        <div id="flFoodInfo" style="font-size:11px;color:var(--text-dim);margin-top:4px;"></div>
+      </div>
+      <div class="form-group">
+        <label class="form-label">あげた量 (g)</label>
+        <input type="number" id="flOfferedG" class="form-input" placeholder="例: 30" step="0.1" min="0" oninput="calcFeedingKcal()">
+      </div>
+      <div class="form-group">
+        <label class="form-label">食べた割合 (%)</label>
+        <input type="number" id="flEatenPct" class="form-input" placeholder="例: 90" min="0" max="100" oninput="calcFeedingKcal()">
+      </div>
+      <div id="flKcalPreview" style="font-size:12px;padding:6px 0;color:var(--accent);font-weight:700;display:none;"></div>
+      <div class="form-group">
+        <label class="form-label">メモ（任意） <button type="button" class="inline-mic-btn" data-voice-for="flNote" onclick="startInlineVoice('flNote')">🎤</button></label>
+        <input type="text" id="flNote" class="form-input" placeholder="残した、いつもより少なめ 等">
+      </div>
+      <div class="modal-actions">
+        <button class="btn btn-outline" onclick="closeFeedingLogModal()">キャンセル</button>
+        <button class="btn btn-primary" onclick="submitFeedingLog()">保存</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- プラン追加/編集モーダル -->
+  <div id="addPlanModal" class="modal-overlay">
+    <div class="modal-box">
+      <div class="modal-title">🍽 プランを追加</div>
+      <div class="form-group">
+        <label class="form-label">食事区分</label>
+        <select id="apSlot" class="form-select">
+          <option value="morning">朝</option>
+          <option value="afternoon">昼</option>
+          <option value="evening">夕</option>
+          <option value="snack">おやつ</option>
+          <option value="supplement">サプリメント</option>
+        </select>
+      </div>
+      <div class="form-group">
+        <label class="form-label">フード</label>
+        <select id="apFoodId" class="form-select" onchange="calcPlanKcal()">
+          <option value="">-- 選択 --</option>
+        </select>
+      </div>
+      <div class="form-group">
+        <label class="form-label">量 (g)</label>
+        <input type="number" id="apAmount" class="form-input" placeholder="例: 30" step="0.1" min="0" oninput="calcPlanKcal()">
+      </div>
+      <div id="apKcalPreview" style="font-size:12px;padding:6px 0;color:var(--accent);font-weight:700;display:none;"></div>
+      <div class="form-group">
+        <label class="form-label">予定時刻（任意）</label>
+        <input type="time" id="apTime" class="form-input">
+      </div>
+      <div class="form-group">
+        <label class="form-label">メモ（任意）</label>
+        <input type="text" id="apNotes" class="form-input" placeholder="食べ残しが多いので少量ずつ 等">
+      </div>
+      <div class="modal-actions">
+        <button class="btn btn-outline" onclick="closeAddPlanModal()">キャンセル</button>
+        <button class="btn btn-primary" onclick="submitPlan()">保存</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- プリセット適用/管理モーダル -->
+  <div id="presetApplyModal" class="modal-overlay"></div>
+
+  <!-- 注意事項追加モーダル -->
+  <div id="catNoteModal" class="modal-overlay">
+    <div class="modal-box">
+      <div class="modal-title">注意事項を追加</div>
+      <div class="form-group">
+        <label class="form-label">内容 * <button type="button" class="inline-mic-btn" data-voice-for="cnNote" onclick="startInlineVoice('cnNote')">🎤</button></label>
+        <textarea id="cnNote" class="form-textarea" placeholder="気づきや注意事項を記入..." style="min-height:80px;"></textarea>
+      </div>
+      <div class="form-group">
+        <label class="form-label">カテゴリ</label>
+        <select id="cnCategory" class="form-select">
+          <option value="general">一般</option>
+          <option value="health">健康</option>
+          <option value="behavior">行動</option>
+          <option value="feeding">食事</option>
+          <option value="medication">投薬</option>
+          <option value="task">タスク関連</option>
+          <option value="warning">警告</option>
+        </select>
+      </div>
+      <div class="form-group">
+        <label style="font-size:12px;color:var(--text-dim);display:flex;align-items:center;gap:6px;">
+          <input type="checkbox" id="cnPinned"> ピン留め（常に上に表示）
+        </label>
+      </div>
+      <div class="modal-actions">
+        <button class="btn btn-outline" onclick="closeCatNoteModal()">キャンセル</button>
+        <button class="btn btn-primary" onclick="submitCatNote()">保存</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- 体重記録モーダル -->
+  <div id="healthRecordModal" class="modal-overlay">
+    <div class="modal-box">
+      <div class="modal-title">⚖️ 体重を記録</div>
+      <input type="hidden" id="hrType" value="weight">
+      <input type="hidden" id="hrDate">
+      <div class="form-group">
+        <label class="form-label">体重（kg）</label>
+        <input type="number" id="hrValue" class="form-input" placeholder="例: 3.30" step="0.01" min="0" inputmode="decimal" style="font-size:20px;text-align:center;font-weight:700;">
+      </div>
+      <div class="modal-actions">
+        <button class="btn btn-outline" onclick="closeHealthRecordModal()">キャンセル</button>
+        <button class="btn btn-primary" onclick="submitHealthRecord()">保存</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- 病院記録モーダル -->
+  <div id="clinicRecordModal" class="modal-overlay">
+    <div class="modal-box">
+      <div class="modal-title">🏥 病院記録を追加</div>
+      <div class="form-group">
+        <label class="form-label">種別</label>
+        <select id="crType" class="form-select">
+          <option value="checkup">健康診断</option>
+          <option value="vaccine">ワクチン</option>
+          <option value="surgery">手術</option>
+          <option value="dental">歯科</option>
+          <option value="emergency">緊急</option>
+          <option value="test">検査</option>
+          <option value="observation">経過観察</option>
+        </select>
+      </div>
+      <div class="form-group">
+        <label class="form-label">日付</label>
+        <input type="date" id="crDate" class="form-input">
+      </div>
+      <div class="form-group">
+        <label class="form-label">内容 <button type="button" class="inline-mic-btn" data-voice-for="crContent" onclick="startInlineVoice('crContent')">🎤</button></label>
+        <textarea id="crContent" class="form-textarea" rows="5" placeholder="診察内容、処方、所見など自由に記入"></textarea>
+      </div>
+      <div class="form-group" id="crNextDueGroup">
+        <label class="form-label">次回予定日（任意）</label>
+        <input type="date" id="crNextDue" class="form-input">
+      </div>
+      <div class="modal-actions">
+        <button class="btn btn-outline" onclick="closeClinicRecordModal()">キャンセル</button>
+        <button class="btn btn-primary" onclick="submitClinicRecord()">保存</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- 病院予定モーダル -->
+  <div id="vetScheduleModal" class="modal-overlay">
+    <div class="modal-box">
+      <div class="modal-title">📅 病院の予定を登録</div>
+      <div class="form-group">
+        <label class="form-label">種別</label>
+        <select id="vsType" class="form-select">
+          <option value="checkup">健康診断</option>
+          <option value="vaccine">ワクチン</option>
+          <option value="surgery">手術</option>
+          <option value="dental">歯科</option>
+          <option value="test">検査</option>
+          <option value="observation">経過観察</option>
+        </select>
+      </div>
+      <div class="form-group">
+        <label class="form-label">予定日 *</label>
+        <input type="date" id="vsDate" class="form-input">
+      </div>
+      <div class="form-group">
+        <label class="form-label">メモ（任意） <button type="button" class="inline-mic-btn" data-voice-for="vsMemo" onclick="startInlineVoice('vsMemo')">🎤</button></label>
+        <textarea id="vsMemo" class="form-textarea" rows="3" placeholder="予約内容、注意事項など"></textarea>
+      </div>
+      <div class="modal-actions">
+        <button class="btn btn-outline" onclick="closeVetScheduleModal()">キャンセル</button>
+        <button class="btn btn-primary" onclick="submitVetSchedule()">登録</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- 排便記録モーダル -->
+  <div id="stoolRecordModal" class="modal-overlay">
+    <div class="modal-box">
+      <div class="modal-title">🚽 排便を記録</div>
+      <div class="form-group">
+        <label class="form-label">状態 *</label>
+        <select id="stoolStatus" class="form-select">
+          <option value="">-- 選択 --</option>
+          <option value="健康">健康</option>
+          <option value="硬い">硬い</option>
+          <option value="軟便">軟便</option>
+          <option value="下痢">下痢</option>
+          <option value="血便小">血便小（いつもの程度）</option>
+          <option value="血便大（異常）">血便大（異常）</option>
+        </select>
+      </div>
+      <div class="form-group">
+        <label class="form-label">時間帯（任意）</label>
+        <select id="stoolDetails" class="form-select">
+          <option value="">--</option>
+          <option value="朝">朝</option>
+          <option value="昼">昼</option>
+          <option value="夜">夜</option>
+          <option value="途中">途中</option>
+        </select>
+      </div>
+      <div class="form-group">
+        <label class="form-label">日付</label>
+        <input type="date" id="stoolDate" class="form-input">
+      </div>
+      <div class="modal-actions">
+        <button class="btn btn-outline" onclick="closeStoolModal()">キャンセル</button>
+        <button class="btn btn-primary" onclick="submitStoolRecord()">保存</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- 排尿記録モーダル -->
+  <div id="urineRecordModal" class="modal-overlay">
+    <div class="modal-box">
+      <div class="modal-title">💧 排尿を記録</div>
+      <div class="form-group">
+        <label class="form-label">状態 *</label>
+        <select id="urineStatus" class="form-select">
+          <option value="">-- 選択 --</option>
+          <option value="なし（異常）">なし（異常）</option>
+          <option value="なし">なし</option>
+          <option value="少量">少量</option>
+          <option value="普通">普通</option>
+          <option value="多い">多い</option>
+          <option value="血尿小">血尿小</option>
+          <option value="血尿大（異常）">血尿大（異常）</option>
+        </select>
+      </div>
+      <div class="form-group">
+        <label class="form-label">時間帯（任意）</label>
+        <select id="urineDetails" class="form-select">
+          <option value="">--</option>
+          <option value="朝">朝</option>
+          <option value="昼">昼</option>
+          <option value="夜">夜</option>
+          <option value="途中">途中</option>
+        </select>
+      </div>
+      <div class="form-group">
+        <label class="form-label">日付</label>
+        <input type="date" id="urineDate" class="form-input">
+      </div>
+      <div class="modal-actions">
+        <button class="btn btn-outline" onclick="closeUrineModal()">キャンセル</button>
+        <button class="btn btn-primary" onclick="submitUrineRecord()">保存</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- 名前変更モーダル -->
+  <div id="renameModal" class="modal-overlay">
+    <div class="modal-box">
+      <div class="modal-title">✏️ 名前を変更</div>
+      <div id="renameOldName" style="font-size:12px;color:var(--text-dim);margin-bottom:12px;"></div>
+      <div class="form-group">
+        <label class="form-label">新しい名前 *</label>
+        <input type="text" id="renameNewName" class="form-input" placeholder="新しい名前を入力" style="font-size:18px;font-weight:700;">
+      </div>
+      <div style="font-size:11px;color:var(--text-dim);margin-bottom:8px;">※ 旧名は音声認識辞書に自動登録されます</div>
+      <div class="modal-actions">
+        <button class="btn btn-outline" onclick="closeRenameModal()">キャンセル</button>
+        <button class="btn btn-primary" onclick="submitRename()">変更する</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ロケーション・ステータス編集モーダル -->
+  <div id="locationStatusModal" class="modal-overlay">
+    <div class="modal-box">
+      <div class="modal-title">📍 拠点・ステータスを変更</div>
+      <div class="form-group">
+        <label class="form-label">拠点</label>
+        <select id="lsLocationId" class="form-select">
+          <option value="cafe">BAKENEKO CAFE</option>
+          <option value="nekomata">猫又療養所</option>
+          <option value="endo">遠藤宅</option>
+          <option value="azukari">預かり隊</option>
+        </select>
+      </div>
+      <div class="form-group">
+        <label class="form-label">ステータス</label>
+        <select id="lsStatus" class="form-select">
+          <option value="active">在籍</option>
+          <option value="adopted">卒業</option>
+          <option value="trial">トライアル中</option>
+        </select>
+      </div>
+      <div class="modal-actions">
+        <button class="btn btn-outline" onclick="closeLocationStatusModal()">キャンセル</button>
+        <button class="btn btn-primary" onclick="submitLocationStatus()">保存</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ケア記録モーダル -->
+  <div id="careRecordModal" class="modal-overlay">
+    <div class="modal-box">
+      <div class="modal-title">🪮 ケア実施を記録</div>
+      <div class="form-group">
+        <label class="form-label">ケア項目 * <button type="button" class="inline-mic-btn" data-voice-for="careTypeVoice" onclick="startInlineVoice('careTypeVoice')">🎤</button></label>
+        <input type="text" id="careTypeVoice" class="form-input" placeholder="音声で入力（例: ブラシ）" style="margin-bottom:6px;" oninput="matchCareTypeFromVoice(this.value)">
+        <select id="careType" class="form-select">
+          <option value="">-- 選択 --</option>
+        </select>
+      </div>
+      <div class="form-group">
+        <label class="form-label">実施状況 *</label>
+        <select id="careDone" class="form-select">
+          <option value="1">実施した</option>
+          <option value="0">スキップ（実施していない）</option>
+        </select>
+      </div>
+      <div class="form-group">
+        <label class="form-label">日付</label>
+        <input type="date" id="careDate" class="form-input">
+      </div>
+      <div class="modal-actions">
+        <button class="btn btn-outline" onclick="closeCareModal()">キャンセル</button>
+        <button class="btn btn-primary" onclick="submitCareRecord()">保存</button>
+      </div>
+    </div>
+  </div>
+
+  <div id="medScheduleModal" class="modal-overlay">
+    <div class="modal-box">
+      <div class="modal-title" id="medModalTitle">💊 投薬スケジュールを追加</div>
+      <input type="hidden" id="msEditId" value="">
+
+      <div class="form-group">
+        <label class="form-label">薬 *</label>
+        <select id="msMedicineId" class="form-select">
+          <option value="">選択してください</option>
+        </select>
+      </div>
+      <div class="form-group" id="msNewMedicineGroup" style="display:none;">
+        <label class="form-label">新しい薬の名前 *</label>
+        <input type="text" id="msNewMedicineName" class="form-input" placeholder="例: アモキシシリン">
+      </div>
+
+      <div style="display:flex;gap:8px;">
+        <div class="form-group" style="flex:1;">
+          <label class="form-label">用量</label>
+          <input type="number" id="msDosageAmount" class="form-input" step="0.1" placeholder="例: 0.5">
+        </div>
+        <div class="form-group" style="flex:1;">
+          <label class="form-label">単位</label>
+          <select id="msDosageUnit" class="form-select">
+            <option value="">--</option>
+            <option value="錠">錠</option>
+            <option value="ml">ml</option>
+            <option value="mg">mg</option>
+            <option value="滴">滴</option>
+            <option value="包">包</option>
+            <option value="g">g</option>
+          </select>
+        </div>
+      </div>
+
+      <div class="form-group">
+        <label class="form-label">頻度</label>
+        <select id="msFrequency" class="form-select" onchange="onFrequencyChange()">
+          <option value="毎日">毎日</option>
+          <option value="隔日(A)">隔日 — A日</option>
+          <option value="隔日(B)">隔日 — B日</option>
+          <option value="3日に1回">3日に1回</option>
+          <option value="週3回">週3回</option>
+          <option value="週1回">週1回</option>
+          <option value="月末のみ">月末のみ</option>
+          <option value="必要時">必要時</option>
+        </select>
+        <div id="msAlternateHint" class="form-hint" style="display:none;margin-top:4px;font-size:11px;color:#ff9800;">
+          ⚠ 交互投薬: 同じ猫に A日 と B日 で別の薬を登録してください
+        </div>
+      </div>
+
+      <div class="form-group">
+        <label class="form-label">タイミング</label>
+        <div class="ms-slot-checks">
+          <label class="ms-check"><input type="checkbox" value="朝" checked> 朝</label>
+          <label class="ms-check"><input type="checkbox" value="昼"> 昼</label>
+          <label class="ms-check"><input type="checkbox" value="晩"> 晩</label>
+        </div>
+      </div>
+
+      <div class="form-group">
+        <label class="form-label">投与経路</label>
+        <select id="msRoute" class="form-select">
+          <option value="経口">経口</option>
+          <option value="点眼">点眼</option>
+          <option value="点鼻">点鼻</option>
+          <option value="点耳">点耳</option>
+          <option value="皮下注射">皮下注射</option>
+          <option value="塗布">塗布</option>
+          <option value="その他">その他</option>
+        </select>
+      </div>
+
+      <div style="display:flex;gap:8px;">
+        <div class="form-group" style="flex:1;">
+          <label class="form-label">開始日 *</label>
+          <input type="date" id="msStartDate" class="form-input">
+        </div>
+        <div class="form-group" style="flex:1;">
+          <label class="form-label">終了日</label>
+          <input type="date" id="msEndDate" class="form-input">
+          <label style="font-size:11px;display:flex;align-items:center;gap:4px;margin-top:4px;cursor:pointer;">
+            <input type="checkbox" id="msEndDateUndecided" onchange="toggleEndDate(this)"> 未定
+          </label>
+        </div>
+      </div>
+
+      <div class="form-group">
+        <label class="form-label">目的</label>
+        <input type="text" id="msPurpose" class="form-input" placeholder="例: 尿路感染の治療">
+      </div>
+      <div class="form-group">
+        <label class="form-label">メモ（投薬コツなど）</label>
+        <textarea id="msNotes" class="form-textarea" placeholder="例: ちゅーるに混ぜると飲みやすい"></textarea>
+      </div>
+
+      <div class="modal-actions">
+        <button class="btn btn-outline" onclick="closeMedScheduleModal()">キャンセル</button>
+        <button class="btn btn-primary" onclick="submitMedSchedule()">保存</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="footer">
+    &copy; BAKENEKO GAMES
+  </div>
+
+  <script src="config.js"></script>
+  <script src="js/login-gate.js"></script>
+  <script src="js/app.js"></script>
+  <script src="js/cat-detail.js?v=85"></script>
+  <script src="js/voice-console.js"></script>
+</body>
+</html>

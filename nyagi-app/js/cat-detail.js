@@ -865,7 +865,10 @@ function toggleFold(id, btn) {
         html += '<div class="health-record-item">';
         html += '<div class="hr-head">';
         html += '<span><span class="' + badgeClass + '">' + escapeHtml(typeLabel) + '</span>' + escapeHtml(formatDateShort(r.record_date)) + '</span>';
+        html += '<div style="display:flex;align-items:center;gap:6px;">';
         html += '<span style="font-size:11px;color:var(--text-dim);">' + escapeHtml(r.recorded_by || '') + '</span>';
+        html += '<button class="btn-edit-small" onclick="deleteClinicRecord(' + r.id + ')" title="削除" style="font-size:11px;color:#f87171;padding:2px 4px;">🗑</button>';
+        html += '</div>';
         html += '</div>';
         if (r.value) {
           html += '<div class="hr-value">' + escapeHtml(r.value) + '</div>';
@@ -1499,6 +1502,36 @@ function toggleFold(id, btn) {
     return m ? m[1] : '';
   }
 
+  function countVomitRecords(healthRecs, todayStr) {
+    var now = new Date();
+    var d7 = new Date(now.getTime() - 7 * 86400000).toISOString().slice(0, 10);
+    var d30 = new Date(now.getTime() - 30 * 86400000).toISOString().slice(0, 10);
+    var result = { today: 0, week: 0, total: 0, lastDate: '' };
+    for (var i = 0; i < healthRecs.length; i++) {
+      var r = healthRecs[i];
+      var isVomit = false;
+      var count = 1;
+      if (r.record_type === 'vomiting') {
+        isVomit = true;
+      } else if (r.record_type === 'observation') {
+        var val = (r.value || '') + ' ' + (r.details || '');
+        if (val.indexOf('はき戻し') !== -1 || val.indexOf('嘔吐') !== -1 || val.indexOf('吐いた') !== -1) {
+          isVomit = true;
+          var m = val.match(/(\d+)\s*回/);
+          if (m) count = parseInt(m[1], 10) || 1;
+        }
+      }
+      if (!isVomit) continue;
+      var rd = r.record_date || '';
+      if (rd < d30) continue;
+      result.total += count;
+      if (rd >= d7) result.week += count;
+      if (rd === todayStr) result.today += count;
+      if (!result.lastDate || rd > result.lastDate) result.lastDate = rd;
+    }
+    return result;
+  }
+
   function renderMealHistoryBlock(title, obsRec, foodsDb) {
     if (!obsRec) return '';
     var val = obsRec.value || '';
@@ -1585,6 +1618,25 @@ function toggleFold(id, btn) {
       html += '<div style="font-size:14px;font-weight:700;margin-bottom:8px;">📊 直近の給餌実績</div>';
       html += histBlock;
       html += mornBlock;
+      html += '</div>';
+    }
+
+    var vomitCounts = countVomitRecords(healthRecs, today);
+    if (vomitCounts.total > 0) {
+      var vBg = vomitCounts.today > 0 ? 'rgba(248,113,113,0.12)' : 'rgba(251,146,60,0.10)';
+      var vBorder = vomitCounts.today > 0 ? '#f87171' : '#fb923c';
+      html += '<div style="background:' + vBg + ';border-left:3px solid ' + vBorder + ';border-radius:8px;padding:10px 12px;margin-bottom:10px;">';
+      html += '<div style="font-size:13px;font-weight:700;color:' + vBorder + ';margin-bottom:4px;">🤮 はき戻し記録</div>';
+      html += '<div style="display:flex;gap:16px;font-size:12px;color:var(--text-main);">';
+      if (vomitCounts.today > 0) {
+        html += '<span>今日: <b style="color:#f87171;">' + vomitCounts.today + '回</b></span>';
+      }
+      html += '<span>直近7日: <b>' + vomitCounts.week + '回</b></span>';
+      html += '<span>直近30日: <b>' + vomitCounts.total + '回</b></span>';
+      html += '</div>';
+      if (vomitCounts.lastDate) {
+        html += '<div style="font-size:11px;color:var(--text-dim);margin-top:4px;">最終: ' + escapeHtml(vomitCounts.lastDate) + '</div>';
+      }
       html += '</div>';
     }
 
@@ -2466,6 +2518,18 @@ function toggleFold(id, btn) {
     }).catch(function () {
       alert('更新に失敗しました');
     });
+  };
+
+  window.deleteClinicRecord = function (recordId) {
+    if (!confirm('この病院記録を削除しますか？\nこの操作は取り消せません。')) return;
+    fetch(API_BASE + '/health/records/' + recordId, {
+      method: 'DELETE',
+      headers: apiHeaders(),
+    }).then(function (r) { return r.json(); })
+    .then(function (data) {
+      if (data.error) { alert('削除エラー: ' + (data.message || data.error)); return; }
+      loadClinicRecords();
+    }).catch(function () { alert('削除に失敗しました'); });
   };
 
   window.submitClinicRecord = function () {

@@ -193,6 +193,9 @@
     // 2. 🏥 健康スコア（注意順 TOP5）
     html += renderHealthScoreTop5(m.cats_summary || []);
 
+    // 2.5 🤮 はき戻し（直近7日で記録がある猫のみ）
+    html += renderVomitSummary(m.cats_summary || []);
+
     // 3. 💊 今日の投薬（朝・昼・夜カード）
     var meds = m.medications_today || [];
     var pendingMeds = e.pending_medications || [];
@@ -570,6 +573,34 @@
     }
   }
 
+  // ── はき戻しサマリー ──
+
+  function renderVomitSummary(cats) {
+    var withVomit = [];
+    for (var i = 0; i < cats.length; i++) {
+      if (cats[i].vomit_7d > 0) withVomit.push(cats[i]);
+    }
+    if (withVomit.length === 0) return '';
+
+    withVomit.sort(function (a, b) { return b.vomit_7d - a.vomit_7d; });
+
+    var html = '<div class="section-title dash-fold-title" data-fold="vomitSummary">🤮 はき戻し（直近7日）</div>';
+    html += '<div class="dash-fold-body" data-fold-target="vomitSummary">';
+    html += '<div class="card">';
+    for (var i = 0; i < withVomit.length; i++) {
+      var c = withVomit[i];
+      var icon = c.species === 'dog' ? '🐶' : '🐱';
+      var vColor = c.vomit_7d >= 3 ? '#f87171' : c.vomit_7d >= 2 ? '#fb923c' : '#facc15';
+      var border = i < withVomit.length - 1 ? 'border-bottom:1px solid rgba(255,255,255,0.06);' : '';
+      html += '<a href="cat.html?id=' + encodeURIComponent(c.id || '') + '" style="display:flex;align-items:center;justify-content:space-between;padding:8px 4px;text-decoration:none;color:inherit;' + border + '">';
+      html += '<span style="font-size:13px;">' + icon + ' ' + escapeHtml(c.name) + '</span>';
+      html += '<span style="font-size:14px;font-weight:700;color:' + vColor + ';">' + c.vomit_7d + '回</span>';
+      html += '</a>';
+    }
+    html += '</div></div>';
+    return html;
+  }
+
   // ── 健康スコア TOP5 ──
 
   function renderHealthScoreTop5(cats) {
@@ -600,7 +631,11 @@
       html += '<div style="display:flex;align-items:center;gap:10px;">';
       html += '<span style="font-size:22px;font-weight:900;min-width:38px;text-align:center;color:' + colorHex + ';">' + s + '</span>';
       html += '<div style="flex:1;min-width:0;">';
-      html += '<div style="font-size:13px;font-weight:600;">' + icon + ' ' + escapeHtml(c.name) + '</div>';
+      html += '<div style="font-size:13px;font-weight:600;display:flex;align-items:center;gap:6px;">' + icon + ' ' + escapeHtml(c.name);
+      if (c.vomit_7d > 0) {
+        html += ' <span style="font-size:10px;background:rgba(248,113,113,0.2);color:#f87171;padding:1px 5px;border-radius:10px;font-weight:600;">🤮' + c.vomit_7d + '</span>';
+      }
+      html += '</div>';
       html += '<div style="background:var(--surface-alt);border-radius:3px;height:4px;margin-top:4px;">';
       html += '<div style="background:' + colorHex + ';width:' + s + '%;height:100%;border-radius:3px;"></div>';
       html += '</div></div></div>';

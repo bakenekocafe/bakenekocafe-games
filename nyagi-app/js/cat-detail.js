@@ -1255,6 +1255,7 @@ function toggleFold(id, btn) {
     if (calorieArea) calorieArea.innerHTML = '<div class="detail-section"><div class="detail-title">🔥 カロリー評価</div><div class="loading" style="padding:16px;">読み込み中...</div></div>';
 
     var today = new Date().toISOString().slice(0, 10);
+    var yesterday = new Date(Date.now() - 86400000).toISOString().slice(0, 10);
 
     function doFetch(retryCount) {
       retryCount = retryCount || 0;
@@ -1263,13 +1264,15 @@ function toggleFold(id, btn) {
         fetch(API_BASE + '/feeding/logs?cat_id=' + encodeURIComponent(catId) + '&date=' + today, { headers: apiHeaders() }).then(function (r) { return r.json(); }),
         fetch(API_BASE + '/health/records?cat_id=' + encodeURIComponent(catId) + '&limit=40', { headers: apiHeaders() }).then(function (r) { return r.json(); }),
         fetch(API_BASE + '/feeding/foods', { headers: apiHeaders() }).then(function (r) { return r.json(); }),
+        fetch(API_BASE + '/feeding/logs?cat_id=' + encodeURIComponent(catId) + '&date=' + yesterday, { headers: apiHeaders() }).then(function (r) { return r.json(); }),
       ]).then(function (results) {
         var calcData = results[0];
         _lastCalcData = calcData;
         renderCalorieCard(calcData);
         var healthRecs = (results[2] && results[2].records) || [];
         var foodsDb = (results[3] && results[3].foods) || [];
-        renderFeedingSection(calcData, results[1].logs || [], today, healthRecs, foodsDb);
+        var yesterdayLogs = (results[4] && results[4].logs) || [];
+        renderFeedingSection(calcData, results[1].logs || [], today, healthRecs, foodsDb, yesterdayLogs);
       }).catch(function (err) {
         if (retryCount < 2) {
           setTimeout(function () { doFetch(retryCount + 1); }, 1200);
@@ -1590,11 +1593,76 @@ function toggleFold(id, btn) {
     return html;
   }
 
-  function renderFeedingSection(calc, logs, today, healthRecs, foodsDb) {
+  function renderLeftoverInput(eveningLogs) {
+    var needsInput = [];
+    for (var i = 0; i < eveningLogs.length; i++) {
+      var l = eveningLogs[i];
+      if (l.eaten_pct === null || l.eaten_pct === undefined || l.eaten_pct === 100) {
+        needsInput.push(l);
+      }
+    }
+    if (needsInput.length === 0) {
+      var allDone = true;
+      for (var k = 0; k < eveningLogs.length; k++) {
+        if (eveningLogs[k].eaten_pct === null || eveningLogs[k].eaten_pct === undefined) { allDone = false; break; }
+      }
+      if (allDone) return '';
+    }
+
+    var h = '<div style="background:rgba(99,102,241,0.08);border:1px solid rgba(99,102,241,0.2);border-radius:10px;padding:12px;margin-bottom:12px;">';
+    h += '<div style="font-size:14px;font-weight:700;color:#a78bfa;margin-bottom:8px;">🌙 昨夜の夜ごはん — 残り量を記録</div>';
+
+    for (var i = 0; i < eveningLogs.length; i++) {
+      var l = eveningLogs[i];
+      var hasLeftover = l.eaten_pct !== null && l.eaten_pct !== undefined && l.eaten_pct < 100;
+      var isComplete = l.eaten_pct !== null && l.eaten_pct !== undefined && l.eaten_pct === 100;
+      var offG = l.offered_g || 0;
+
+      h += '<div style="background:var(--surface);border-radius:8px;padding:10px 12px;margin-bottom:6px;" id="leftover-row-' + l.id + '">';
+      h += '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;">';
+      h += '<div style="font-size:13px;font-weight:600;">' + escapeHtml(l.food_name || '不明') + '</div>';
+      if (offG) h += '<span style="font-size:12px;color:var(--text-dim);">提供: ' + offG + 'g</span>';
+      h += '</div>';
+
+      if (hasLeftover) {
+        var leftG = Math.round(offG * (100 - l.eaten_pct) / 100 * 10) / 10;
+        var ateG = Math.round(offG * l.eaten_pct / 100 * 10) / 10;
+        h += '<div style="font-size:12px;color:#4ade80;">✅ 記録済み: ' + l.eaten_pct + '% 食べた（' + ateG + 'g） / 残り ' + leftG + 'g</div>';
+      } else if (isComplete) {
+        h += '<div style="font-size:12px;color:#4ade80;">✅ 完食</div>';
+      } else {
+        h += '<div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;">';
+        h += '<label style="font-size:12px;color:var(--text-dim);">残り:</label>';
+        h += '<input type="number" id="leftover-g-' + l.id + '" placeholder="g" min="0" step="0.1" style="width:60px;font-size:13px;padding:4px 6px;border:1px solid rgba(255,255,255,0.15);border-radius:6px;background:var(--surface-alt);color:var(--text-main);"';
+        if (offG) h += ' max="' + offG + '"';
+        h += '>';
+        h += '<button class="btn btn-outline" style="font-size:11px;padding:4px 10px;" onclick="saveLeftover(' + l.id + ',' + offG + ')">保存</button>';
+        h += '<button class="btn btn-outline" style="font-size:11px;padding:4px 10px;background:rgba(74,222,128,0.15);color:#4ade80;border-color:rgba(74,222,128,0.3);" onclick="saveLeftoverComplete(' + l.id + ')">完食</button>';
+        h += '</div>';
+      }
+      h += '</div>';
+    }
+    h += '</div>';
+    return h;
+  }
+
+  function renderFeedingSection(calc, logs, today, healthRecs, foodsDb, yesterdayLogs) {
     healthRecs = healthRecs || [];
     foodsDb = foodsDb || [];
+    yesterdayLogs = yesterdayLogs || [];
 
     var html = '<div class="detail-section">';
+
+    var eveningLogs = [];
+    for (var yl = 0; yl < yesterdayLogs.length; yl++) {
+      var slot = yesterdayLogs[yl].meal_slot || '';
+      if (slot === 'evening' || slot === 'night' || slot === 'dinner') {
+        eveningLogs.push(yesterdayLogs[yl]);
+      }
+    }
+    if (eveningLogs.length > 0) {
+      html += renderLeftoverInput(eveningLogs);
+    }
 
     var yesterday = new Date(Date.now() - 86400000).toISOString().slice(0, 10);
     var prevEvening = null, morningMeal = null, eveningMeal = null;
@@ -1793,6 +1861,36 @@ function toggleFold(id, btn) {
     feedingArea.innerHTML = html;
     _feedingLogsCache = logs;
   }
+
+  window.saveLeftover = function (logId, offeredG) {
+    var input = document.getElementById('leftover-g-' + logId);
+    if (!input) return;
+    var leftG = parseFloat(input.value);
+    if (isNaN(leftG) || leftG < 0) { alert('残り量を入力してください'); return; }
+    if (offeredG > 0 && leftG > offeredG) { alert('提供量(' + offeredG + 'g)を超えています'); return; }
+    var eatenPct = offeredG > 0 ? Math.round((offeredG - leftG) / offeredG * 100) : 0;
+    if (eatenPct < 0) eatenPct = 0;
+    if (eatenPct > 100) eatenPct = 100;
+    fetch(API_BASE + '/feeding/logs/' + logId, {
+      method: 'PUT', headers: apiHeaders(),
+      body: JSON.stringify({ eaten_pct: eatenPct }),
+    }).then(function (r) { return r.json(); })
+    .then(function (data) {
+      if (data.error) { alert('エラー: ' + (data.message || data.error)); return; }
+      loadFeedingSection();
+    }).catch(function () { alert('保存に失敗しました'); });
+  };
+
+  window.saveLeftoverComplete = function (logId) {
+    fetch(API_BASE + '/feeding/logs/' + logId, {
+      method: 'PUT', headers: apiHeaders(),
+      body: JSON.stringify({ eaten_pct: 100 }),
+    }).then(function (r) { return r.json(); })
+    .then(function (data) {
+      if (data.error) { alert('エラー: ' + (data.message || data.error)); return; }
+      loadFeedingSection();
+    }).catch(function () { alert('保存に失敗しました'); });
+  };
 
   window.quickFed = function (planId) {
     fetch(API_BASE + '/feeding/plans/' + planId + '/fed', {

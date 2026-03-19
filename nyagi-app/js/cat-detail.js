@@ -1258,11 +1258,15 @@ function toggleFold(id, btn) {
       Promise.all([
         fetch(API_BASE + '/feeding/calc?cat_id=' + encodeURIComponent(catId), { headers: apiHeaders() }).then(function (r) { return r.json(); }),
         fetch(API_BASE + '/feeding/logs?cat_id=' + encodeURIComponent(catId) + '&date=' + today, { headers: apiHeaders() }).then(function (r) { return r.json(); }),
+        fetch(API_BASE + '/health/records?cat_id=' + encodeURIComponent(catId) + '&limit=40', { headers: apiHeaders() }).then(function (r) { return r.json(); }),
+        fetch(API_BASE + '/feeding/foods', { headers: apiHeaders() }).then(function (r) { return r.json(); }),
       ]).then(function (results) {
         var calcData = results[0];
         _lastCalcData = calcData;
         renderCalorieCard(calcData);
-        renderFeedingSection(calcData, results[1].logs || [], today);
+        var healthRecs = (results[2] && results[2].records) || [];
+        var foodsDb = (results[3] && results[3].foods) || [];
+        renderFeedingSection(calcData, results[1].logs || [], today, healthRecs, foodsDb);
       }).catch(function (err) {
         if (retryCount < 2) {
           setTimeout(function () { doFetch(retryCount + 1); }, 1200);
@@ -1397,8 +1401,193 @@ function toggleFold(id, btn) {
     });
   };
 
-  function renderFeedingSection(calc, logs, today) {
+  function parseFeedingText(text, foodsDb) {
+    var items = [];
+    var cleaned = text.replace(/【評価:[^】]*】/g, '').replace(/■ご飯指示[\s\S]*/g, '').trim();
+    var parts = cleaned.split(/[①②③④⑤⑥⑦⑧]/).filter(function (p) { return p.trim(); });
+    for (var i = 0; i < parts.length; i++) {
+      var p = parts[i].trim();
+      if (!p) continue;
+      var timeMatch = p.match(/^(\d{1,2}:\d{2})\s*/);
+      var time = timeMatch ? timeMatch[1] : '';
+      var rest = timeMatch ? p.slice(timeMatch[0].length) : p;
+
+      var gramsMatch = rest.match(/(\d+(?:\.\d+)?)\s*[gｇ]/);
+      var offeredG = gramsMatch ? parseFloat(gramsMatch[1]) : 0;
+
+      var leftoverMatch = rest.match(/[→⇒]\s*(\d+(?:\.\d+)?)\s*[gｇ]\s*残/);
+      var leftoverG = leftoverMatch ? parseFloat(leftoverMatch[1]) : 0;
+      var isComplete = rest.indexOf('完食') !== -1;
+      if (isComplete) leftoverG = 0;
+
+      var foodName = rest.replace(/\d{1,2}:\d{2}\s*/, '')
+        .replace(/\d+(?:\.\d+)?\s*[gｇ]/, '').replace(/[→⇒].*/, '')
+        .replace(/^\s*[\(（].*?[\)）]\s*/, '').trim();
+      if (!foodName && !offeredG) continue;
+
+      var eatenG = offeredG - leftoverG;
+      var kcalPer100 = 0;
+      var matchedFood = '';
+      for (var fi = 0; fi < foodsDb.length; fi++) {
+        var fn = foodsDb[fi].name || '';
+        if (foodName && (foodName.indexOf(fn) !== -1 || fn.indexOf(foodName) !== -1)) {
+          kcalPer100 = foodsDb[fi].kcal_per_100g || 0;
+          matchedFood = fn;
+          break;
+        }
+      }
+      if (!matchedFood) {
+        var keywords = [
+          { k: 'ピュリナ尿路', id: 'food_purina_urinary' },
+          { k: 'メディファス尿路', id: 'food_medifas_urinary' },
+          { k: '低分子プロテイン', id: 'food_rc_low_protein' },
+          { k: 'カルカン', id: 'food_kalkan_wet' },
+          { k: '腎サポ スペシャル', id: 'food_renal_special' },
+          { k: '腎サポスペシャル', id: 'food_renal_special' },
+          { k: '腎サポウェット', id: 'food_renal_wet' },
+          { k: '腎サポ ウェット', id: 'food_renal_wet' },
+          { k: 'kd缶', id: 'food_kd_can' },
+          { k: 'kd缶', id: 'food_kd_can' },
+          { k: 'KD缶', id: 'food_kd_can' },
+          { k: '健康缶', id: 'food_eye_care' },
+          { k: 'エルモ', id: 'food_elmo' },
+          { k: 'キドニーキープリッチ', id: 'food_kidney_keep_rich' },
+          { k: 'キドニーキープ', id: 'food_kidney_keep' },
+          { k: 'プロフェッショナルバランス', id: 'food_pro_balance' },
+          { k: 'ちゅる水', id: 'food_churu_water' },
+          { k: '腸内バイオーム', id: 'food_gi_biome' },
+          { k: 'メディコートアドバンス', id: 'food_medifas_advance' },
+          { k: 'センシブル', id: 'food_sensible' },
+          { k: 'センシ', id: 'food_sensible' },
+          { k: 'aim', id: 'food_aim30' },
+          { k: 'AIM', id: 'food_aim30' },
+          { k: 'ドクターズケア', id: 'food_doctors_care' },
+          { k: 'ニュートロ子猫', id: 'food_nutro_kitten' },
+        ];
+        for (var ki = 0; ki < keywords.length; ki++) {
+          if (foodName.indexOf(keywords[ki].k) !== -1 || rest.indexOf(keywords[ki].k) !== -1) {
+            for (var fj = 0; fj < foodsDb.length; fj++) {
+              if (foodsDb[fj].id === keywords[ki].id) {
+                kcalPer100 = foodsDb[fj].kcal_per_100g || 0;
+                matchedFood = foodsDb[fj].name;
+                break;
+              }
+            }
+            if (matchedFood) break;
+          }
+        }
+      }
+
+      var eatenKcal = kcalPer100 ? Math.round(eatenG * kcalPer100 / 100) : 0;
+      items.push({
+        time: time,
+        name: foodName,
+        matchedName: matchedFood,
+        offeredG: offeredG,
+        leftoverG: leftoverG,
+        eatenG: eatenG,
+        isComplete: isComplete,
+        kcalPer100: kcalPer100,
+        eatenKcal: eatenKcal,
+      });
+    }
+    return items;
+  }
+
+  function extractFeedingEval(text) {
+    var m = text.match(/【評価:\s*([^】]*)】/);
+    return m ? m[1] : '';
+  }
+
+  function renderMealHistoryBlock(title, obsRec, foodsDb) {
+    if (!obsRec) return '';
+    var val = obsRec.value || '';
+    var evalText = extractFeedingEval(val);
+    var items = parseFeedingText(val, foodsDb);
+    if (items.length === 0 && !evalText) return '';
+
+    var totalOffered = 0, totalEaten = 0, totalKcal = 0;
+    for (var i = 0; i < items.length; i++) {
+      totalOffered += items[i].offeredG;
+      totalEaten += items[i].eatenG;
+      totalKcal += items[i].eatenKcal;
+    }
+
+    var evalColor = evalText.indexOf('完食') !== -1 ? '#4ade80' :
+      evalText.indexOf('少し残') !== -1 ? '#facc15' :
+      evalText.indexOf('半分') !== -1 ? '#fb923c' :
+      evalText.indexOf('7割') !== -1 || evalText.indexOf('全残') !== -1 ? '#f87171' : 'var(--text-dim)';
+
+    var html = '<div style="background:var(--surface);border-radius:8px;padding:10px 12px;margin-bottom:8px;">';
+    html += '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;">';
+    html += '<b style="font-size:13px;">' + title + '</b>';
+    if (evalText) html += '<span style="font-size:11px;font-weight:700;color:' + evalColor + ';">' + escapeHtml(evalText) + '</span>';
+    html += '</div>';
+
+    for (var i = 0; i < items.length; i++) {
+      var it = items[i];
+      html += '<div style="display:flex;justify-content:space-between;align-items:center;padding:3px 0;border-bottom:1px solid rgba(255,255,255,0.04);font-size:12px;">';
+      html += '<div style="flex:1;min-width:0;">';
+      if (it.time) html += '<span style="color:var(--primary);margin-right:4px;">' + escapeHtml(it.time) + '</span>';
+      html += '<span>' + escapeHtml(it.name || it.matchedName || '?') + '</span>';
+      html += '</div>';
+      html += '<div style="text-align:right;white-space:nowrap;">';
+      if (it.offeredG) {
+        html += '<span style="color:var(--text-dim);">' + it.offeredG + 'g</span>';
+        if (it.leftoverG > 0) {
+          html += '<span style="color:#f87171;margin-left:4px;">-' + it.leftoverG + 'g残</span>';
+        } else if (it.isComplete) {
+          html += '<span style="color:#4ade80;margin-left:4px;">完食</span>';
+        }
+        if (it.eatenKcal > 0) {
+          html += '<span style="color:#a78bfa;margin-left:4px;">' + it.eatenKcal + 'kcal</span>';
+        }
+      }
+      html += '</div></div>';
+    }
+
+    if (items.length > 0 && totalOffered > 0) {
+      html += '<div style="display:flex;justify-content:space-between;margin-top:6px;padding-top:6px;border-top:1px solid rgba(255,255,255,0.08);font-size:12px;font-weight:700;">';
+      html += '<span>合計</span>';
+      html += '<span>提供 ' + Math.round(totalOffered) + 'g → 摂取 ' + Math.round(totalEaten) + 'g';
+      if (totalKcal > 0) html += ' (' + totalKcal + 'kcal)';
+      html += '</span></div>';
+    }
+    html += '</div>';
+    return html;
+  }
+
+  function renderFeedingSection(calc, logs, today, healthRecs, foodsDb) {
+    healthRecs = healthRecs || [];
+    foodsDb = foodsDb || [];
+
     var html = '<div class="detail-section">';
+
+    var yesterday = new Date(Date.now() - 86400000).toISOString().slice(0, 10);
+    var prevEvening = null, morningMeal = null, eveningMeal = null;
+    for (var hi = 0; hi < healthRecs.length; hi++) {
+      var hr = healthRecs[hi];
+      if (hr.record_type !== 'observation') continue;
+      var det = hr.details || '';
+      if (!prevEvening && det === '前日夜ごはん' && hr.record_date === today) prevEvening = hr;
+      if (!morningMeal && det === '朝飯内容' && hr.record_date === today) morningMeal = hr;
+      if (!eveningMeal && det === '夜飯内容' && hr.record_date === today) eveningMeal = hr;
+      if (!eveningMeal && det === '夜飯内容' && hr.record_date === yesterday) eveningMeal = hr;
+      if (!prevEvening && det === '前日夜ごはん' && hr.record_date === yesterday) prevEvening = hr;
+      if (!morningMeal && det === '朝飯内容' && hr.record_date === yesterday) morningMeal = hr;
+    }
+
+    var histBlock = renderMealHistoryBlock('🌙 昨夜の夜ごはん', prevEvening || eveningMeal, foodsDb);
+    var mornBlock = renderMealHistoryBlock('☀️ 今朝のごはん', morningMeal, foodsDb);
+
+    if (histBlock || mornBlock) {
+      html += '<div style="margin-bottom:12px;">';
+      html += '<div style="font-size:14px;font-weight:700;margin-bottom:8px;">📊 直近の給餌実績</div>';
+      html += histBlock;
+      html += mornBlock;
+      html += '</div>';
+    }
+
     html += '<div class="section-header">';
     html += '<div class="detail-title">🍽 給餌プラン</div>';
     html += '<div style="display:flex;gap:4px;">';

@@ -1593,54 +1593,91 @@ function toggleFold(id, btn) {
     return html;
   }
 
-  function renderLeftoverInput(eveningLogs) {
-    var needsInput = [];
-    for (var i = 0; i < eveningLogs.length; i++) {
-      var l = eveningLogs[i];
-      if (l.eaten_pct === null || l.eaten_pct === undefined || l.eaten_pct === 100) {
-        needsInput.push(l);
+  function renderLeftoverInput(eveningPlans, eveningLogs) {
+    var logByPlanId = {};
+    for (var li = 0; li < eveningLogs.length; li++) {
+      if (eveningLogs[li].plan_id) logByPlanId[eveningLogs[li].plan_id] = eveningLogs[li];
+    }
+
+    var items = [];
+    for (var pi = 0; pi < eveningPlans.length; pi++) {
+      var plan = eveningPlans[pi];
+      var log = logByPlanId[plan.id] || null;
+      items.push({ plan: plan, log: log, type: 'plan' });
+    }
+    for (var lli = 0; lli < eveningLogs.length; lli++) {
+      if (!eveningLogs[lli].plan_id) {
+        items.push({ plan: null, log: eveningLogs[lli], type: 'manual' });
       }
     }
-    if (needsInput.length === 0) {
-      var allDone = true;
-      for (var k = 0; k < eveningLogs.length; k++) {
-        if (eveningLogs[k].eaten_pct === null || eveningLogs[k].eaten_pct === undefined) { allDone = false; break; }
-      }
-      if (allDone) return '';
+    if (items.length === 0) return '';
+
+    var allRecorded = true;
+    for (var ci = 0; ci < items.length; ci++) {
+      var it = items[ci];
+      if (it.log && it.log.eaten_pct !== null && it.log.eaten_pct !== undefined && it.log.eaten_pct < 100) continue;
+      if (it.log && it.log.eaten_pct === 100) continue;
+      allRecorded = false;
+      break;
     }
 
     var h = '<div style="background:rgba(99,102,241,0.08);border:1px solid rgba(99,102,241,0.2);border-radius:10px;padding:12px;margin-bottom:12px;">';
     h += '<div style="font-size:14px;font-weight:700;color:#a78bfa;margin-bottom:8px;">🌙 昨夜の夜ごはん — 残り量を記録</div>';
 
-    for (var i = 0; i < eveningLogs.length; i++) {
-      var l = eveningLogs[i];
-      var hasLeftover = l.eaten_pct !== null && l.eaten_pct !== undefined && l.eaten_pct < 100;
-      var isComplete = l.eaten_pct !== null && l.eaten_pct !== undefined && l.eaten_pct === 100;
-      var offG = l.offered_g || 0;
+    for (var i = 0; i < items.length; i++) {
+      var item = items[i];
+      var log = item.log;
+      var plan = item.plan;
+      var foodName = (log && log.food_name) || (plan && plan.food_name) || '不明';
+      var offG = (log && log.offered_g) || (plan && plan.amount_g) || 0;
 
-      h += '<div style="background:var(--surface);border-radius:8px;padding:10px 12px;margin-bottom:6px;" id="leftover-row-' + l.id + '">';
+      h += '<div style="background:var(--surface);border-radius:8px;padding:10px 12px;margin-bottom:6px;">';
       h += '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;">';
-      h += '<div style="font-size:13px;font-weight:600;">' + escapeHtml(l.food_name || '不明') + '</div>';
+      h += '<div style="font-size:13px;font-weight:600;">' + escapeHtml(foodName) + '</div>';
       if (offG) h += '<span style="font-size:12px;color:var(--text-dim);">提供: ' + offG + 'g</span>';
       h += '</div>';
 
-      if (hasLeftover) {
-        var leftG = Math.round(offG * (100 - l.eaten_pct) / 100 * 10) / 10;
-        var ateG = Math.round(offG * l.eaten_pct / 100 * 10) / 10;
-        h += '<div style="font-size:12px;color:#4ade80;">✅ 記録済み: ' + l.eaten_pct + '% 食べた（' + ateG + 'g） / 残り ' + leftG + 'g</div>';
-      } else if (isComplete) {
-        h += '<div style="font-size:12px;color:#4ade80;">✅ 完食</div>';
-      } else {
-        h += '<div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;">';
-        h += '<label style="font-size:12px;color:var(--text-dim);">残り:</label>';
-        h += '<input type="number" id="leftover-g-' + l.id + '" placeholder="g" min="0" step="0.1" style="width:60px;font-size:13px;padding:4px 6px;border:1px solid rgba(255,255,255,0.15);border-radius:6px;background:var(--surface-alt);color:var(--text-main);"';
-        if (offG) h += ' max="' + offG + '"';
-        h += '>';
-        h += '<button class="btn btn-outline" style="font-size:11px;padding:4px 10px;" onclick="saveLeftover(' + l.id + ',' + offG + ')">保存</button>';
-        h += '<button class="btn btn-outline" style="font-size:11px;padding:4px 10px;background:rgba(74,222,128,0.15);color:#4ade80;border-color:rgba(74,222,128,0.3);" onclick="saveLeftoverComplete(' + l.id + ')">完食</button>';
+      if (log && log.eaten_pct !== null && log.eaten_pct !== undefined && log.eaten_pct < 100) {
+        var leftG = Math.round(offG * (100 - log.eaten_pct) / 100 * 10) / 10;
+        var ateG = Math.round(offG * log.eaten_pct / 100 * 10) / 10;
+        h += '<div style="display:flex;justify-content:space-between;align-items:center;">';
+        h += '<span style="font-size:12px;color:#4ade80;">✅ ' + log.eaten_pct + '% 食べた（' + ateG + 'g） / 残り ' + leftG + 'g</span>';
+        h += '<button class="btn-edit-small" onclick="openLeftoverEdit(' + log.id + ',' + offG + ')" title="修正" style="font-size:11px;">✏️</button>';
         h += '</div>';
+      } else if (log && log.eaten_pct === 100) {
+        h += '<div style="display:flex;justify-content:space-between;align-items:center;">';
+        h += '<span style="font-size:12px;color:#4ade80;">✅ 完食</span>';
+        h += '<button class="btn-edit-small" onclick="openLeftoverEdit(' + log.id + ',' + offG + ')" title="修正" style="font-size:11px;">✏️</button>';
+        h += '</div>';
+      } else if (log) {
+        h += renderLeftoverControls(log.id, offG, 'log');
+      } else if (plan) {
+        h += renderLeftoverControls(plan.id, offG, 'plan');
       }
       h += '</div>';
+    }
+
+    if (allRecorded) {
+      h += '<div style="text-align:center;font-size:11px;color:var(--text-dim);margin-top:4px;">全品目の残り量が記録済みです</div>';
+    }
+
+    h += '</div>';
+    return h;
+  }
+
+  function renderLeftoverControls(id, offG, mode) {
+    var prefix = mode === 'plan' ? 'plan' : 'log';
+    var h = '<div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;">';
+    h += '<label style="font-size:12px;color:var(--text-dim);">残り:</label>';
+    h += '<input type="number" id="leftover-g-' + prefix + '-' + id + '" placeholder="g" min="0" step="0.1" style="width:60px;font-size:13px;padding:4px 6px;border:1px solid rgba(255,255,255,0.15);border-radius:6px;background:var(--surface-alt);color:var(--text-main);"';
+    if (offG) h += ' max="' + offG + '"';
+    h += '>';
+    if (mode === 'plan') {
+      h += '<button class="btn btn-outline" style="font-size:11px;padding:4px 10px;" onclick="saveLeftoverFromPlan(' + id + ',' + offG + ')">保存</button>';
+      h += '<button class="btn btn-outline" style="font-size:11px;padding:4px 10px;background:rgba(74,222,128,0.15);color:#4ade80;border-color:rgba(74,222,128,0.3);" onclick="saveLeftoverFromPlanComplete(' + id + ')">完食</button>';
+    } else {
+      h += '<button class="btn btn-outline" style="font-size:11px;padding:4px 10px;" onclick="saveLeftover(' + id + ',' + offG + ')">保存</button>';
+      h += '<button class="btn btn-outline" style="font-size:11px;padding:4px 10px;background:rgba(74,222,128,0.15);color:#4ade80;border-color:rgba(74,222,128,0.3);" onclick="saveLeftoverComplete(' + id + ')">完食</button>';
     }
     h += '</div>';
     return h;
@@ -1653,6 +1690,12 @@ function toggleFold(id, btn) {
 
     var html = '<div class="detail-section">';
 
+    var eveningPlans = [];
+    var allPlans = (calc && calc.plans) || [];
+    for (var epi = 0; epi < allPlans.length; epi++) {
+      var ps = allPlans[epi].meal_slot || '';
+      if (ps === 'evening') eveningPlans.push(allPlans[epi]);
+    }
     var eveningLogs = [];
     for (var yl = 0; yl < yesterdayLogs.length; yl++) {
       var slot = yesterdayLogs[yl].meal_slot || '';
@@ -1660,8 +1703,8 @@ function toggleFold(id, btn) {
         eveningLogs.push(yesterdayLogs[yl]);
       }
     }
-    if (eveningLogs.length > 0) {
-      html += renderLeftoverInput(eveningLogs);
+    if (eveningPlans.length > 0 || eveningLogs.length > 0) {
+      html += renderLeftoverInput(eveningPlans, eveningLogs);
     }
 
     var yesterday = new Date(Date.now() - 86400000).toISOString().slice(0, 10);
@@ -1862,8 +1905,53 @@ function toggleFold(id, btn) {
     _feedingLogsCache = logs;
   }
 
+  window.saveLeftoverFromPlan = function (planId, offeredG) {
+    var input = document.getElementById('leftover-g-plan-' + planId);
+    if (!input) return;
+    var leftG = parseFloat(input.value);
+    if (isNaN(leftG) || leftG < 0) { alert('残り量を入力してください'); return; }
+    if (offeredG > 0 && leftG > offeredG) { alert('提供量(' + offeredG + 'g)を超えています'); return; }
+    var eatenPct = offeredG > 0 ? Math.round((offeredG - leftG) / offeredG * 100) : 0;
+    var yesterday = new Date(Date.now() - 86400000).toISOString().slice(0, 10);
+    fetch(API_BASE + '/feeding/plans/' + planId + '/fed', {
+      method: 'POST', headers: apiHeaders(),
+      body: JSON.stringify({ eaten_pct: eatenPct, log_date: yesterday }),
+    }).then(function (r) { return r.json(); })
+    .then(function (data) {
+      if (data.error) { alert('エラー: ' + (data.message || data.error)); return; }
+      loadFeedingSection();
+    }).catch(function () { alert('保存に失敗しました'); });
+  };
+
+  window.saveLeftoverFromPlanComplete = function (planId) {
+    var yesterday = new Date(Date.now() - 86400000).toISOString().slice(0, 10);
+    fetch(API_BASE + '/feeding/plans/' + planId + '/fed', {
+      method: 'POST', headers: apiHeaders(),
+      body: JSON.stringify({ eaten_pct: 100, log_date: yesterday }),
+    }).then(function (r) { return r.json(); })
+    .then(function (data) {
+      if (data.error) { alert('エラー: ' + (data.message || data.error)); return; }
+      loadFeedingSection();
+    }).catch(function () { alert('保存に失敗しました'); });
+  };
+
+  window.openLeftoverEdit = function (logId, offeredG) {
+    var row = document.getElementById('leftover-row-' + logId);
+    if (!row) {
+      var parent = document.querySelector('[onclick*="openLeftoverEdit(' + logId + '"]');
+      if (parent) row = parent.closest('[style*="background:var(--surface)"]');
+    }
+    if (!row) return;
+    var existingInput = row.querySelector('input[type="number"]');
+    if (existingInput) return;
+    var editDiv = document.createElement('div');
+    editDiv.style.cssText = 'margin-top:6px;';
+    editDiv.innerHTML = renderLeftoverControls(logId, offeredG, 'log');
+    row.appendChild(editDiv);
+  };
+
   window.saveLeftover = function (logId, offeredG) {
-    var input = document.getElementById('leftover-g-' + logId);
+    var input = document.getElementById('leftover-g-log-' + logId);
     if (!input) return;
     var leftG = parseFloat(input.value);
     if (isNaN(leftG) || leftG < 0) { alert('残り量を入力してください'); return; }

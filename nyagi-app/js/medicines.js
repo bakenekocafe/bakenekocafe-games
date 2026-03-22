@@ -15,6 +15,10 @@ function loadCredentials() {
     var raw = localStorage.getItem('nyagi_creds');
     if (raw) return JSON.parse(raw);
   } catch (_) {}
+  try {
+    var m = document.cookie.match(/(?:^|; )nyagi_creds=([^;]*)/);
+    if (m) { var p = JSON.parse(decodeURIComponent(m[1])); if (p && p.staffId) { localStorage.setItem('nyagi_creds', JSON.stringify(p)); return p; } }
+  } catch (_) {}
   return null;
 }
 
@@ -38,7 +42,7 @@ function apiHeaders() {
 })();
 
 function loadMedicineList() {
-  fetch(API_BASE + '/medicines', { headers: apiHeaders() })
+  fetch(API_BASE + '/medicines', { headers: apiHeaders(), cache: 'no-store' })
     .then(function (r) { return r.json(); })
     .then(function (data) {
       allMedicines = data.medicines || [];
@@ -254,7 +258,7 @@ function saveMedicine() {
 
   fetch(url, {
     method: method,
-    headers: apiHeaders(),
+    headers: apiHeaders(), cache: 'no-store',
     body: JSON.stringify(body)
   })
   .then(function (r) { return r.json(); })

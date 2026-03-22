@@ -6,7 +6,8 @@
  * - /api/ops/* → Network First → 失敗時はエラーレスポンス（アプリ側で IndexedDB 保存）
  */
 
-var CACHE_NAME = 'nyagi-v91';
+/** HTML/CSS/JS のキャッシュバストと合わせて更新すること */
+var CACHE_NAME = 'nyagi-v202';
 
 self.addEventListener('message', function (event) {
   if (event.data && event.data.type === 'SKIP_WAITING') {
@@ -40,8 +41,10 @@ self.addEventListener('fetch', function (event) {
   }
 
   event.respondWith(
-    fetch(event.request, { cache: 'no-store' }).catch(function () {
-      return new Response('Offline', { status: 503, statusText: 'Service Unavailable' });
+    fetch(event.request, { cache: 'reload' }).catch(function () {
+      return fetch(event.request, { cache: 'no-store' }).catch(function () {
+        return new Response('Offline', { status: 503, statusText: 'Service Unavailable' });
+      });
     })
   );
 });

@@ -36,6 +36,10 @@
       var stored = localStorage.getItem('nyagi_creds');
       if (stored) return JSON.parse(stored);
     } catch (_) {}
+    try {
+      var m = document.cookie.match(/(?:^|; )nyagi_creds=([^;]*)/);
+      if (m) { var p = JSON.parse(decodeURIComponent(m[1])); if (p && p.staffId) { localStorage.setItem('nyagi_creds', JSON.stringify(p)); return p; } }
+    } catch (_) {}
     return null;
   }
 
@@ -160,7 +164,7 @@
     cardArea.innerHTML = '<div class="loading">読み込み中...</div>';
     var ctrl = new AbortController();
     var timeoutId = setTimeout(function () { ctrl.abort(); }, 30000);
-    fetch(getApiUrl() + locationQuery(), { headers: apiHeaders(), signal: ctrl.signal })
+    fetch(getApiUrl() + locationQuery(), { headers: apiHeaders(), cache: 'no-store', signal: ctrl.signal })
       .then(function (r) {
         clearTimeout(timeoutId);
         return r.json().then(function (data) {
@@ -543,6 +547,11 @@
     return html;
   }
 
+  function feedingSlotLabel(slot) {
+    var m = { morning: '☀️朝', afternoon: '昼', evening: '🌙夕', night: '🌙夕' };
+    return m[slot] || slot || '';
+  }
+
   function renderItemCard_Feeding() {
     var html = '<div class="item-card">';
     html += '<div class="item-card-title">🍚 ごはん献立</div>';
@@ -553,8 +562,17 @@
 
       var planVals = '';
       if (plan.length === 0) planVals = '<span class="dim">献立未設定</span>';
-      else { for (var j = 0; j < plan.length; j++) planVals += '<span style="font-size:12px;">' + esc(plan[j].meal_slot) + ': ' + esc(plan[j].food_name) + ' ' + plan[j].amount_g + 'g</span>'; }
-      html += itemRow(c, '<div class="item-cat-name">' + alertDot(c.alert_level) + esc(c.name) + '</div><div class="item-values" style="flex-direction:column;gap:1px;">' + planVals + '</div>');
+      else {
+        for (var j = 0; j < plan.length; j++) {
+          var pj = plan[j];
+          planVals += '<div style="font-size:12px;">' + esc(feedingSlotLabel(pj.meal_slot)) + ': ' + esc(pj.food_name) + ' ' + pj.amount_g + 'g';
+          if (pj.notes && String(pj.notes).trim()) {
+            planVals += '<div style="font-size:10px;color:var(--text-dim);margin-top:2px;padding-left:6px;line-height:1.35;">📝 ' + esc(String(pj.notes).trim()) + '</div>';
+          }
+          planVals += '</div>';
+        }
+      }
+      html += itemRow(c, '<div class="item-cat-name">' + alertDot(c.alert_level) + esc(c.name) + '</div><div class="item-values" style="flex-direction:column;gap:4px;">' + planVals + '</div>');
     }
     html += '</div></div>';
     return html;

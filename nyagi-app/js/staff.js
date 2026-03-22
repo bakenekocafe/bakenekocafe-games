@@ -25,6 +25,10 @@
       var stored = localStorage.getItem('nyagi_creds');
       if (stored) return JSON.parse(stored);
     } catch (_) {}
+    try {
+      var m = document.cookie.match(/(?:^|; )nyagi_creds=([^;]*)/);
+      if (m) { var p = JSON.parse(decodeURIComponent(m[1])); if (p && p.staffId) { localStorage.setItem('nyagi_creds', JSON.stringify(p)); return p; } }
+    } catch (_) {}
     return null;
   }
 
@@ -45,7 +49,7 @@
   }
 
   function loadStaffAndLocations() {
-    fetch(API_BASE, { headers: apiHeaders() })
+    fetch(API_BASE, { headers: apiHeaders(), cache: 'no-store' })
       .then(function (r) { return r.json(); })
       .then(function (data) {
         if (data.error) {
@@ -164,7 +168,7 @@
         var currentActive = this.getAttribute('data-active') === '1';
         fetch(API_BASE + '/' + encodeURIComponent(id), {
           method: 'PUT',
-          headers: apiHeaders(),
+          headers: apiHeaders(), cache: 'no-store',
           body: JSON.stringify({ active: !currentActive }),
         })
           .then(function (r) { return r.json(); })
@@ -218,7 +222,7 @@
 
       fetch(url, {
         method: method,
-        headers: apiHeaders(),
+        headers: apiHeaders(), cache: 'no-store',
         body: JSON.stringify(body),
       })
         .then(function (r) { return r.json(); })

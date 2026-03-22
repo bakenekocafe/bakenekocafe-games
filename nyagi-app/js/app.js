@@ -39,7 +39,8 @@
 
   // ── Service Worker 登録（本番のみ・毎回更新チェック） ──
   if ('serviceWorker' in navigator && location.hostname !== 'localhost' && location.hostname !== '127.0.0.1') {
-    navigator.serviceWorker.register('sw.js', { updateViaCache: 'none' }).then(function (reg) {
+    /** HTML の ?v= と sw.js 内 CACHE_NAME と揃えて更新（エッジが sw を掴む対策） */
+    navigator.serviceWorker.register('sw.js?v=202', { updateViaCache: 'none' }).then(function (reg) {
       console.log('SW registered:', reg.scope);
       reg.update();
     }).catch(function (err) {
@@ -66,12 +67,20 @@
       var stored = localStorage.getItem('nyagi_creds');
       if (stored) return JSON.parse(stored);
     } catch (_) {}
+    try {
+      var m = document.cookie.match(/(?:^|; )nyagi_creds=([^;]*)/);
+      if (m) { var p = JSON.parse(decodeURIComponent(m[1])); if (p && p.staffId) { localStorage.setItem('nyagi_creds', JSON.stringify(p)); return p; } }
+    } catch (_) {}
     return null;
   }
 
   function saveCredentials(adminKey, staffId) {
     var creds = { adminKey: adminKey, staffId: staffId };
-    localStorage.setItem('nyagi_creds', JSON.stringify(creds));
+    if (window._nyagiSaveCreds) {
+      window._nyagiSaveCreds(JSON.stringify(creds));
+    } else {
+      try { localStorage.setItem('nyagi_creds', JSON.stringify(creds)); } catch (_) {}
+    }
     return creds;
   }
 
@@ -120,6 +129,7 @@
       var apiOrigin = (window.NYAGI_API_ORIGIN != null) ? window.NYAGI_API_ORIGIN : '';
       fetch(apiOrigin + '/api/ops/auth/login', {
         method: 'POST',
+        cache: 'no-store',
         headers: { 'Content-Type': 'application/json', 'X-Admin-Key': adminKey },
         body: JSON.stringify({ password: password }),
       })
@@ -144,7 +154,8 @@
 
   if (logoutBtn) {
     logoutBtn.addEventListener('click', function () {
-      localStorage.removeItem('nyagi_creds');
+      if (window._nyagiClearCreds) { window._nyagiClearCreds(); }
+      else { localStorage.removeItem('nyagi_creds'); }
       credentials = null;
       showLogin();
     });
@@ -160,11 +171,18 @@
   }
 
   function submitTranscript(rawText, inputType, isConsult, callback) {
+    var filterLoc = null;
+    var filterStatus = null;
+    try { filterLoc = localStorage.getItem('nyagi_dash_location') || null; } catch (_) {}
+    try { filterStatus = localStorage.getItem('nyagi_dash_status') || null; } catch (_) {}
+
     var payload = {
       raw_transcript: rawText,
       input_type: inputType,
       is_consult: isConsult,
     };
+    if (filterLoc && filterLoc !== 'all') payload.filter_location = filterLoc;
+    if (filterStatus && filterStatus !== 'all') payload.filter_status = filterStatus;
 
     if (!navigator.onLine) {
       savePending(payload);
@@ -179,6 +197,7 @@
     fetch(API_BASE + '/submit', {
       method: 'POST',
       headers: apiHeaders(),
+      cache: 'no-store',
       body: JSON.stringify(payload),
     }).then(function (res) {
       return res.json().then(function (data) { data._httpStatus = res.status; return data; });
@@ -435,6 +454,7 @@
 
     fetch(API_BASE + '/history?limit=20', {
       headers: apiHeaders(),
+      cache: 'no-store',
     }).then(function (res) {
       return res.json();
     }).then(function (data) {
@@ -527,6 +547,7 @@
     fetch(API_BASE + '/submit', {
       method: 'POST',
       headers: apiHeaders(),
+      cache: 'no-store',
       body: JSON.stringify({
         raw_transcript: item.raw_transcript,
         input_type: item.input_type,

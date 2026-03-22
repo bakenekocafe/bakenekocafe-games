@@ -21,6 +21,10 @@
       var stored = localStorage.getItem('nyagi_creds');
       if (stored) return JSON.parse(stored);
     } catch (_) {}
+    try {
+      var m = document.cookie.match(/(?:^|; )nyagi_creds=([^;]*)/);
+      if (m) { var p = JSON.parse(decodeURIComponent(m[1])); if (p && p.staffId) { localStorage.setItem('nyagi_creds', JSON.stringify(p)); return p; } }
+    } catch (_) {}
     return null;
   }
 
@@ -46,11 +50,14 @@
         gateBtn.disabled = true;
         fetch(_origin + '/api/ops/auth/login', {
           method: 'POST',
+          cache: 'no-store',
           headers: { 'Content-Type': 'application/json', 'X-Admin-Key': adminKey },
           body: JSON.stringify({ password: password })
         }).then(function (r) { return r.json(); }).then(function (data) {
           if (!data || !data.staffId) { if (gateAlert) { gateAlert.textContent = 'パスワードが違います'; gateAlert.style.display = 'block'; } gateBtn.disabled = false; return; }
-          localStorage.setItem('nyagi_creds', JSON.stringify({ adminKey: adminKey, staffId: data.staffId }));
+          var _cj = JSON.stringify({ adminKey: adminKey, staffId: data.staffId });
+          if (window._nyagiSaveCreds) { window._nyagiSaveCreds(_cj); }
+          else { localStorage.setItem('nyagi_creds', _cj); }
           credentials = { adminKey: adminKey, staffId: data.staffId };
           loginGate.style.display = 'none';
           taskContent.style.display = 'block';
@@ -71,7 +78,7 @@
   }
 
   function loadCatList() {
-    fetch(API_BASE + '/cats', { headers: apiHeaders() })
+    fetch(API_BASE + '/cats', { headers: apiHeaders(), cache: 'no-store' })
       .then(function (r) { return r.json(); })
       .then(function (data) {
         catList = data.cats || [];
@@ -96,7 +103,7 @@
   }
 
   function loadStaffList() {
-    fetch(API_BASE + '/staff', { headers: apiHeaders() })
+    fetch(API_BASE + '/staff', { headers: apiHeaders(), cache: 'no-store' })
       .then(function (r) { return r.json(); })
       .then(function (data) {
         staffList = data.staff || [];
@@ -192,7 +199,7 @@
     document.getElementById('taskListArea').innerHTML = '<div class="loading"><span class="spinner"></span> 読み込み中...</div>';
     document.getElementById('progressArea').innerHTML = '';
 
-    fetch(API_BASE + '/tasks' + qs, { headers: apiHeaders() })
+    fetch(API_BASE + '/tasks' + qs, { headers: apiHeaders(), cache: 'no-store' })
       .then(function (r) { return r.json(); })
       .then(function (data) {
         if (data.error) {
@@ -348,7 +355,7 @@
   function loadMonitoringTasks() {
     document.getElementById('monitoringListArea').innerHTML = '<div class="loading"><span class="spinner"></span> 読み込み中...</div>';
 
-    fetch(API_BASE + '/tasks?task_type=monitoring', { headers: apiHeaders() })
+    fetch(API_BASE + '/tasks?task_type=monitoring', { headers: apiHeaders(), cache: 'no-store' })
       .then(function (r) { return r.json(); })
       .then(function (data) {
         if (data.error) {
@@ -399,7 +406,7 @@
   window.resolveMonitoring = function (taskId) {
     fetch(API_BASE + '/tasks/' + taskId + '/done', {
       method: 'POST',
-      headers: apiHeaders(),
+      headers: apiHeaders(), cache: 'no-store',
       body: JSON.stringify({ note: '解決' }),
     }).then(function (r) { return r.json(); })
     .then(function (data) {
@@ -420,7 +427,7 @@
       if (!confirm('この操作を取り消して「未完了」に戻しますか？')) return;
       fetch(API_BASE + '/tasks/' + taskId + '/undo', {
         method: 'POST',
-        headers: apiHeaders(),
+        headers: apiHeaders(), cache: 'no-store',
         body: JSON.stringify({}),
       }).then(function (r) { return r.json(); })
       .then(function (data) {
@@ -433,7 +440,7 @@
 
     fetch(API_BASE + '/tasks/' + taskId + '/done', {
       method: 'POST',
-      headers: apiHeaders(),
+      headers: apiHeaders(), cache: 'no-store',
       body: JSON.stringify({}),
     }).then(function (r) { return r.json(); })
     .then(function (data) {
@@ -478,7 +485,7 @@
 
     fetch(API_BASE + '/tasks/' + taskId + '/skip', {
       method: 'POST',
-      headers: apiHeaders(),
+      headers: apiHeaders(), cache: 'no-store',
       body: JSON.stringify({ reason: reason || null }),
     }).then(function (r) { return r.json(); })
     .then(function (data) {
@@ -519,7 +526,7 @@
 
     fetch(API_BASE + '/tasks/' + taskId + '/note', {
       method: 'PUT',
-      headers: apiHeaders(),
+      headers: apiHeaders(), cache: 'no-store',
       body: JSON.stringify({ note: text, also_cat_note: alsoCat }),
     }).then(function (r) { return r.json(); })
     .then(function (data) {
@@ -597,7 +604,7 @@
 
     fetch(API_BASE + '/tasks', {
       method: 'POST',
-      headers: apiHeaders(),
+      headers: apiHeaders(), cache: 'no-store',
       body: JSON.stringify(payload),
     }).then(function (r) { return r.json(); })
     .then(function (data) {
@@ -606,7 +613,7 @@
       if (noteText && data.task) {
         return fetch(API_BASE + '/tasks/' + data.task.id + '/note', {
           method: 'PUT',
-          headers: apiHeaders(),
+          headers: apiHeaders(), cache: 'no-store',
           body: JSON.stringify({ note: noteText, also_cat_note: !!catId }),
         }).then(function () { return data; });
       }
@@ -630,7 +637,7 @@
 
     var loc = getSelectedLocation();
     var url = API_BASE + '/tasks/templates' + ((loc && loc !== 'both') ? '?location=' + encodeURIComponent(loc) : '');
-    fetch(url, { headers: apiHeaders() })
+    fetch(url, { headers: apiHeaders(), cache: 'no-store' })
       .then(function (r) {
         if (!r.ok) {
           area.innerHTML = '<div class="empty-msg">API エラー: HTTP ' + r.status + '<br>URL: ' + url + '</div>';
@@ -685,6 +692,82 @@
     document.getElementById('templateListArea').innerHTML = html;
   }
 
+  // ── 曜日ピッカー ─────────────────────────────────────────
+  window._toggleDow = function (btn) {
+    btn.classList.toggle('active');
+    window._syncRecurrenceHidden();
+  };
+
+  window._setDowPreset = function (preset) {
+    var btns = document.querySelectorAll('#tmplWeekdayPicker .dow-btn');
+    for (var i = 0; i < btns.length; i++) {
+      var d = parseInt(btns[i].getAttribute('data-dow'), 10);
+      if (preset === 'weekday') btns[i].classList.toggle('active', d >= 1 && d <= 5);
+      else if (preset === 'weekend') btns[i].classList.toggle('active', d === 0 || d === 6);
+      else if (preset === 'all') btns[i].classList.add('active');
+      else if (preset === 'clear') btns[i].classList.remove('active');
+    }
+    window._syncRecurrenceHidden();
+  };
+
+  window._onRecurrenceTypeChange = function () {
+    var type = document.getElementById('tmplRecurrenceType').value;
+    document.getElementById('tmplWeekdayPicker').style.display = type === 'weekly' ? 'block' : 'none';
+    document.getElementById('tmplMonthDayPicker').style.display = type === 'monthly' ? 'block' : 'none';
+    window._syncRecurrenceHidden();
+  };
+
+  window._syncRecurrenceHidden = function () {
+    var type = document.getElementById('tmplRecurrenceType').value;
+    var hidden = document.getElementById('tmplRecurrence');
+    if (type === 'daily' || type === 'once') {
+      hidden.value = type;
+      return;
+    }
+    if (type === 'weekly') {
+      var btns = document.querySelectorAll('#tmplWeekdayPicker .dow-btn.active');
+      var days = [];
+      for (var i = 0; i < btns.length; i++) days.push(btns[i].getAttribute('data-dow'));
+      hidden.value = days.length > 0 ? 'weekly:' + days.join(',') : 'daily';
+      return;
+    }
+    if (type === 'monthly') {
+      var input = document.getElementById('tmplMonthDays');
+      var val = (input ? input.value : '').replace(/\s/g, '');
+      hidden.value = val ? 'monthly:' + val : 'daily';
+      return;
+    }
+  }
+
+  function _setRecurrenceUI(value) {
+    var typeSelect = document.getElementById('tmplRecurrenceType');
+    var hidden = document.getElementById('tmplRecurrence');
+    hidden.value = value || 'daily';
+
+    if (!value || value === 'daily') {
+      typeSelect.value = 'daily';
+    } else if (value === 'once') {
+      typeSelect.value = 'once';
+    } else if (value.indexOf('weekly:') === 0) {
+      typeSelect.value = 'weekly';
+      var days = value.replace('weekly:', '').split(',');
+      var btns = document.querySelectorAll('#tmplWeekdayPicker .dow-btn');
+      for (var i = 0; i < btns.length; i++) {
+        var d = btns[i].getAttribute('data-dow');
+        btns[i].classList.toggle('active', days.indexOf(d) !== -1);
+      }
+    } else if (value.indexOf('monthly:') === 0) {
+      typeSelect.value = 'monthly';
+      var input = document.getElementById('tmplMonthDays');
+      if (input) input.value = value.replace('monthly:', '');
+    } else {
+      typeSelect.value = 'daily';
+    }
+
+    document.getElementById('tmplWeekdayPicker').style.display = typeSelect.value === 'weekly' ? 'block' : 'none';
+    document.getElementById('tmplMonthDayPicker').style.display = typeSelect.value === 'monthly' ? 'block' : 'none';
+  }
+
   window.openNewTemplateModal = function () {
     document.getElementById('tmplEditMode').value = '';
     document.getElementById('tmplModalTitle').textContent = '+ テンプレートを追加';
@@ -696,7 +779,7 @@
     document.getElementById('tmplTaskType').value = 'routine';
     document.getElementById('tmplAttribute').value = 'opening';
     document.getElementById('tmplCatId').value = '';
-    document.getElementById('tmplRecurrence').value = 'daily';
+    _setRecurrenceUI('daily');
     document.getElementById('tmplTimeSlot').value = '';
     document.getElementById('tmplPriority').value = 'normal';
     document.getElementById('tmplSortOrder').value = '0';
@@ -707,7 +790,7 @@
   };
 
   window.openEditTemplateModal = function (templateId) {
-    fetch(API_BASE + '/tasks/templates/' + encodeURIComponent(templateId), { headers: apiHeaders() })
+    fetch(API_BASE + '/tasks/templates/' + encodeURIComponent(templateId), { headers: apiHeaders(), cache: 'no-store' })
       .then(function (r) { return r.json(); })
       .then(function (data) {
         if (data.error) { alert('テンプレートが見つかりません'); return; }
@@ -722,7 +805,7 @@
         document.getElementById('tmplTaskType').value = t.task_type || 'routine';
         document.getElementById('tmplAttribute').value = t.attribute || 'opening';
         document.getElementById('tmplCatId').value = t.cat_id || '';
-        document.getElementById('tmplRecurrence').value = t.recurrence || 'daily';
+        _setRecurrenceUI(t.recurrence || 'daily');
         document.getElementById('tmplTimeSlot').value = t.time_slot || '';
         document.getElementById('tmplPriority').value = t.priority || 'normal';
         document.getElementById('tmplSortOrder').value = t.sort_order || 0;
@@ -762,7 +845,7 @@
     if (editId) {
       fetch(API_BASE + '/tasks/templates/' + encodeURIComponent(editId), {
         method: 'PUT',
-        headers: apiHeaders(),
+        headers: apiHeaders(), cache: 'no-store',
         body: JSON.stringify(payload),
       }).then(function (r) { return r.json(); })
       .then(function (data) {
@@ -777,7 +860,7 @@
       payload.id = id;
       fetch(API_BASE + '/tasks/templates', {
         method: 'POST',
-        headers: apiHeaders(),
+        headers: apiHeaders(), cache: 'no-store',
         body: JSON.stringify(payload),
       }).then(function (r) { return r.json(); })
       .then(function (data) {
@@ -796,7 +879,7 @@
 
     fetch(API_BASE + '/tasks/templates/' + encodeURIComponent(editId), {
       method: 'DELETE',
-      headers: apiHeaders(),
+      headers: apiHeaders(), cache: 'no-store',
     }).then(function (r) { return r.json(); })
     .then(function (data) {
       if (data.error) { alert('エラー: ' + (data.message || data.error)); return; }
@@ -814,7 +897,7 @@
 
     fetch(API_BASE + '/tasks/templates/generate', {
       method: 'POST',
-      headers: apiHeaders(),
+      headers: apiHeaders(), cache: 'no-store',
       body: JSON.stringify({ date: date }),
     }).then(function (r) { return r.json(); })
     .then(function (data) {
@@ -840,7 +923,7 @@
     detailArea.style.display = 'none';
     actionsArea.style.display = 'block';
 
-    fetch(API_BASE + '/tasks/projects', { headers: apiHeaders() })
+    fetch(API_BASE + '/tasks/projects', { headers: apiHeaders(), cache: 'no-store' })
       .then(function (r) { return r.json(); })
       .then(function (data) {
         if (data.error) {
@@ -879,7 +962,7 @@
     if (!confirm('このプロジェクトを削除しますか？\nノードと関連タスクもすべて削除されます。')) return;
     fetch(API_BASE + '/tasks/projects/' + projectId, {
       method: 'DELETE',
-      headers: apiHeaders(),
+      headers: apiHeaders(), cache: 'no-store',
     }).then(function (r) { return r.json(); })
     .then(function (data) {
       if (data.error) { alert('エラー: ' + (data.message || data.error)); return; }
@@ -900,7 +983,7 @@
 
     detailArea.innerHTML = '<div class="loading"><span class="spinner"></span> 読み込み中...</div>';
 
-    fetch(API_BASE + '/tasks/projects/' + projectId, { headers: apiHeaders() })
+    fetch(API_BASE + '/tasks/projects/' + projectId, { headers: apiHeaders(), cache: 'no-store' })
       .then(function (r) { return r.json(); })
       .then(function (data) {
         if (data.error) {
@@ -976,7 +1059,7 @@
 
     fetch(API_BASE + '/tasks/projects/' + projectId + '/nodes/' + nodeId, {
       method: 'PUT',
-      headers: apiHeaders(),
+      headers: apiHeaders(), cache: 'no-store',
       body: JSON.stringify({ status: newStatus }),
     }).then(function (r) { return r.json(); })
     .then(function () { openProject(projectId); })
@@ -1002,7 +1085,7 @@
 
     fetch(API_BASE + '/tasks/projects', {
       method: 'POST',
-      headers: apiHeaders(),
+      headers: apiHeaders(), cache: 'no-store',
       body: JSON.stringify({
         title: title,
         description: document.getElementById('npDescription').value.trim() || null,
@@ -1067,7 +1150,7 @@
 
     fetch(API_BASE + '/tasks/projects/' + projectId + '/nodes', {
       method: 'POST',
-      headers: apiHeaders(),
+      headers: apiHeaders(), cache: 'no-store',
       body: JSON.stringify(payload),
     }).then(function (r) { return r.json(); })
     .then(function (data) {
@@ -1149,7 +1232,7 @@
     var date = document.getElementById('filterDate').value || new Date().toISOString().slice(0, 10);
     var url = API_BASE + '/tasks/close-day/preview?location=' + encodeURIComponent(loc) + '&date=' + encodeURIComponent(date);
 
-    fetch(url, { headers: apiHeaders() })
+    fetch(url, { headers: apiHeaders(), cache: 'no-store' })
       .then(function (r) { return r.json(); })
       .then(function (data) {
         if (data.error === 'already_closed') {
@@ -1290,7 +1373,7 @@
 
     fetch(API_BASE + '/tasks/close-day', {
       method: 'POST',
-      headers: apiHeaders(),
+      headers: apiHeaders(), cache: 'no-store',
       body: JSON.stringify(payload),
     })
     .then(function (r) { return r.json(); })

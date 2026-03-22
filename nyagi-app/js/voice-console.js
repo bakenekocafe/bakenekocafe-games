@@ -45,6 +45,18 @@
 
   var ctx = detectContext();
 
+  var FILTER_LOC_LABELS = { cafe: 'BAKENEKO CAFE', nekomata: '猫又療養所', endo: '遠藤宅', azukari: '預かり隊' };
+  var FILTER_STATUS_LABELS = { all: '全て', active: '在籍', adopted: '卒業', trial: 'トライアル中' };
+
+  function getFilterLabel() {
+    var loc = null, st = null;
+    try { loc = localStorage.getItem('nyagi_dash_location'); } catch (_) {}
+    try { st = localStorage.getItem('nyagi_dash_status'); } catch (_) {}
+    var locLabel = (loc && loc !== 'all' && FILTER_LOC_LABELS[loc]) ? FILTER_LOC_LABELS[loc] : '全拠点';
+    var stLabel = (st && st !== 'all' && FILTER_STATUS_LABELS[st]) ? FILTER_STATUS_LABELS[st] : '全ステータス';
+    return '📍 ' + locLabel + ' / ' + stLabel;
+  }
+
   // ── DOM 構築 ──────────────────────────────────────────────────
   function buildDOM() {
     // --- FAB ---
@@ -112,6 +124,7 @@
       '<div class="vc-panel-header">' +
         '<span class="vc-panel-title">\uD83C\uDFA4 入力コンソール</span>' +
         '<span class="vc-panel-context">' + escHtml(ctx.label) + '</span>' +
+        '<div class="vc-panel-filter">' + escHtml(getFilterLabel()) + '</div>' +
         '<button class="vc-panel-minimize" aria-label="縮小">\u25BC</button>' +
         '<button class="vc-panel-close" aria-label="閉じる">\u2715</button>' +
       '</div>' +
@@ -186,6 +199,11 @@
     miniBar.classList.toggle('visible', mode === MODE_MINI);
     overlay.classList.toggle('visible', mode === MODE_FULL);
     panel.classList.toggle('visible', mode === MODE_FULL);
+
+    if (mode === MODE_FULL) {
+      var filterEl = panel.querySelector('.vc-panel-filter');
+      if (filterEl) filterEl.textContent = getFilterLabel();
+    }
 
     if (mode === MODE_MINI) {
       if (lastTranscript) {
@@ -311,8 +329,7 @@
   function submitReport(text) {
     var opts = {
       inputType: 'speech',
-      isConsult: false,
-      catId: ctx.catId || null
+      isConsult: false
     };
 
     if (typeof window.nyagiSubmitReport === 'function') {

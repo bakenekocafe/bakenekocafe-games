@@ -38,8 +38,7 @@ function toggleFold(id, btn) {
   var careArea             = document.getElementById('careArea');
   var stoolArea            = document.getElementById('stoolArea');
   var urineArea            = document.getElementById('urineArea');
-  var medRecordArea        = document.getElementById('medRecordArea');
-  var feedingMemoArea      = document.getElementById('feedingMemoArea');
+  
   var catNotesArea         = document.getElementById('catNotesArea');
   var scoreCardArea        = document.getElementById('scoreCardArea');
   var actionsArea          = document.getElementById('actionsArea');
@@ -48,6 +47,9 @@ function toggleFold(id, btn) {
   var credentials = null;
   var catId = null;
   var currentCatData = null;
+  /** 給餌UIを描画した暦日（JST）。日付またぎでタブ放置時に再読込する */
+  var _feedingSectionRenderedDate = null;
+  var _feedingMidnightRefreshBound = false;
 
   var LOCATION_LABELS = {
     cafe: 'BAKENEKO CAFE',
@@ -64,6 +66,56 @@ function toggleFold(id, btn) {
     deceased: '他界'
   };
 
+  var NYAGI_PRESET_LOC_KEY = 'nyagi_feeding_preset_location';
+
+  function getStoredPresetLocation() {
+    try {
+      var v = localStorage.getItem(NYAGI_PRESET_LOC_KEY);
+      if (v === 'cafe' || v === 'nekomata') return v;
+    } catch (_) {}
+    return 'cafe';
+  }
+
+  function setStoredPresetLocation(loc) {
+    if (loc !== 'cafe' && loc !== 'nekomata') return;
+    try { localStorage.setItem(NYAGI_PRESET_LOC_KEY, loc); } catch (_) {}
+  }
+
+  function effectivePresetLocationForApply() {
+    if (currentCatData && (currentCatData.location_id === 'cafe' || currentCatData.location_id === 'nekomata')) {
+      return currentCatData.location_id;
+    }
+    return getStoredPresetLocation();
+  }
+
+  function presetLocShortLabel(loc) {
+    return loc === 'nekomata' ? '猫又療養所' : 'BAKENEKO CAFE';
+  }
+
+  function presetLocationBadgeHtml(loc) {
+    var L = loc === 'nekomata' ? 'nekomata' : 'cafe';
+    var bg = L === 'nekomata' ? 'rgba(248,113,113,0.15)' : 'rgba(251,191,36,0.12)';
+    var c = L === 'nekomata' ? '#f87171' : '#fbbf24';
+    return '<span style="font-size:10px;padding:2px 6px;border-radius:4px;background:' + bg + ';color:' + c + ';font-weight:600;">' + escapeHtml(presetLocShortLabel(L)) + '</span>';
+  }
+
+  function renderPresetLocationSwitcher(activeLoc, context) {
+    var aCafe = activeLoc === 'cafe' ? 'background:rgba(251,191,36,0.25);border-color:rgba(251,191,36,0.55);color:#fbbf24;font-weight:700;' : 'background:var(--surface);border-color:rgba(255,255,255,0.12);color:var(--text-dim);';
+    var aNeko = activeLoc === 'nekomata' ? 'background:rgba(248,113,113,0.18);border-color:rgba(248,113,113,0.45);color:#f87171;font-weight:700;' : 'background:var(--surface);border-color:rgba(255,255,255,0.12);color:var(--text-dim);';
+    var h = '<div style="font-size:11px;color:var(--text-dim);margin:0 0 8px;font-weight:600;">🏷 表示拠点（タップで切替・一覧を絞り込み）</div>';
+    h += '<div style="display:flex;gap:8px;margin-bottom:14px;">';
+    h += '<button type="button" class="btn" style="flex:1;padding:10px 6px;font-size:11px;border:2px solid;border-radius:8px;' + aCafe + '" onclick="switchFedPresetLocation(&quot;cafe&quot;,&quot;' + context + '&quot;)">🐱 BAKENEKO CAFE</button>';
+    h += '<button type="button" class="btn" style="flex:1;padding:10px 6px;font-size:11px;border:2px solid;border-radius:8px;' + aNeko + '" onclick="switchFedPresetLocation(&quot;nekomata&quot;,&quot;' + context + '&quot;)">🏥 猫又療養所</button>';
+    h += '</div>';
+    return h;
+  }
+
+  function feedingPresetsListUrl(species, loc) {
+    var u = API_BASE + '/feeding/presets?species=' + encodeURIComponent(species || 'cat');
+    if (loc === 'cafe' || loc === 'nekomata') u += '&location_id=' + encodeURIComponent(loc);
+    return u;
+  }
+
   // ── 認証 ──────────────────────────────────────────────────────────────────────
 
   function loadCredentials() {
@@ -71,15 +123,39 @@ function toggleFold(id, btn) {
       var stored = localStorage.getItem('nyagi_creds');
       if (stored) return JSON.parse(stored);
     } catch (_) {}
+    try {
+      var m = document.cookie.match(/(?:^|; )nyagi_creds=([^;]*)/);
+      if (m) { var p = JSON.parse(decodeURIComponent(m[1])); if (p && p.staffId) { localStorage.setItem('nyagi_creds', JSON.stringify(p)); return p; } }
+    } catch (_) {}
     return null;
   }
 
   function apiHeaders() {
+    if (!credentials || !credentials.adminKey || !credentials.staffId) {
+      return { 'Content-Type': 'application/json', 'X-Admin-Key': '', 'X-Staff-Id': '' };
+    }
     return {
       'Content-Type': 'application/json',
       'X-Admin-Key': credentials.adminKey,
       'X-Staff-Id': credentials.staffId,
     };
+  }
+
+  function _feedFetchJson(url) {
+    return fetch(url, { headers: apiHeaders(), cache: 'no-store' }).then(function (r) {
+      return r.text().then(function (text) {
+        var data = {};
+        if (text) {
+          try { data = JSON.parse(text); } catch (_) {
+            return Promise.reject({ kind: 'parse', status: r.status });
+          }
+        }
+        if (!r.ok) {
+          return Promise.reject({ kind: 'http', status: r.status, data: data });
+        }
+        return data;
+      });
+    });
   }
 
   function getQueryParam(name) {
@@ -91,6 +167,15 @@ function toggleFold(id, btn) {
       }
     }
     return null;
+  }
+
+  /** 猫詳細を開いたまま日付が変わったら給餌プランのチェック状態を再取得 */
+  function checkFeedingDayRollover() {
+    if (!catId || !feedingArea) return;
+    var d = todayJstYmd();
+    if (_feedingSectionRenderedDate && _feedingSectionRenderedDate !== d) {
+      loadFeedingSection();
+    }
   }
 
   // ── 初期化 ────────────────────────────────────────────────────────────────────
@@ -108,6 +193,19 @@ function toggleFold(id, btn) {
       return;
     }
     if (catContent) catContent.style.display = 'block';
+    if (!_feedingMidnightRefreshBound) {
+      _feedingMidnightRefreshBound = true;
+      document.addEventListener('visibilitychange', function () {
+        if (document.visibilityState === 'visible') checkFeedingDayRollover();
+      });
+      window.addEventListener('focus', checkFeedingDayRollover);
+      window.addEventListener('pageshow', function (ev) {
+        if (ev && ev.persisted) checkFeedingDayRollover();
+      });
+      setInterval(function () {
+        if (document.visibilityState === 'visible') checkFeedingDayRollover();
+      }, 60000);
+    }
     setTimeout(function () { loadCatDetail(); }, 150);
   }
 
@@ -130,7 +228,7 @@ function toggleFold(id, btn) {
       var url = API_BASE + '/cats/' + encodeURIComponent(catId) + '/timeline?limit=50';
       var ctrl = new AbortController();
       var timeoutId = setTimeout(function () { ctrl.abort(); }, 30000);
-      fetch(url, { headers: apiHeaders(), signal: ctrl.signal })
+      fetch(url, { headers: apiHeaders(), cache: 'no-store', signal: ctrl.signal })
         .then(function (res) {
           clearTimeout(timeoutId);
           if (!res.ok) throw new Error('HTTP ' + res.status);
@@ -147,12 +245,10 @@ function toggleFold(id, btn) {
           loadCareSection();
           loadStoolSection();
           loadUrineSection();
-          loadMedRecordSection();
           loadHealthRecords();
           loadClinicRecords();
           loadMedicationSchedule();
           loadFeedingSection();
-          loadFeedingMemo();
           loadCatNotes();
           loadCatTasks();
         })
@@ -180,11 +276,21 @@ function toggleFold(id, btn) {
     // ヘッダー
     var level = cat.alert_level || 'normal';
     var html = '<div class="cat-header">';
+    html += '<div class="cat-avatar-wrap" onclick="triggerCatPhotoUpload()">';
     if (cat.photo_url) {
-      html += '<img src="' + escapeHtml(cat.photo_url) + '" alt="' + escapeHtml(cat.name) + '" style="width:80px;height:80px;border-radius:50%;object-fit:cover;">';
+      if (cat.photo_url.indexOf('r2:') === 0) {
+        html += '<img class="cat-avatar-img" id="catAvatarImg" src="" alt="' + escapeHtml(cat.name) + '" style="display:none;">';
+        html += '<div class="cat-header-emoji" id="catAvatarFallback">🐱</div>';
+        loadCatPhotoFromR2();
+      } else {
+        html += '<img class="cat-avatar-img" src="' + escapeHtml(cat.photo_url) + '" alt="' + escapeHtml(cat.name) + '">';
+      }
     } else {
       html += '<div class="cat-header-emoji">🐱</div>';
     }
+    html += '<div class="cat-avatar-overlay">📷</div>';
+    html += '</div>';
+    html += '<input type="file" id="catPhotoInput" accept="image/*" style="display:none;" onchange="onCatPhotoSelected(this)">';
     html += '<div class="cat-header-name">' + escapeHtml(cat.name || catId) +
       ' <button type="button" class="btn-edit-loc" onclick="openRenameModal()" style="font-size:13px;">✏️</button></div>';
     html += '<span class="cat-header-status ' + level + '">' + escapeHtml(level.toUpperCase()) + '</span>';
@@ -260,7 +366,7 @@ function toggleFold(id, btn) {
     scoreCardArea.innerHTML = '';
 
     fetch(API_BASE + '/health-scores?cat_id=' + encodeURIComponent(catId) + '&live=true', {
-      headers: apiHeaders(),
+      headers: apiHeaders(), cache: 'no-store',
     }).then(function (res) { return res.json(); })
     .then(function (data) {
       renderScoreCard(data.scores || []);
@@ -362,7 +468,7 @@ function toggleFold(id, btn) {
     weightChartArea.innerHTML = '<div class="detail-section"><div class="detail-title">⚖️ 体重推移</div><div class="loading" style="padding:20px;">読み込み中...</div></div>';
 
     fetch(API_BASE + '/health/weight-history?cat_id=' + encodeURIComponent(catId) + '&months=6', {
-      headers: apiHeaders(),
+      headers: apiHeaders(), cache: 'no-store',
     }).then(function (res) { return res.json(); })
     .then(function (data) {
       renderWeightChart(data.weights || []);
@@ -489,15 +595,68 @@ function toggleFold(id, btn) {
     return d;
   }
 
+  /** JST の YYYY-MM-DD */
+  function todayJstYmd() {
+    return new Date().toLocaleDateString('sv-SE', { timeZone: 'Asia/Tokyo' });
+  }
+
+  /** JST の HH:mm */
+  function nowJstHm() {
+    return new Date().toLocaleTimeString('en-GB', {
+      timeZone: 'Asia/Tokyo',
+      hour: '2-digit',
+      minute: '2-digit',
+      hour12: false,
+    });
+  }
+
+  /** JST の「昨日」YYYY-MM-DD（給餌ログ取得を calc と揃える） */
+  function yesterdayJstYmd() {
+    var t = todayJstYmd();
+    var d = new Date(t + 'T12:00:00+09:00');
+    d.setTime(d.getTime() - 86400000);
+    return d.toLocaleDateString('sv-SE', { timeZone: 'Asia/Tokyo' });
+  }
+
+  function careQuickMapKey(recordType, detailLabel) {
+    return (recordType || '') + '|' + String(detailLabel || '');
+  }
+
+  function htmlAttr(s) {
+    return String(s == null ? '' : s)
+      .replace(/&/g, '&amp;')
+      .replace(/"/g, '&quot;')
+      .replace(/</g, '&lt;');
+  }
+
   function loadCareSection() {
     if (!careArea) return;
     careArea.innerHTML = '<div class="detail-section"><div class="detail-title">🪮 ケア実施状況</div><div class="loading" style="padding:16px;">読み込み中...</div></div>';
 
     var catParam = encodeURIComponent(catId);
+    var typeFetch = careTypesCache.length > 0
+      ? Promise.resolve(null)
+      : fetch(API_BASE + '/health/care-types', { headers: apiHeaders(), cache: 'no-store' }).then(function (r) { return r.json(); });
+
     Promise.all([
-      fetch(API_BASE + '/health/records?cat_id=' + catParam + '&type=care&limit=60', { headers: apiHeaders() }).then(function (r) { return r.json(); }),
-      fetch(API_BASE + '/health/records?cat_id=' + catParam + '&type=eye_discharge&limit=60', { headers: apiHeaders() }).then(function (r) { return r.json(); }),
+      fetch(API_BASE + '/health/records?cat_id=' + catParam + '&type=care&limit=60', { headers: apiHeaders(), cache: 'no-store' }).then(function (r) { return r.json(); }),
+      fetch(API_BASE + '/health/records?cat_id=' + catParam + '&type=eye_discharge&limit=60', { headers: apiHeaders(), cache: 'no-store' }).then(function (r) { return r.json(); }),
+      typeFetch,
     ]).then(function (results) {
+      if (results[2] && results[2].care_types) {
+        careTypesCache = results[2].care_types;
+      }
+      if (careTypesCache.length === 0) {
+        careTypesCache = [
+          { id: 'brush', label: 'ブラシ', record_type: 'care' },
+          { id: 'chin', label: 'アゴ', record_type: 'care' },
+          { id: 'ear', label: '耳', record_type: 'care' },
+          { id: 'nail', label: '爪切り', record_type: 'care' },
+          { id: 'paw', label: '肉球', record_type: 'care' },
+          { id: 'butt', label: 'お尻', record_type: 'care' },
+          { id: 'eye', label: '目ヤニ拭き', record_type: 'eye_discharge' },
+        ];
+      }
       var careRecs = results[0].records || [];
       var eyeRecs = results[1].records || [];
       for (var i = 0; i < eyeRecs.length; i++) {
@@ -513,12 +672,104 @@ function toggleFold(id, btn) {
     });
   }
 
+  function buildTodayCareQuickMap(records, todayYmd) {
+    var map = {};
+    for (var i = 0; i < records.length; i++) {
+      var r = records[i];
+      if ((r.record_date || '') !== todayYmd) continue;
+      if (r.record_type !== 'care' && r.record_type !== 'eye_discharge') continue;
+      var label = parseCareDetails(r.details);
+      var key = careQuickMapKey(r.record_type, label);
+      var done = r.value !== '×' && r.value !== 'ー';
+      var prev = map[key];
+      var ca = (r.created_at || '');
+      if (!prev) {
+        map[key] = { id: String(r.id), done: done, recorded_time: r.recorded_time, recorder_name: r.recorder_name, recorded_by: r.recorded_by, created_at: ca };
+      } else if (ca >= (prev.created_at || '')) {
+        map[key] = { id: String(r.id), done: done, recorded_time: r.recorded_time, recorder_name: r.recorder_name, recorded_by: r.recorded_by, created_at: ca };
+      }
+    }
+    return map;
+  }
+
   function renderCareSection(records) {
     var addBtn = '<button class="btn btn-outline btn-sm" style="margin-left:8px;font-size:12px;" onclick="openCareModal()">＋ ケア記録</button>';
+    var today = todayJstYmd();
+    var todayMap = buildTodayCareQuickMap(records, today);
+    var types = careTypesCache.length ? careTypesCache : [];
+
+    var html = '<div class="detail-section">';
+    html += '<div class="detail-title">🪮 ケア実施状況' + addBtn + '</div>';
+
+    if (types.length > 0) {
+      var doneCt = 0;
+      for (var dc = 0; dc < types.length; dc++) {
+        var dct = types[dc];
+        var dqk = careQuickMapKey(dct.record_type || 'care', dct.label || '');
+        var dent = todayMap[dqk];
+        if (dent && dent.done) doneCt++;
+      }
+      var totalCt = types.length;
+      var pendCt = totalCt - doneCt;
+      var sumCls = 'care-today-summary';
+      if (doneCt === totalCt) sumCls += ' care-today-summary--all';
+      else if (doneCt === 0) sumCls += ' care-today-summary--none';
+      else sumCls += ' care-today-summary--partial';
+
+      html += '<div class="care-today-panel">';
+      html += '<div class="' + sumCls + '">';
+      html += '<span class="care-today-summary-main">今日のケア <b>' + doneCt + '</b> / ' + totalCt + ' 項目</span>';
+      if (pendCt > 0) {
+        html += '<span class="care-today-summary-warn">未実施 <b>' + pendCt + '</b></span>';
+      } else {
+        html += '<span class="care-today-summary-ok">すべて記録済み</span>';
+      }
+      html += '</div>';
+      html += '<p class="care-today-help">未実施の行は左の□をタップすると記録されます（記録者・時刻も保存）。チェックを外すと取り消し。</p>';
+      html += '<div class="care-today-rows">';
+      for (var ti = 0; ti < types.length; ti++) {
+        var ct = types[ti];
+        var rt = ct.record_type || 'care';
+        var lab = ct.label || '';
+        var qk = careQuickMapKey(rt, lab);
+        var ent = todayMap[qk];
+        var chk = ent && ent.done;
+        var rid = (ent && ent.done) ? ent.id : '';
+        var escLab = escapeHtml(lab);
+        var rowCls = 'care-today-item' + (chk ? ' care-today-item--done' : ' care-today-item--pending');
+        var hint = '';
+        if (chk) {
+          var hm = [];
+          if (ent.recorded_time) hm.push(ent.recorded_time);
+          if (ent.recorder_name) hm.push(ent.recorder_name);
+          else if (ent.recorded_by) hm.push(String(ent.recorded_by));
+          hint = hm.length ? escapeHtml(hm.join(' · ')) : '記録済み';
+        } else {
+          hint = '未実施 — タップで記録';
+        }
+        var pillCls = chk ? 'care-today-item-pill care-today-item-pill--done' : 'care-today-item-pill care-today-item-pill--wait';
+        var pillTxt = chk ? '済' : '未';
+        html += '<label class="' + rowCls + '">';
+        html += '<input type="checkbox" class="care-today-cb"' + (chk ? ' checked' : '') + ' data-record-type="' + htmlAttr(rt) + '" data-details="' + htmlAttr(lab) + '" data-record-id="' + htmlAttr(rid) + '" onchange="toggleCareQuick(this)">';
+        html += '<span class="care-today-item-main">';
+        html += '<span class="care-today-item-title">' + escLab + '</span>';
+        html += '<span class="care-today-item-hint">' + hint + '</span>';
+        html += '</span>';
+        html += '<span class="' + pillCls + '">' + pillTxt + '</span>';
+        html += '</label>';
+      }
+      html += '</div></div>';
+    }
+
     if (records.length === 0) {
-      careArea.innerHTML = '<div class="detail-section"><div class="detail-title">🪮 ケア実施状況' + addBtn + '</div><div class="empty-msg">記録なし</div></div>';
+      html += '<div class="care-history-heading">履歴</div>';
+      html += '<div class="empty-msg">まだ記録がありません</div></div>';
+      careArea.innerHTML = html;
       return;
     }
+
+    html += '<div class="care-history-heading">履歴</div>';
+
     var byDate = {};
     var dateOrder = [];
     for (var i = 0; i < records.length; i++) {
@@ -528,15 +779,12 @@ function toggleFold(id, btn) {
       byDate[d].push(r);
     }
 
-    var today = new Date().toISOString().slice(0, 10);
     var visibleCount = 0;
     for (var k = 0; k < dateOrder.length; k++) {
       if (dateOrder[k] === today) { visibleCount = 1; break; }
     }
 
     var foldId = 'careFold';
-    var html = '<div class="detail-section">';
-    html += '<div class="detail-title">🪮 ケア実施状況' + addBtn + '</div>';
 
     for (var di = 0; di < dateOrder.length && di < 7; di++) {
       var date = dateOrder[di];
@@ -545,15 +793,29 @@ function toggleFold(id, btn) {
       if (hidden && di === Math.max(visibleCount, 1)) {
         html += '<div id="' + foldId + '" class="fold-area" style="display:none;">';
       }
-      html += '<div class="care-date-group">';
-      html += '<div class="care-date-label">' + escapeHtml(date.slice(5)) + '</div>';
+      var isTodayGroup = date === today;
+      html += '<div class="care-date-group' + (isTodayGroup ? ' care-date-group--today' : '') + '">';
+      html += '<div class="care-date-label">' + (isTodayGroup ? '今日 ' : '') + escapeHtml(date.slice(5)) + '</div>';
       html += '<div class="care-row">';
       for (var ci = 0; ci < items.length; ci++) {
         var done = items[ci].value !== '×' && items[ci].value !== 'ー';
         var cls = done ? 'care-done' : 'care-skip';
         var detailLabel = parseCareDetails(items[ci].details);
-        html += '<span class="care-chip ' + cls + '">' + escapeHtml(detailLabel);
-        if (done && items[ci].value) html += '<small>' + escapeHtml(items[ci].value) + '</small>';
+        var mark = done ? '<span class="care-chip-mark care-chip-mark--ok">済</span>' : '<span class="care-chip-mark care-chip-mark--skip">未</span>';
+        html += '<span class="care-chip ' + cls + '">' + mark + '<span class="care-chip-name">' + escapeHtml(detailLabel) + '</span>';
+        if (done) {
+          var meta = [];
+          if (items[ci].recorded_time) meta.push(items[ci].recorded_time);
+          if (items[ci].recorder_name) meta.push(items[ci].recorder_name);
+          else if (items[ci].recorded_by) meta.push(items[ci].recorded_by);
+          if (meta.length > 0) {
+            html += '<small>' + escapeHtml(meta.join(' · ')) + '</small>';
+          } else if (items[ci].value) {
+            html += '<small>' + escapeHtml(items[ci].value) + '</small>';
+          }
+        } else {
+          html += '<small class="care-chip-skiplabel">スキップ</small>';
+        }
         html += '</span>';
       }
       html += '</div></div>';
@@ -566,6 +828,71 @@ function toggleFold(id, btn) {
     careArea.innerHTML = html;
   }
 
+  window.toggleCareQuick = function (el) {
+    if (!el || el.getAttribute('data-care-busy') === '1') return;
+    var rt = el.getAttribute('data-record-type');
+    var det = el.getAttribute('data-details') || '';
+    var rid = el.getAttribute('data-record-id') || '';
+    var wantOn = el.checked;
+    if (wantOn) {
+      if (rid) return;
+      el.setAttribute('data-care-busy', '1');
+      el.disabled = true;
+      var body = {
+        cat_id: catId,
+        record_type: rt,
+        record_date: todayJstYmd(),
+        value: '記録',
+        details: det,
+        recorded_time: nowJstHm(),
+      };
+      fetch(API_BASE + '/health/records', {
+        method: 'POST',
+        headers: apiHeaders(), cache: 'no-store',
+        body: JSON.stringify(body),
+      }).then(function (r) { return r.json(); })
+      .then(function (data) {
+        if (data.error) {
+          alert('エラー: ' + (data.message || data.error));
+          el.checked = false;
+          return;
+        }
+        loadCareSection();
+      }).catch(function () {
+        alert('ケア記録の保存に失敗しました');
+        el.checked = false;
+      }).finally(function () {
+        el.disabled = false;
+        el.removeAttribute('data-care-busy');
+      });
+    } else {
+      if (!rid) {
+        el.checked = false;
+        return;
+      }
+      el.setAttribute('data-care-busy', '1');
+      el.disabled = true;
+      fetch(API_BASE + '/health/records/' + encodeURIComponent(rid), {
+        method: 'DELETE',
+        headers: apiHeaders(), cache: 'no-store',
+      }).then(function (r) { return r.json(); })
+      .then(function (data) {
+        if (data.error) {
+          alert('削除エラー: ' + (data.message || data.error));
+          el.checked = true;
+          return;
+        }
+        loadCareSection();
+      }).catch(function () {
+        alert('削除に失敗しました');
+        el.checked = true;
+      }).finally(function () {
+        el.disabled = false;
+        el.removeAttribute('data-care-busy');
+      });
+    }
+  };
+
   // ── 排便状況セクション ─────────────────────────────────────────────────────────
 
   function loadStoolSection() {
@@ -573,7 +900,7 @@ function toggleFold(id, btn) {
     stoolArea.innerHTML = '<div class="detail-section"><div class="detail-title">🚽 排便状況</div><div class="loading" style="padding:16px;">読み込み中...</div></div>';
 
     fetch(API_BASE + '/health/records?cat_id=' + encodeURIComponent(catId) + '&type=stool&limit=30', {
-      headers: apiHeaders(),
+      headers: apiHeaders(), cache: 'no-store',
     }).then(function (res) { return res.json(); })
     .then(function (data) {
       renderStoolSection(data.records || []);
@@ -609,7 +936,7 @@ function toggleFold(id, btn) {
     urineArea.innerHTML = '<div class="detail-section"><div class="detail-title">💧 排尿状況</div><div class="loading" style="padding:16px;">読み込み中...</div></div>';
 
     fetch(API_BASE + '/health/records?cat_id=' + encodeURIComponent(catId) + '&type=urine&limit=30', {
-      headers: apiHeaders(),
+      headers: apiHeaders(), cache: 'no-store',
     }).then(function (res) { return res.json(); })
     .then(function (data) {
       renderUrineSection(data.records || []);
@@ -642,34 +969,6 @@ function toggleFold(id, btn) {
   }
 
   // ── お薬状況セクション ─────────────────────────────────────────────────────────
-
-  function loadMedRecordSection() {
-    if (!medRecordArea) return;
-    medRecordArea.innerHTML = '<div class="detail-section"><div class="detail-title">💊 お薬状況</div><div class="loading" style="padding:16px;">読み込み中...</div></div>';
-
-    fetch(API_BASE + '/health/records?cat_id=' + encodeURIComponent(catId) + '&type=medication&limit=60', {
-      headers: apiHeaders(),
-    }).then(function (res) { return res.json(); })
-    .then(function (data) {
-      renderMedRecordSection(data.records || []);
-    }).catch(function () {
-      medRecordArea.innerHTML = '';
-    });
-  }
-
-  function renderMedRecordSection(records) {
-    var days = buildRecentDays(14);
-    var byDate = groupByDate(records);
-    var html = '<div class="detail-section">';
-    html += '<div class="detail-title">💊 お薬状況</div>';
-    html += '<div class="stool-list">';
-    html += renderDailyRows(days, byDate, function (r) {
-      var name = r.value || '—';
-      return '<span class="stool-chip med-chip">' + escapeHtml(name) + '</span>';
-    }, 4, 'medFold');
-    html += '</div></div>';
-    medRecordArea.innerHTML = html;
-  }
 
   // ── 共通ヘルパー: 2週間日付リスト / 日別グルーピング / 行レンダリング ──
 
@@ -750,7 +1049,7 @@ function toggleFold(id, btn) {
     healthRecordsArea.innerHTML = '<div class="detail-section"><div class="detail-title">⚖️ 体重記録</div><div class="loading" style="padding:16px;">読み込み中...</div></div>';
 
     fetch(API_BASE + '/health/records?cat_id=' + encodeURIComponent(catId) + '&limit=30', {
-      headers: apiHeaders(),
+      headers: apiHeaders(), cache: 'no-store',
     }).then(function (res) { return res.json(); })
     .then(function (data) {
       var recs = data.records || [];
@@ -796,7 +1095,7 @@ function toggleFold(id, btn) {
     clinicRecordsArea.innerHTML = '<div class="detail-section"><div class="detail-title">🏥 病院記録</div><div class="loading" style="padding:16px;">読み込み中...</div></div>';
 
     fetch(API_BASE + '/health/records?cat_id=' + encodeURIComponent(catId) + '&limit=50', {
-      headers: apiHeaders(),
+      headers: apiHeaders(), cache: 'no-store',
     }).then(function (res) { return res.json(); })
     .then(function (data) {
       var recs = data.records || [];
@@ -811,26 +1110,28 @@ function toggleFold(id, btn) {
     });
   }
 
-  function renderClinicRecords(records) {
-    var html = '<div class="detail-section">';
-    html += '<div class="section-header">';
-    html += '<div class="detail-title">🏥 病院記録</div>';
-    html += '<div style="display:flex;gap:6px;">';
-    html += '<button class="btn-add" onclick="openVetScheduleModal()" style="background:rgba(99,102,241,0.15);color:#a78bfa;">📅 予定</button>';
-    html += '<button class="btn-add" onclick="openClinicRecordModal()">+ 記録</button>';
-    html += '</div>';
-    html += '</div>';
+  var vetScheduleArea = document.getElementById('vetScheduleArea');
 
+  function renderClinicRecords(records) {
     var typeLabels = { vaccine: 'ワクチン', checkup: '健診', surgery: '手術', dental: '歯科', emergency: '緊急', test: '検査', observation: '経過観察' };
     var todayStr = new Date().toISOString().slice(0, 10);
 
+    // ── 病院予定セクション ──
     var scheduled = [];
     for (var u = 0; u < records.length; u++) {
       if (records[u].next_due) scheduled.push(records[u]);
     }
-    if (scheduled.length > 0) {
-      scheduled.sort(function (a, b) { return a.next_due < b.next_due ? -1 : 1; });
-      html += '<div style="margin-bottom:10px;">';
+    scheduled.sort(function (a, b) { return a.next_due < b.next_due ? -1 : 1; });
+
+    var schedHtml = '<div class="detail-section">';
+    schedHtml += '<div class="section-header">';
+    schedHtml += '<div class="detail-title">📅 病院予定</div>';
+    schedHtml += '<button class="btn-add" onclick="openVetScheduleModal()" style="background:rgba(99,102,241,0.15);color:#a78bfa;">+ 予定追加</button>';
+    schedHtml += '</div>';
+
+    if (scheduled.length === 0) {
+      schedHtml += '<div class="empty-msg">予定なし</div>';
+    } else {
       for (var ui = 0; ui < scheduled.length; ui++) {
         var up = scheduled[ui];
         var upLabel = typeLabels[up.record_type] || up.record_type;
@@ -839,30 +1140,49 @@ function toggleFold(id, btn) {
         var urgColor = isOverdue ? '#f87171' : diffDays <= 7 ? '#fb923c' : diffDays <= 30 ? '#facc15' : '#4ade80';
         var daysText = diffDays === 0 ? '今日' : isOverdue ? Math.abs(diffDays) + '日超過' : diffDays + '日後';
         var bgColor = isOverdue ? 'rgba(248,113,113,0.1)' : 'rgba(99,102,241,0.08)';
-        html += '<div style="display:flex;align-items:center;gap:8px;padding:8px 10px;background:' + bgColor + ';border-radius:8px;margin-bottom:4px;border-left:3px solid ' + urgColor + ';">';
-        html += '<span style="font-size:16px;">' + (isOverdue ? '⚠️' : '📅') + '</span>';
-        html += '<div style="flex:1;">';
-        html += '<div style="font-size:13px;font-weight:600;color:var(--text-main);">' + escapeHtml(up.next_due) + ' ' + escapeHtml(upLabel) + '</div>';
-        if (up.value) html += '<div style="font-size:11px;color:var(--text-dim);margin-top:2px;">' + escapeHtml(up.value) + '</div>';
-        html += '</div>';
-        html += '<button class="btn-add" onclick="markVetVisited(' + up.id + ',\'' + escapeHtml(up.record_type) + '\',\'' + escapeHtml(up.next_due) + '\')" style="background:rgba(74,222,128,0.15);color:#4ade80;font-size:11px;padding:4px 8px;white-space:nowrap;">✅ 受診済み</button>';
-        html += '<span style="font-size:12px;font-weight:700;color:' + urgColor + ';white-space:nowrap;">' + daysText + '</span>';
-        html += '</div>';
+        schedHtml += '<div class="vet-schedule-card" style="background:' + bgColor + ';border-left:3px solid ' + urgColor + ';">';
+        schedHtml += '<div class="vet-schedule-main">';
+        schedHtml += '<span style="font-size:18px;">' + (isOverdue ? '⚠️' : '📅') + '</span>';
+        schedHtml += '<div style="flex:1;">';
+        schedHtml += '<div style="font-size:14px;font-weight:600;color:var(--text-main);">' + escapeHtml(upLabel) + '</div>';
+        schedHtml += '<div style="font-size:12px;color:var(--text-dim);margin-top:2px;">' + escapeHtml(up.next_due) + '</div>';
+        if (up.value) schedHtml += '<div style="font-size:11px;color:var(--text-dim);margin-top:2px;">' + escapeHtml(up.value) + '</div>';
+        schedHtml += '</div>';
+        schedHtml += '<div style="display:flex;flex-direction:column;align-items:flex-end;gap:4px;">';
+        schedHtml += '<span style="font-size:13px;font-weight:700;color:' + urgColor + ';white-space:nowrap;">' + daysText + '</span>';
+        schedHtml += '<button class="btn-add" onclick="markVetVisited(' + up.id + ',\'' + escapeHtml(up.record_type) + '\',\'' + escapeHtml(up.next_due) + '\')" style="background:rgba(74,222,128,0.15);color:#4ade80;font-size:11px;padding:4px 8px;white-space:nowrap;">✅ 受診済み</button>';
+        schedHtml += '<div style="display:flex;gap:4px;">';
+        schedHtml += '<button class="btn-edit-small" onclick="editVetScheduleDate(' + up.id + ',\'' + escapeHtml(up.next_due) + '\')" style="font-size:10px;color:var(--text-dim);padding:2px 6px;" title="日付変更">📅 変更</button>';
+        schedHtml += '<button class="btn-edit-small" onclick="deleteVetSchedule(' + up.id + ')" style="font-size:10px;color:#f87171;padding:2px 6px;" title="削除">🗑</button>';
+        schedHtml += '</div>';
+        schedHtml += '</div>';
+        schedHtml += '</div>';
+        schedHtml += '</div>';
       }
-      html += '</div>';
     }
+    schedHtml += '</div>';
+    if (vetScheduleArea) vetScheduleArea.innerHTML = schedHtml;
+
+    // ── 病院記録セクション ──
+    var html = '<div class="detail-section">';
+    html += '<div class="section-header">';
+    html += '<div class="detail-title">🏥 病院記録</div>';
+    html += '<button class="btn-add" onclick="openClinicRecordModal()">+ 記録</button>';
+    html += '</div>';
 
     var pastRecords = [];
-    for (var p = 0; p < records.length; p++) pastRecords.push(records[p]);
+    for (var pi = 0; pi < records.length; pi++) {
+      if (!records[pi].next_due) pastRecords.push(records[pi]);
+    }
 
-    if (pastRecords.length === 0 && upcoming.length === 0) {
-      html += '<div class="empty-msg">記録・予定なし</div>';
-    } else if (pastRecords.length > 0) {
+    if (pastRecords.length === 0) {
+      html += '<div class="empty-msg">記録なし</div>';
+    } else {
       for (var i = 0; i < pastRecords.length; i++) {
         var r = pastRecords[i];
         var typeLabel = typeLabels[r.record_type] || r.record_type;
         var badgeClass = 'hr-type-badge' + (r.record_type === 'emergency' ? ' emergency' : r.record_type === 'vaccine' ? ' vaccine' : '');
-        html += '<div class="health-record-item">';
+        html += '<div class="clinic-record-card">';
         html += '<div class="hr-head">';
         html += '<span><span class="' + badgeClass + '">' + escapeHtml(typeLabel) + '</span>' + escapeHtml(formatDateShort(r.record_date)) + '</span>';
         html += '<div style="display:flex;align-items:center;gap:6px;">';
@@ -870,16 +1190,58 @@ function toggleFold(id, btn) {
         html += '<button class="btn-edit-small" onclick="deleteClinicRecord(' + r.id + ')" title="削除" style="font-size:11px;color:#f87171;padding:2px 4px;">🗑</button>';
         html += '</div>';
         html += '</div>';
-        if (r.value) {
-          html += '<div class="hr-value">' + escapeHtml(r.value) + '</div>';
-        }
+
+        var parsed = null;
         if (r.details) {
-          var detStr = '';
-          try { var d = JSON.parse(r.details); detStr = typeof d === 'string' ? d : (d.note || d.finding || ''); } catch (_) { detStr = r.details; }
-          if (detStr) html += '<div class="hr-details">' + escapeHtml(detStr) + '</div>';
+          try { parsed = JSON.parse(r.details); } catch (_) { parsed = null; }
         }
+        var hasStructured = parsed && parsed.structured;
+
+        if (hasStructured) {
+          var s = parsed.structured;
+          if (s.summary) {
+            html += '<div class="cr-summary">' + escapeHtml(s.summary) + '</div>';
+          }
+          var sections = [
+            { key: 'diagnosis',   icon: '🔍', label: '診断' },
+            { key: 'treatment',   icon: '💊', label: '処方・治療' },
+            { key: 'findings',    icon: '📋', label: '所見' },
+            { key: 'next_steps',  icon: '📅', label: '次回指示' },
+          ];
+          html += '<div class="cr-structured">';
+          for (var si = 0; si < sections.length; si++) {
+            var sec = sections[si];
+            if (s[sec.key]) {
+              html += '<div class="cr-field">';
+              html += '<div class="cr-field-label">' + sec.icon + ' ' + sec.label + '</div>';
+              html += '<div class="cr-field-value">' + escapeHtml(s[sec.key]) + '</div>';
+              html += '</div>';
+            }
+          }
+          html += '</div>';
+          if (parsed.note) {
+            html += '<details class="cr-raw-toggle"><summary>原文を表示</summary>';
+            html += '<div class="cr-raw-text">' + escapeHtml(parsed.note) + '</div>';
+            html += '</details>';
+          }
+        } else {
+          if (r.value) {
+            html += '<div class="hr-value">' + escapeHtml(r.value) + '</div>';
+          }
+          if (parsed && parsed.note) {
+            html += '<div class="hr-details">' + escapeHtml(parsed.note) + '</div>';
+          } else if (r.details) {
+            var detStr = '';
+            try { detStr = typeof parsed === 'string' ? parsed : (parsed && (parsed.note || parsed.finding)) || ''; } catch (_) { detStr = r.details; }
+            if (detStr) html += '<div class="hr-details">' + escapeHtml(detStr) + '</div>';
+          }
+        }
+
         if (r.next_due) {
           html += '<div class="hr-next-due">📅 次回: ' + escapeHtml(r.next_due) + '</div>';
+        }
+        if (r.has_file) {
+          html += '<div class="clinic-file-badge" onclick="downloadClinicFile(' + r.id + ')">📎 添付ファイル</div>';
         }
         html += '</div>';
       }
@@ -888,21 +1250,46 @@ function toggleFold(id, btn) {
     clinicRecordsArea.innerHTML = html;
   }
 
+  window.downloadClinicFile = function (recordId) {
+    fetch(API_BASE + '/health/records/' + recordId + '/file', {
+      headers: apiHeaders(), cache: 'no-store',
+    }).then(function (r) {
+      if (!r.ok) throw new Error('not found');
+      var disposition = r.headers.get('Content-Disposition') || '';
+      var nameMatch = disposition.match(/filename="([^"]+)"/);
+      var fileName = nameMatch ? nameMatch[1] : 'document';
+      return r.blob().then(function (blob) { return { blob: blob, name: fileName }; });
+    }).then(function (result) {
+      var url = URL.createObjectURL(result.blob);
+      var link = document.createElement('a');
+      link.href = url;
+      link.download = result.name;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      setTimeout(function () { URL.revokeObjectURL(url); }, 1000);
+    }).catch(function () { alert('ファイルの取得に失敗しました'); });
+  };
+
   // ── 投薬スケジュールセクション ─────────────────────────────────────────────────
 
   var _medLogDate = null;
 
+  var _medActiveTab = 'schedule';
+
   function loadMedicationSchedule(selectedDate) {
-    medicationScheduleArea.innerHTML = '<div class="detail-section"><div class="detail-title">💊 投薬スケジュール</div><div class="loading" style="padding:16px;">読み込み中...</div></div>';
+    medicationScheduleArea.innerHTML = '<div class="detail-section"><div class="detail-title">💊 お薬管理</div><div class="loading" style="padding:16px;">読み込み中...</div></div>';
 
     var date = selectedDate || _medLogDate || new Date().toISOString().slice(0, 10);
     _medLogDate = date;
 
     Promise.all([
-      fetch(API_BASE + '/health/medications?cat_id=' + encodeURIComponent(catId), { headers: apiHeaders() }).then(function (r) { return r.json(); }),
-      fetch(API_BASE + '/health/medication-logs?cat_id=' + encodeURIComponent(catId) + '&date=' + date, { headers: apiHeaders() }).then(function (r) { return r.json(); }),
+      fetch(API_BASE + '/health/medications?cat_id=' + encodeURIComponent(catId), { headers: apiHeaders(), cache: 'no-store' }).then(function (r) { return r.json(); }),
+      fetch(API_BASE + '/health/medication-logs?cat_id=' + encodeURIComponent(catId) + '&date=' + date, { headers: apiHeaders(), cache: 'no-store' }).then(function (r) { return r.json(); }),
+      fetch(API_BASE + '/health/records?cat_id=' + encodeURIComponent(catId) + '&type=medication&limit=60', { headers: apiHeaders(), cache: 'no-store' }).then(function (r) { return r.json(); }),
+      fetch(API_BASE + '/health/medication-presets', { headers: apiHeaders(), cache: 'no-store' }).then(function (r) { return r.json(); }),
     ]).then(function (results) {
-      renderMedicationSchedule(results[0].medications || [], results[1].logs || [], date);
+      renderMedicationUnified(results[0].medications || [], results[1].logs || [], date, results[2].records || [], results[3].presets || []);
     }).catch(function () {
       medicationScheduleArea.innerHTML = '';
     });
@@ -915,16 +1302,39 @@ function toggleFold(id, btn) {
 
   var _medicationsList = [];
 
-  function renderMedicationSchedule(medications, logs, date) {
+  function renderMedicationUnified(medications, logs, date, historyRecords, presets) {
     _medicationsList = medications;
+    _medPresets = presets;
+
     var html = '<div class="detail-section">';
-    html += '<div class="section-header" style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px;">';
-    html += '<div class="detail-title">💊 投薬スケジュール</div>';
-    html += '<div style="display:flex;align-items:center;gap:8px;">';
+    html += '<div class="detail-title">💊 お薬管理</div>';
+
+    // ── タブ ──
+    html += '<div class="med-tabs">';
+    html += '<div class="med-tab' + (_medActiveTab === 'schedule' ? ' active' : '') + '" onclick="switchMedTab(\'schedule\')">💊 スケジュール</div>';
+    html += '<div class="med-tab' + (_medActiveTab === 'history' ? ' active' : '') + '" onclick="switchMedTab(\'history\')">📝 投薬履歴</div>';
+    html += '<div class="med-tab' + (_medActiveTab === 'preset' ? ' active' : '') + '" onclick="switchMedTab(\'preset\')">📋 プリセット</div>';
+    html += '</div>';
+
+    // ── タブ1: スケジュール ──
+    html += '<div id="medTabSchedule" class="med-tab-panel' + (_medActiveTab === 'schedule' ? ' active' : '') + '">';
+    html += '<div style="display:flex;align-items:center;gap:8px;margin-bottom:10px;flex-wrap:wrap;">';
     html += '<label style="font-size:12px;color:var(--text-dim);">記録日:</label>';
     html += '<input type="date" id="medLogDate" class="form-input" value="' + escapeHtml(date) + '" style="width:140px;padding:6px 8px;font-size:13px;" onchange="onMedLogDateChange()">';
     html += '<button class="btn-med-add" onclick="openMedScheduleModal()">＋ 追加</button>';
-    html += '</div></div>';
+    html += '</div>';
+
+    // 今日のサマリーバー
+    var todayStr2 = new Date().toISOString().slice(0, 10);
+    if (date === todayStr2 && logs.length > 0) {
+      var doneCount = 0; var totalCount = logs.length;
+      for (var lx = 0; lx < logs.length; lx++) { if (logs[lx].status === 'done') doneCount++; }
+      var allDone = doneCount === totalCount;
+      var barBg = allDone ? 'rgba(34,197,94,0.15)' : 'rgba(250,204,21,0.12)';
+      var barIcon = allDone ? '✅' : '⏳';
+      var barText = allDone ? '本日の投薬 すべて完了 (' + doneCount + '/' + totalCount + ')' : '本日の投薬 ' + doneCount + '/' + totalCount + ' 完了';
+      html += '<div style="background:' + barBg + ';padding:8px 12px;border-radius:8px;margin-bottom:10px;font-size:13px;font-weight:600;">' + barIcon + ' ' + barText + '</div>';
+    }
 
     if (medications.length === 0) {
       html += '<div class="empty-msg">投薬スケジュールなし</div>';
@@ -932,23 +1342,33 @@ function toggleFold(id, btn) {
       for (var i = 0; i < medications.length; i++) {
         var med = medications[i];
         html += '<div class="med-schedule-card">';
-        html += '<div class="med-schedule-head">';
-        html += '<div>';
+        html += '<div class="med-schedule-head"><div>';
         html += '<div class="med-schedule-name">' + escapeHtml(med.medicine_name || '') + '</div>';
         html += '<div class="med-schedule-meta">';
         if (med.dosage_amount) html += med.dosage_amount + (med.dosage_unit ? escapeHtml(med.dosage_unit) : '') + '&nbsp;';
-        if (med.frequency) html += escapeHtml(med.frequency) + '&nbsp;';
+        if (med.frequency) html += escapeHtml(formatFreqLabel(med.frequency)) + '&nbsp;';
         var slots = [];
         try { slots = JSON.parse(med.time_slots || '[]'); } catch (_) {}
         if (slots.length) html += '[' + slots.map(escapeHtml).join('/') + '] ';
         if (med.route) html += '(' + escapeHtml(med.route) + ')&nbsp;';
         html += '開始: ' + escapeHtml(med.start_date || '');
-        if (med.end_date) { html += ' 〜 ' + escapeHtml(med.end_date); } else { html += ' 〜 <span style="color:var(--text-dim)">未定</span>'; }
+        if (med.end_date) {
+          html += ' 〜 <span style="color:#f87171;">' + escapeHtml(med.end_date) + '</span>';
+          var endDt = new Date(med.end_date + 'T00:00:00Z');
+          var nowDt = new Date(new Date().toISOString().slice(0, 10) + 'T00:00:00Z');
+          var daysLeft = Math.round((endDt - nowDt) / 86400000);
+          if (daysLeft >= 0 && daysLeft <= 7) html += ' <span style="background:#f87171;color:#fff;padding:0 4px;border-radius:3px;font-size:10px;">残' + daysLeft + '日</span>';
+        } else {
+          html += ' 〜 <span style="color:var(--text-dim)">継続中</span>';
+        }
         html += '</div>';
+        if (med.frequency && med.frequency !== '毎日') {
+          var nextD = calcNextDoseDate(med.frequency, med.start_date);
+          if (nextD) html += '<div class="med-schedule-meta">📅 次回: ' + nextD.slice(5).replace('-', '/') + '</div>';
+        }
         if (med.purpose) html += '<div class="med-schedule-meta">目的: ' + escapeHtml(med.purpose) + '</div>';
         if (med.notes) html += '<div class="med-schedule-tip">💡 ' + escapeHtml(med.notes) + '</div>';
-        html += '</div>';
-        html += '</div>';
+        html += '</div></div>';
 
         var medLogs = logs.filter(function (l) { return l.medication_id === med.id; });
         if (medLogs.length > 0) {
@@ -966,35 +1386,141 @@ function toggleFold(id, btn) {
         html += '<button class="btn-med-edit" onclick="openMedScheduleModal(' + med.id + ')">編集</button>';
         html += '<button class="btn-med-stop" onclick="stopMedSchedule(' + med.id + ')">終了</button>';
         html += '<button class="btn-med-stop" style="color:#f87171;" onclick="deleteMedSchedule(' + med.id + ')">削除</button>';
-        html += '</div>';
-
-        html += '</div>';
+        html += '</div></div>';
       }
     }
+    html += '</div>';
+
+    // ── タブ2: 投薬履歴 ──
+    html += '<div id="medTabHistory" class="med-tab-panel' + (_medActiveTab === 'history' ? ' active' : '') + '">';
+    html += renderMedHistoryContent(historyRecords);
+    html += '</div>';
+
+    // ── タブ3: プリセット ──
+    html += '<div id="medTabPreset" class="med-tab-panel' + (_medActiveTab === 'preset' ? ' active' : '') + '">';
+    html += renderMedPresetContent(presets);
+    html += '</div>';
+
     html += '</div>';
     medicationScheduleArea.innerHTML = html;
   }
 
+  function renderMedHistoryContent(records) {
+    var days = buildRecentDays(14);
+    var byDate = groupByDate(records);
+    var html = '<div style="font-size:12px;color:var(--text-dim);margin-bottom:8px;">直近14日間の投薬記録（手動入力・インポート）</div>';
+    html += '<div class="stool-list">';
+    html += renderDailyRows(days, byDate, function (r) {
+      var name = r.value || '—';
+      return '<span class="stool-chip med-chip">' + escapeHtml(name) + '</span>';
+    }, 4, 'medHistFold');
+    html += '</div>';
+    return html;
+  }
+
+  function renderMedPresetContent(presets) {
+    var html = '';
+    if (presets.length === 0) {
+      html += '<div class="empty-msg">プリセットがありません</div>';
+    } else {
+      for (var i = 0; i < presets.length; i++) {
+        var p = presets[i];
+        html += '<div style="display:flex;justify-content:space-between;align-items:center;padding:8px 10px;background:var(--surface);border-radius:6px;margin-bottom:6px;">';
+        html += '<div>';
+        html += '<div style="font-size:13px;font-weight:600;">' + escapeHtml(p.name) + '</div>';
+        if (p.description) html += '<div style="font-size:11px;color:var(--text-dim);">' + escapeHtml(p.description) + '</div>';
+        html += '<div style="font-size:11px;color:var(--text-dim);">💊 ' + (p.item_count || 0) + ' 件の薬</div>';
+        html += '</div>';
+        html += '<div style="display:flex;gap:4px;">';
+        html += '<button class="btn-med-edit" onclick="editMedPreset(' + p.id + ')" title="編集">✏️</button>';
+        html += '<button class="btn-med-stop" onclick="deleteMedPresetConfirm(' + p.id + ')" title="削除">🗑</button>';
+        html += '<button class="btn-med-edit" style="background:rgba(74,222,128,0.18);color:#4ade80;font-size:11px;" onclick="applyMedPresetDirect(' + p.id + ',' + (p.item_count || 0) + ')" title="この猫に適用">▶ 適用</button>';
+        html += '</div></div>';
+      }
+    }
+    html += '<div style="margin-top:10px;display:flex;gap:6px;align-items:center;">';
+    html += '<input type="text" id="mpNewNameInline" class="form-input" placeholder="新しいプリセット名..." style="flex:1;min-width:0;font-size:12px;">';
+    html += '<button type="button" class="btn btn-primary btn-med-preset-create" onclick="createMedPresetInline()">作成</button>';
+    html += '</div>';
+    return html;
+  }
+
+  window.switchMedTab = function (tab) {
+    _medActiveTab = tab;
+    var tabs = document.querySelectorAll('.med-tab');
+    var panels = document.querySelectorAll('.med-tab-panel');
+    for (var i = 0; i < tabs.length; i++) tabs[i].classList.remove('active');
+    for (var i = 0; i < panels.length; i++) panels[i].classList.remove('active');
+    var tabMap = { schedule: 0, history: 1, preset: 2 };
+    var panelMap = { schedule: 'medTabSchedule', history: 'medTabHistory', preset: 'medTabPreset' };
+    if (tabs[tabMap[tab]]) tabs[tabMap[tab]].classList.add('active');
+    var panel = document.getElementById(panelMap[tab]);
+    if (panel) panel.classList.add('active');
+  };
+
+  window.applyMedPresetDirect = function (presetId, itemCount) {
+    if (itemCount === 0) {
+      alert('このプリセットには薬が登録されていません。先に編集で薬を追加してください。');
+      return;
+    }
+    if (!confirm('このプリセットの薬をこの猫に適用しますか？')) return;
+    fetch(API_BASE + '/health/medication-presets/' + presetId + '/apply', {
+      method: 'POST', headers: apiHeaders(), cache: 'no-store',
+      body: JSON.stringify({ cat_id: catId }),
+    }).then(function (r) { return r.json(); })
+    .then(function (data) {
+      if (data.error) { alert('エラー: ' + (data.message || data.error)); return; }
+      alert(data.count + ' 件の投薬スケジュールを追加しました');
+      _medActiveTab = 'schedule';
+      loadMedicationSchedule();
+    }).catch(function () { alert('適用に失敗しました'); });
+  };
+
+  window.createMedPresetInline = function () {
+    var nameEl = document.getElementById('mpNewNameInline');
+    var name = nameEl ? nameEl.value.trim() : '';
+    if (!name) { alert('プリセット名を入力してください'); return; }
+    fetch(API_BASE + '/health/medication-presets', {
+      method: 'POST', headers: apiHeaders(), cache: 'no-store',
+      body: JSON.stringify({ name: name }),
+    }).then(function (r) { return r.json(); })
+    .then(function (data) {
+      if (data.error) { alert('エラー: ' + (data.message || data.error)); return; }
+      _medActiveTab = 'preset';
+      loadMedicationSchedule();
+    }).catch(function () { alert('作成に失敗しました'); });
+  };
+
   function renderMedicationLogItem(log) {
-    var statusIcon = log.status === 'done' ? '✅' : log.status === 'skipped' ? '⏭' : '⬜';
     var rawSlot = (log.scheduled_at || '').slice(11);
     var slotLabel = rawSlot;
     if (rawSlot === '朝' || rawSlot === '昼' || rawSlot === '晩') { slotLabel = rawSlot; }
     else { slotLabel = rawSlot.slice(0, 5); }
 
-    var html = '<div class="med-log-item" id="medlog-' + log.id + '">';
-    html += '<span class="med-log-status">' + statusIcon + '</span>';
-    html += '<span class="med-log-time">' + escapeHtml(slotLabel) + '</span>';
+    var stClass = 'med-log-item';
+    if (log.status === 'done') stClass += ' med-log--done';
+    else if (log.status === 'skipped') stClass += ' med-log--skip';
+    else stClass += ' med-log--pending';
+
+    var html = '<div class="' + stClass + '" id="medlog-' + log.id + '">';
 
     if (log.status === 'done') {
       var adminTime = (log.administered_at || '').slice(11, 16);
-      html += '<span class="med-log-label">投与済 (' + escapeHtml(log.administered_by || '') + ' ' + escapeHtml(adminTime) + ')</span>';
+      html += '<span class="med-log-status">✅</span>';
+      html += '<span class="med-log-time">' + escapeHtml(slotLabel) + '</span>';
+      html += '<span class="med-log-label">' + escapeHtml(log.medicine_name || '') + '</span>';
+      html += '<span class="med-log-detail">投与済 ' + escapeHtml(adminTime) + '</span>';
     } else if (log.status === 'skipped') {
-      html += '<span class="med-log-label">スキップ</span>';
+      html += '<span class="med-log-status">⏭</span>';
+      html += '<span class="med-log-time">' + escapeHtml(slotLabel) + '</span>';
+      html += '<span class="med-log-label">' + escapeHtml(log.medicine_name || '') + '</span>';
+      html += '<span class="med-log-detail">スキップ</span>';
     } else {
-      html += '<span class="med-log-label">未実施</span>';
+      html += '<span class="med-log-status">⬜</span>';
+      html += '<span class="med-log-time">' + escapeHtml(slotLabel) + '</span>';
+      html += '<span class="med-log-label">' + escapeHtml(log.medicine_name || '') + '</span>';
       html += '<span class="med-log-actions">';
-      html += '<button class="btn-log-action done" onclick="doMedicationLog(' + log.id + ',\'done\')">完了</button>';
+      html += '<button class="btn-log-action done" onclick="doMedicationLog(' + log.id + ',\'done\')">💊 あげた</button>';
       html += '<button class="btn-log-action skip" onclick="doMedicationLog(' + log.id + ',\'skip\')">スキップ</button>';
       html += '</span>';
     }
@@ -1008,7 +1534,7 @@ function toggleFold(id, btn) {
     var endpoint = API_BASE + '/health/medication-logs/' + logId + '/' + action;
     fetch(endpoint, {
       method: 'POST',
-      headers: apiHeaders(),
+      headers: apiHeaders(), cache: 'no-store',
       body: JSON.stringify({}),
     }).then(function (r) { return r.json(); })
     .then(function (data) {
@@ -1031,7 +1557,7 @@ function toggleFold(id, btn) {
   function loadMedicines() {
     if (_medicinesList) return Promise.resolve(_medicinesList);
     var sp = (currentCatData && currentCatData.species) || 'cat';
-    return fetch(API_BASE + '/health/medicines?species=' + sp, { headers: apiHeaders() })
+    return fetch(API_BASE + '/health/medicines?species=' + sp, { headers: apiHeaders(), cache: 'no-store' })
       .then(function (r) { return r.json(); })
       .then(function (data) {
         _medicinesList = data.medicines || [];
@@ -1173,7 +1699,7 @@ function toggleFold(id, btn) {
     if (isEdit) {
       fetch(API_BASE + '/health/medications/' + editId, {
         method: 'PUT',
-        headers: apiHeaders(),
+        headers: apiHeaders(), cache: 'no-store',
         body: JSON.stringify(payload),
       }).then(function (r) { return r.json(); })
       .then(function (data) {
@@ -1191,7 +1717,7 @@ function toggleFold(id, btn) {
       payload.medicine_id = resolvedMedicineId;
       fetch(API_BASE + '/health/medications', {
         method: 'POST',
-        headers: apiHeaders(),
+        headers: apiHeaders(), cache: 'no-store',
         body: JSON.stringify(payload),
       }).then(function (r) { return r.json(); })
       .then(function (data) {
@@ -1207,7 +1733,7 @@ function toggleFold(id, btn) {
       var medBody = { id: 'med_' + newName.replace(/\s+/g, '_').toLowerCase() + '_' + Date.now(), name: newName };
       fetch(API_BASE + '/health/medicines', {
         method: 'POST',
-        headers: apiHeaders(),
+        headers: apiHeaders(), cache: 'no-store',
         body: JSON.stringify(medBody),
       }).then(function (r) { return r.json(); })
       .then(function (data) {
@@ -1226,7 +1752,7 @@ function toggleFold(id, btn) {
     var today = new Date().toISOString().slice(0, 10);
     fetch(API_BASE + '/health/medications/' + medId, {
       method: 'PUT',
-      headers: apiHeaders(),
+      headers: apiHeaders(), cache: 'no-store',
       body: JSON.stringify({ active: false, end_date: today }),
     }).then(function (r) { return r.json(); })
     .then(function (data) {
@@ -1239,7 +1765,7 @@ function toggleFold(id, btn) {
     if (!confirm('この投薬スケジュールと関連する投薬ログをすべて削除しますか？\nこの操作は取り消せません。')) return;
     fetch(API_BASE + '/health/medications/' + medId, {
       method: 'DELETE',
-      headers: apiHeaders(),
+      headers: apiHeaders(), cache: 'no-store',
     }).then(function (r) { return r.json(); })
     .then(function (data) {
       if (data.error) { alert('削除エラー: ' + (data.message || data.error)); return; }
@@ -1254,17 +1780,17 @@ function toggleFold(id, btn) {
     feedingArea.innerHTML = '<div class="detail-section"><div class="detail-title">🍽 給餌プラン</div><div class="loading" style="padding:16px;">読み込み中...</div></div>';
     if (calorieArea) calorieArea.innerHTML = '<div class="detail-section"><div class="detail-title">🔥 カロリー評価</div><div class="loading" style="padding:16px;">読み込み中...</div></div>';
 
-    var today = new Date().toISOString().slice(0, 10);
-    var yesterday = new Date(Date.now() - 86400000).toISOString().slice(0, 10);
+    var today = todayJstYmd();
+    var yesterday = yesterdayJstYmd();
 
     function doFetch(retryCount) {
       retryCount = retryCount || 0;
       Promise.all([
-        fetch(API_BASE + '/feeding/calc?cat_id=' + encodeURIComponent(catId), { headers: apiHeaders() }).then(function (r) { return r.json(); }),
-        fetch(API_BASE + '/feeding/logs?cat_id=' + encodeURIComponent(catId) + '&date=' + today, { headers: apiHeaders() }).then(function (r) { return r.json(); }),
-        fetch(API_BASE + '/health/records?cat_id=' + encodeURIComponent(catId) + '&limit=40', { headers: apiHeaders() }).then(function (r) { return r.json(); }),
-        fetch(API_BASE + '/feeding/foods', { headers: apiHeaders() }).then(function (r) { return r.json(); }),
-        fetch(API_BASE + '/feeding/logs?cat_id=' + encodeURIComponent(catId) + '&date=' + yesterday, { headers: apiHeaders() }).then(function (r) { return r.json(); }),
+        _feedFetchJson(API_BASE + '/feeding/calc?cat_id=' + encodeURIComponent(catId)),
+        _feedFetchJson(API_BASE + '/feeding/logs?cat_id=' + encodeURIComponent(catId) + '&date=' + today),
+        _feedFetchJson(API_BASE + '/health/records?cat_id=' + encodeURIComponent(catId) + '&limit=40'),
+        _feedFetchJson(API_BASE + '/feeding/foods'),
+        _feedFetchJson(API_BASE + '/feeding/logs?cat_id=' + encodeURIComponent(catId) + '&date=' + yesterday),
       ]).then(function (results) {
         var calcData = results[0];
         _lastCalcData = calcData;
@@ -1278,9 +1804,15 @@ function toggleFold(id, btn) {
           setTimeout(function () { doFetch(retryCount + 1); }, 1200);
           return;
         }
-        var errHtml = '<div class="detail-section"><div class="detail-title">🔥 カロリー評価</div><div style="padding:16px;background:rgba(248,113,113,0.15);border-radius:8px;font-size:13px;color:#f87171;">データ取得に失敗しました。<button class="btn btn-outline" style="margin-top:8px;font-size:12px;" onclick="loadFeedingSection()">再読み込み</button></div></div>';
+        var hint = '';
+        if (err && err.kind === 'http' && err.status === 401) {
+          hint = '<div style="margin-top:8px;font-size:12px;">ログインの有効期限が切れている可能性があります。一度ログアウトしてから再ログインしてください。</div>';
+        } else if (err && err.kind === 'parse') {
+          hint = '<div style="margin-top:8px;font-size:12px;">サーバー応答が不正です。通信環境を確認するか、しばらくしてから再試行してください。</div>';
+        }
+        var errHtml = '<div class="detail-section"><div class="detail-title">🔥 カロリー評価</div><div style="padding:16px;background:rgba(248,113,113,0.15);border-radius:8px;font-size:13px;color:#f87171;">データ取得に失敗しました。' + hint + '<button class="btn btn-outline" style="margin-top:8px;font-size:12px;" onclick="loadFeedingSection()">再読み込み</button></div></div>';
         if (calorieArea) calorieArea.innerHTML = errHtml;
-        feedingArea.innerHTML = '<div class="detail-section"><div class="detail-title">🍽 給餌プラン</div><div style="padding:16px;color:var(--text-dim);">データ取得に失敗しました。<button class="btn btn-outline" style="margin-top:8px;" onclick="loadFeedingSection()">再読み込み</button></div></div>';
+        feedingArea.innerHTML = '<div class="detail-section"><div class="detail-title">🍽 給餌プラン</div><div style="padding:16px;color:var(--text-dim);">データ取得に失敗しました。' + hint + '<button class="btn btn-outline" style="margin-top:8px;" onclick="loadFeedingSection()">再読み込み</button></div></div>';
       });
     }
     doFetch(0);
@@ -1293,9 +1825,19 @@ function toggleFold(id, btn) {
       return;
     }
     var hasKcal = calc.required_kcal && calc.required_kcal > 0;
+    var displaySpecies = (calc && calc.species) || (currentCatData && currentCatData.species) || 'cat';
     var html = '<div class="detail-section">';
     html += '<div class="detail-title">🔥 カロリー評価・体型（BCS）</div>';
     html += '<div style="background:var(--surface);border-radius:8px;padding:12px;">';
+    html += '<div style="display:flex;justify-content:space-between;align-items:center;font-size:12px;margin-bottom:8px;flex-wrap:wrap;gap:6px;">';
+    html += '<span style="color:var(--text-dim);">種別（必要カロリー・ライフステージ）</span>';
+    html += '<div style="display:flex;gap:6px;align-items:center;">';
+    html += '<select id="speciesSelect" style="background:var(--surface-alt);color:var(--text-main);border:1px solid var(--surface-alt);border-radius:6px;padding:4px 8px;font-size:13px;">';
+    html += '<option value="cat"' + (displaySpecies === 'cat' ? ' selected' : '') + '>🐱 猫</option>';
+    html += '<option value="dog"' + (displaySpecies === 'dog' ? ' selected' : '') + '>🐶 犬</option>';
+    html += '</select>';
+    html += '<button type="button" class="btn-outline" style="font-size:11px;padding:4px 8px;" onclick="saveSpeciesFromCalorie()">保存</button>';
+    html += '</div></div>';
     if (hasKcal) {
       var eatenKcal = calc.today ? (calc.today.eaten_kcal || 0) : 0;
       var remainKcal = calc.remaining_kcal != null ? calc.remaining_kcal : Math.max(0, calc.required_kcal - eatenKcal);
@@ -1331,7 +1873,7 @@ function toggleFold(id, btn) {
       }
 
       var sourceLabel = dataSource ? '記録ベースの推定値' : '';
-      var stageLabel = escapeHtml(lifeStageLabel(calc.life_stage));
+      var stageLabel = escapeHtml(lifeStageLabel(calc.life_stage, displaySpecies));
       var planRef = '登録プラン: ' + (calc.plan_total_kcal || 0) + ' kcal';
       var metaItems = [stageLabel, planRef];
       if (sourceLabel) metaItems.push(sourceLabel);
@@ -1385,13 +1927,32 @@ function toggleFold(id, btn) {
   }
 
   window.loadFeedingSection = loadFeedingSection;
+
+  window.saveSpeciesFromCalorie = function () {
+    var sel = document.getElementById('speciesSelect');
+    if (!sel || !catId) return;
+    var sp = sel.value;
+    fetch(API_BASE + '/cats/' + encodeURIComponent(catId), {
+      method: 'PUT',
+      headers: apiHeaders(), cache: 'no-store',
+      body: JSON.stringify({ species: sp }),
+    }).then(function (r) { return r.json(); })
+    .then(function (data) {
+      if (data.error) { alert('エラー: ' + (data.message || data.error)); return; }
+      if (currentCatData) currentCatData.species = sp;
+      loadFeedingSection();
+    }).catch(function () {
+      alert('種別の保存に失敗しました');
+    });
+  };
+
   window.saveBCS = function (value) {
     if (!value || !catId) return;
     var bcsNum = parseInt(value, 10);
     var bcsLabel = bcsNum === 5 ? '5（理想）' : bcsNum < 5 ? bcsNum + '（痩せ）' : bcsNum + '（肥満）';
     fetch(API_BASE + '/feeding/nutrition-profile?cat_id=' + encodeURIComponent(catId), {
       method: 'PATCH',
-      headers: apiHeaders(),
+      headers: apiHeaders(), cache: 'no-store',
       body: JSON.stringify({ body_condition_score: bcsNum }),
     }).then(function (r) { return r.json(); })
     .then(function (data) {
@@ -1707,7 +2268,11 @@ function toggleFold(id, btn) {
       html += renderLeftoverInput(eveningPlans, eveningLogs);
     }
 
-    var yesterday = new Date(Date.now() - 86400000).toISOString().slice(0, 10);
+    var yesterdayRel = (function (ymd) {
+      var d = new Date(ymd + 'T12:00:00+09:00');
+      d.setTime(d.getTime() - 86400000);
+      return d.toLocaleDateString('sv-SE', { timeZone: 'Asia/Tokyo' });
+    })(today);
     var prevEvening = null, morningMeal = null, eveningMeal = null;
     for (var hi = 0; hi < healthRecs.length; hi++) {
       var hr = healthRecs[hi];
@@ -1716,9 +2281,9 @@ function toggleFold(id, btn) {
       if (!prevEvening && det === '前日夜ごはん' && hr.record_date === today) prevEvening = hr;
       if (!morningMeal && det === '朝飯内容' && hr.record_date === today) morningMeal = hr;
       if (!eveningMeal && det === '夜飯内容' && hr.record_date === today) eveningMeal = hr;
-      if (!eveningMeal && det === '夜飯内容' && hr.record_date === yesterday) eveningMeal = hr;
-      if (!prevEvening && det === '前日夜ごはん' && hr.record_date === yesterday) prevEvening = hr;
-      if (!morningMeal && det === '朝飯内容' && hr.record_date === yesterday) morningMeal = hr;
+      if (!eveningMeal && det === '夜飯内容' && hr.record_date === yesterdayRel) eveningMeal = hr;
+      if (!prevEvening && det === '前日夜ごはん' && hr.record_date === yesterdayRel) prevEvening = hr;
+      if (!morningMeal && det === '朝飯内容' && hr.record_date === yesterdayRel) morningMeal = hr;
     }
 
     var histBlock = renderMealHistoryBlock('🌙 昨夜の夜ごはん', prevEvening || eveningMeal, foodsDb);
@@ -1759,6 +2324,26 @@ function toggleFold(id, btn) {
     html += '<button class="btn-add" style="background:rgba(59,130,246,0.15);color:#93c5fd;" onclick="openFeedingLogModal()" title="手動記録">📝 記録</button>';
     html += '</div></div>';
 
+    var presetName = currentCatData && currentCatData.assigned_preset_name;
+    var presetId = currentCatData && currentCatData.assigned_preset_id;
+    html += '<div style="background:var(--surface);border-radius:8px;padding:8px 12px;margin-bottom:8px;display:flex;justify-content:space-between;align-items:center;">';
+    html += '<div style="font-size:12px;color:var(--text-dim);">';
+    html += '🔗 紐づけプリセット: ';
+    if (presetName) {
+      html += '<b style="color:var(--primary, #a78bfa);">' + escapeHtml(presetName) + '</b>';
+    } else {
+      html += '<span style="color:var(--text-dim);">未設定</span>';
+    }
+    html += '</div>';
+    html += '<button class="btn-outline" style="font-size:11px;padding:3px 8px;" onclick="openAssignPresetModal()">変更</button>';
+    html += '</div>';
+    var presetDesc = currentCatData && currentCatData.assigned_preset_description;
+    if (presetDesc && String(presetDesc).trim()) {
+      html += '<div style="font-size:11px;color:var(--text-dim);line-height:1.4;margin:-4px 0 10px;padding:8px 10px;background:rgba(168,139,250,0.08);border-radius:8px;border-left:3px solid rgba(168,139,250,0.45);">';
+      html += '<span style="font-weight:600;color:var(--primary,#a78bfa);">📝 プリセットメモ</span><br><span style="color:var(--text-main);">' + escapeHtml(String(presetDesc).trim()) + '</span>';
+      html += '</div>';
+    }
+
     if (calc && !calc.error) {
       var mpd = calc.meals_per_day;
       var fedCnt = calc.fed_count || 0;
@@ -1798,33 +2383,51 @@ function toggleFold(id, btn) {
       html += '</div>';
 
       var plans = calc.plans || [];
+      // プラン0件の分岐でも朝/夕ボタンに使うため、ここで必ず定義する（else 内のみだと undefined で例外→「データ取得に失敗」になる）
+      var _slotFixed = ['morning', 'afternoon', 'evening'];
       var todayLogPlanIds = {};
       for (var li = 0; li < logs.length; li++) {
-        if (logs[li].plan_id) todayLogPlanIds[logs[li].plan_id] = logs[li];
+        if (!logs[li].plan_id) continue;
+        if (logs[li].log_date && logs[li].log_date !== today) continue;
+        todayLogPlanIds[logs[li].plan_id] = logs[li];
       }
 
       if (plans.length === 0) {
-        html += '<div class="empty-msg">給餌プランなし — 「+ 追加」か「📋 プリセット」で登録してください</div>';
+        html += '<div class="empty-msg" style="margin-bottom:8px;">給餌プランなし — 下のボタンか「📋 プリセット」で登録してください</div>';
+        html += '<div style="display:flex;gap:8px;justify-content:center;flex-wrap:wrap;margin-bottom:8px;">';
+        for (var emsi = 0; emsi < _slotFixed.length; emsi++) {
+          if (_slotFixed[emsi] === 'afternoon') continue;
+          html += '<button type="button" class="btn-add" onclick="openAddPlanModal(\'' + _slotFixed[emsi] + '\')" style="font-size:12px;">+ ' + slotLabel(_slotFixed[emsi]) + 'に追加</button>';
+        }
+        html += '</div>';
       } else {
         var slots = {};
-        var slotOrder = [];
         for (var i = 0; i < plans.length; i++) {
           var sl = plans[i].meal_slot || 'other';
-          if (!slots[sl]) { slots[sl] = { items: [], totalG: 0, totalKcal: 0 }; slotOrder.push(sl); }
+          if (!slots[sl]) slots[sl] = { items: [], totalG: 0, totalKcal: 0 };
           slots[sl].items.push(plans[i]);
           slots[sl].totalG += plans[i].amount_g || 0;
           slots[sl].totalKcal += plans[i].kcal_calc || 0;
         }
+        var slotOrder = [];
+        for (var sfi = 0; sfi < _slotFixed.length; sfi++) {
+          if (slots[_slotFixed[sfi]]) slotOrder.push(_slotFixed[sfi]);
+        }
+        for (var sk in slots) { if (slots.hasOwnProperty(sk) && slotOrder.indexOf(sk) === -1) slotOrder.push(sk); }
         var grandG = 0;
         var grandKcal = 0;
+        var _slotColors = { morning: 'rgba(251,191,36,0.10)', afternoon: 'rgba(96,165,250,0.08)', evening: 'rgba(139,92,246,0.10)' };
+        var _slotBorders = { morning: 'rgba(251,191,36,0.4)', afternoon: 'rgba(96,165,250,0.3)', evening: 'rgba(139,92,246,0.4)' };
         for (var si = 0; si < slotOrder.length; si++) {
           var sKey = slotOrder[si];
           var slot = slots[sKey];
           grandG += slot.totalG;
           grandKcal += slot.totalKcal;
-          html += '<div style="background:var(--surface);border-radius:8px;padding:10px 12px;margin-bottom:6px;">';
+          var sBg = _slotColors[sKey] || 'var(--surface)';
+          var sBorder = _slotBorders[sKey] || 'transparent';
+          html += '<div style="background:' + sBg + ';border-left:3px solid ' + sBorder + ';border-radius:8px;padding:10px 12px;margin-bottom:6px;">';
           html += '<div style="display:flex;justify-content:space-between;margin-bottom:6px;">';
-          html += '<b style="font-size:13px;color:var(--accent);">' + escapeHtml(slotLabel(sKey)) + '</b>';
+          html += '<b style="font-size:14px;">' + slotLabel(sKey) + '</b>';
           html += '<span style="font-size:11px;color:var(--text-dim);">計 ' + Math.round(slot.totalG) + 'g / ' + Math.round(slot.totalKcal) + 'kcal</span>';
           html += '</div>';
           for (var ii = 0; ii < slot.items.length; ii++) {
@@ -1837,7 +2440,7 @@ function toggleFold(id, btn) {
             html += '<div style="display:flex;align-items:center;gap:6px;padding:4px 0;border-bottom:1px solid rgba(255,255,255,0.04);">';
 
             if (isFed) {
-              html += '<span style="font-size:18px;cursor:default;" title="あげた済み (' + escapeHtml(fedLog.served_time || '') + ')">✅</span>';
+              html += '<button type="button" onclick="undoFed(' + fedLog.id + ')" style="font-size:18px;background:none;border:none;cursor:pointer;padding:0;" title="取り消し (' + escapeHtml(fedLog.served_time || '') + ')">✅</button>';
             } else {
               html += '<button type="button" onclick="quickFed(' + p.id + ')" style="font-size:18px;background:none;border:none;cursor:pointer;padding:0;" title="あげた！">⬜</button>';
             }
@@ -1847,6 +2450,9 @@ function toggleFold(id, btn) {
             html += '<div style="font-size:11px;color:var(--text-dim);">' + p.amount_g + 'g (' + Math.round(p.kcal_calc || 0) + 'kcal)';
             if (p.scheduled_time) html += ' ⏰' + escapeHtml(p.scheduled_time);
             html += '</div>';
+            if (p.notes && String(p.notes).trim()) {
+              html += '<div style="font-size:10px;color:var(--text-dim);margin-top:3px;line-height:1.35;padding:4px 6px;background:rgba(255,255,255,0.04);border-radius:4px;">📝 ' + escapeHtml(String(p.notes).trim()) + '</div>';
+            }
             if (isFed && fedLog.eaten_pct !== null && fedLog.eaten_pct !== undefined && fedLog.eaten_pct < 100) {
               html += '<div style="font-size:10px;color:#facc15;">食べた量: ' + fedLog.eaten_pct + '%</div>';
             }
@@ -1861,6 +2467,9 @@ function toggleFold(id, btn) {
             html += '</div>';
             html += '</div>';
           }
+          html += '<div style="text-align:center;margin-top:6px;">';
+          html += '<button type="button" class="btn-outline" style="font-size:11px;padding:4px 12px;opacity:0.8;" onclick="openAddPlanModal(\'' + sKey + '\')" title="' + slotLabel(sKey) + 'に追加">+ ' + slotLabel(sKey) + 'に追加</button>';
+          html += '</div>';
           html += '</div>';
         }
         html += '<div style="display:flex;justify-content:space-between;font-size:12px;font-weight:700;padding:4px 12px;color:var(--text-main);">';
@@ -1873,7 +2482,9 @@ function toggleFold(id, btn) {
     // 今日の給餌ログ（プラン外の手動記録も含む）
     var manualLogs = [];
     for (var mli = 0; mli < logs.length; mli++) {
-      if (!logs[mli].plan_id) manualLogs.push(logs[mli]);
+      if (logs[mli].plan_id) continue;
+      if (logs[mli].log_date && logs[mli].log_date !== today) continue;
+      manualLogs.push(logs[mli]);
     }
     if (manualLogs.length > 0) {
       html += '<div style="margin-top:12px;font-size:13px;font-weight:700;padding:4px 0;border-top:1px solid var(--surface-alt);">📝 手動記録</div>';
@@ -1903,6 +2514,7 @@ function toggleFold(id, btn) {
     html += '</div>';
     feedingArea.innerHTML = html;
     _feedingLogsCache = logs;
+    _feedingSectionRenderedDate = today;
   }
 
   window.saveLeftoverFromPlan = function (planId, offeredG) {
@@ -1912,9 +2524,9 @@ function toggleFold(id, btn) {
     if (isNaN(leftG) || leftG < 0) { alert('残り量を入力してください'); return; }
     if (offeredG > 0 && leftG > offeredG) { alert('提供量(' + offeredG + 'g)を超えています'); return; }
     var eatenPct = offeredG > 0 ? Math.round((offeredG - leftG) / offeredG * 100) : 0;
-    var yesterday = new Date(Date.now() - 86400000).toISOString().slice(0, 10);
+    var yesterday = yesterdayJstYmd();
     fetch(API_BASE + '/feeding/plans/' + planId + '/fed', {
-      method: 'POST', headers: apiHeaders(),
+      method: 'POST', headers: apiHeaders(), cache: 'no-store',
       body: JSON.stringify({ eaten_pct: eatenPct, log_date: yesterday }),
     }).then(function (r) { return r.json(); })
     .then(function (data) {
@@ -1924,9 +2536,9 @@ function toggleFold(id, btn) {
   };
 
   window.saveLeftoverFromPlanComplete = function (planId) {
-    var yesterday = new Date(Date.now() - 86400000).toISOString().slice(0, 10);
+    var yesterday = yesterdayJstYmd();
     fetch(API_BASE + '/feeding/plans/' + planId + '/fed', {
-      method: 'POST', headers: apiHeaders(),
+      method: 'POST', headers: apiHeaders(), cache: 'no-store',
       body: JSON.stringify({ eaten_pct: 100, log_date: yesterday }),
     }).then(function (r) { return r.json(); })
     .then(function (data) {
@@ -1960,7 +2572,7 @@ function toggleFold(id, btn) {
     if (eatenPct < 0) eatenPct = 0;
     if (eatenPct > 100) eatenPct = 100;
     fetch(API_BASE + '/feeding/logs/' + logId, {
-      method: 'PUT', headers: apiHeaders(),
+      method: 'PUT', headers: apiHeaders(), cache: 'no-store',
       body: JSON.stringify({ eaten_pct: eatenPct }),
     }).then(function (r) { return r.json(); })
     .then(function (data) {
@@ -1971,7 +2583,7 @@ function toggleFold(id, btn) {
 
   window.saveLeftoverComplete = function (logId) {
     fetch(API_BASE + '/feeding/logs/' + logId, {
-      method: 'PUT', headers: apiHeaders(),
+      method: 'PUT', headers: apiHeaders(), cache: 'no-store',
       body: JSON.stringify({ eaten_pct: 100 }),
     }).then(function (r) { return r.json(); })
     .then(function (data) {
@@ -1982,7 +2594,9 @@ function toggleFold(id, btn) {
 
   window.quickFed = function (planId) {
     fetch(API_BASE + '/feeding/plans/' + planId + '/fed', {
-      method: 'POST', headers: apiHeaders(), body: JSON.stringify({})
+      method: 'POST',
+      headers: apiHeaders(), cache: 'no-store',
+      body: JSON.stringify({ log_date: todayJstYmd() }),
     }).then(function (r) { return r.json(); })
     .then(function (data) {
       if (data.error) { alert('エラー: ' + (data.message || data.error)); return; }
@@ -1990,10 +2604,21 @@ function toggleFold(id, btn) {
     }).catch(function () { alert('記録に失敗しました'); });
   };
 
+  window.undoFed = function (logId) {
+    if (!confirm('この給餌記録を取り消しますか？')) return;
+    fetch(API_BASE + '/feeding/logs/' + logId, {
+      method: 'DELETE', headers: apiHeaders(), cache: 'no-store',
+    }).then(function (r) { return r.json(); })
+    .then(function (data) {
+      if (data.error) { alert('エラー: ' + (data.message || data.error)); return; }
+      loadFeedingSection();
+    }).catch(function () { alert('取り消しに失敗しました'); });
+  };
+
   window.deletePlan = function (planId) {
     if (!confirm('この給餌プランを削除しますか？')) return;
     fetch(API_BASE + '/feeding/plans/' + planId, {
-      method: 'DELETE', headers: apiHeaders()
+      method: 'DELETE', headers: apiHeaders(), cache: 'no-store'
     }).then(function (r) { return r.json(); })
     .then(function (data) {
       if (data.error) { alert('エラー: ' + (data.message || data.error)); return; }
@@ -2014,8 +2639,7 @@ function toggleFold(id, btn) {
     if (document.getElementById('apTime')) document.getElementById('apTime').value = plan.scheduled_time || '';
     if (document.getElementById('apNotes')) document.getElementById('apNotes').value = plan.notes || '';
     ensureFoodList(function () {
-      var sel = document.getElementById('apFoodId');
-      if (sel && plan.food_id) sel.value = plan.food_id;
+      if (plan.food_id) setFoodSearchValue('apFoodId', plan.food_id);
       calcPlanKcal();
     });
     var modal = document.getElementById('addPlanModal');
@@ -2025,21 +2649,28 @@ function toggleFold(id, btn) {
   var _editingPlanId = null;
   var _lastCalcData = null;
 
-  window.openAddPlanModal = function () {
+  var _addPlanMode = 'plan'; // 'plan' or 'preset'
+
+  window.openAddPlanModal = function (defaultSlot) {
     _editingPlanId = null;
+    _addPlanMode = 'plan';
+    _pendingPresetId = null;
     var titleEl = document.querySelector('#addPlanModal .modal-title');
     if (titleEl) titleEl.textContent = '🍽 プランを追加';
-    if (document.getElementById('apSlot')) document.getElementById('apSlot').value = 'morning';
+    var slotSel = document.getElementById('apSlot');
+    if (slotSel) slotSel.value = defaultSlot || 'morning';
     if (document.getElementById('apAmount')) document.getElementById('apAmount').value = '';
     if (document.getElementById('apTime')) document.getElementById('apTime').value = '';
     if (document.getElementById('apNotes')) document.getElementById('apNotes').value = '';
     if (document.getElementById('apKcalPreview')) document.getElementById('apKcalPreview').style.display = 'none';
+    setFoodSearchValue('apFoodId', '');
     ensureFoodList(function () {});
     var modal = document.getElementById('addPlanModal');
     if (modal) modal.classList.add('open');
   };
 
   window.closeAddPlanModal = function () {
+    _editingPresetItemId = null;
     var modal = document.getElementById('addPlanModal');
     if (modal) modal.classList.remove('open');
   };
@@ -2075,7 +2706,7 @@ function toggleFold(id, btn) {
 
     if (_editingPlanId) {
       fetch(API_BASE + '/feeding/plans/' + _editingPlanId, {
-        method: 'PUT', headers: apiHeaders(), body: JSON.stringify(payload)
+        method: 'PUT', headers: apiHeaders(), cache: 'no-store', body: JSON.stringify(payload)
       }).then(function (r) { return r.json(); })
       .then(function (data) {
         if (data.error) { alert('エラー: ' + (data.message || data.error)); return; }
@@ -2085,7 +2716,7 @@ function toggleFold(id, btn) {
     } else {
       payload.cat_id = catId;
       fetch(API_BASE + '/feeding/plans', {
-        method: 'POST', headers: apiHeaders(), body: JSON.stringify(payload)
+        method: 'POST', headers: apiHeaders(), cache: 'no-store', body: JSON.stringify(payload)
       }).then(function (r) { return r.json(); })
       .then(function (data) {
         if (data.error) { alert('エラー: ' + (data.message || data.error)); return; }
@@ -2095,44 +2726,57 @@ function toggleFold(id, btn) {
     }
   };
 
-  // プリセット適用
-  window.openPresetApplyModal = function () {
+  // プリセット適用（拠点フィルタ: cafe = BAKENEKO CAFE / nekomata = 猫又療養所）
+  function _fillPresetApplyModal(loc) {
     var modal = document.getElementById('presetApplyModal');
     if (!modal) return;
-    modal.innerHTML = '<div class="modal-box"><div class="modal-title">📋 プリセットを適用</div><div class="loading" style="padding:16px;">読み込み中...</div><div class="modal-actions"><button class="btn btn-outline" onclick="closePresetApplyModal()">閉じる</button></div></div>';
-    modal.classList.add('open');
-
     var sp = (currentCatData && currentCatData.species) || 'cat';
-    fetch(API_BASE + '/feeding/presets?species=' + sp, { headers: apiHeaders() })
+    setStoredPresetLocation(loc);
+    fetch(feedingPresetsListUrl(sp, loc), { headers: apiHeaders(), cache: 'no-store' })
       .then(function (r) { return r.json(); })
       .then(function (data) {
         var presets = data.presets || [];
         var innerHtml = '<div class="modal-box" style="max-height:80vh;overflow-y:auto;">';
         innerHtml += '<div class="modal-title">📋 プリセットを適用</div>';
+        innerHtml += '<div style="margin:0 0 10px;text-align:center;"><button type="button" class="btn btn-outline" style="font-size:12px;width:100%;max-width:100%;" onclick="openPresetManageModal()">⚙️ プリセット管理</button></div>';
+        innerHtml += renderPresetLocationSwitcher(loc, 'apply');
         if (presets.length === 0) {
-          innerHtml += '<div class="empty-msg">プリセットがありません。「プリセット管理」で作成してください。</div>';
+          innerHtml += '<div class="empty-msg">この拠点のプリセットがありません。タブを切り替えるか、「プリセット管理」で作成してください。</div>';
         } else {
           for (var i = 0; i < presets.length; i++) {
             var ps = presets[i];
             innerHtml += '<div style="background:var(--surface);border-radius:8px;padding:10px 12px;margin-bottom:8px;">';
-            innerHtml += '<div style="display:flex;justify-content:space-between;align-items:center;">';
-            innerHtml += '<b style="font-size:13px;">' + escapeHtml(ps.name) + '</b>';
-            innerHtml += '<button class="btn btn-primary" style="font-size:11px;padding:4px 10px;" onclick="applyPreset(' + ps.id + ')">適用</button>';
-            innerHtml += '</div>';
+            innerHtml += '<div style="display:flex;justify-content:space-between;align-items:flex-start;gap:8px;">';
+            innerHtml += '<div style="flex:1;min-width:0;"><div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;margin-bottom:2px;">' + presetLocationBadgeHtml(ps.location_id) + '<b style="font-size:13px;">' + escapeHtml(ps.name) + '</b></div>';
             if (ps.description) innerHtml += '<div style="font-size:11px;color:var(--text-dim);margin-top:2px;">' + escapeHtml(ps.description) + '</div>';
-            innerHtml += '<div style="font-size:11px;color:var(--accent);margin-top:4px;">' + (ps.items || []).length + '品 / 計 ' + (ps.total_kcal || 0) + 'kcal</div>';
-            for (var j = 0; j < (ps.items || []).length; j++) {
-              var it = ps.items[j];
-              innerHtml += '<div style="font-size:11px;color:var(--text-dim);padding:1px 0;">' + escapeHtml(slotLabel(it.meal_slot)) + ': ' + escapeHtml(it.food_name || '') + ' ' + it.amount_g + 'g</div>';
-            }
+            innerHtml += _renderPresetItemsSummary(ps.items || [], ps.total_kcal);
             innerHtml += '</div>';
+            innerHtml += '<button class="btn btn-primary" style="font-size:11px;padding:4px 10px;width:auto;min-width:0;flex-shrink:0;align-self:center;" onclick="applyPreset(' + ps.id + ')">適用</button>';
+            innerHtml += '</div></div>';
           }
         }
-        innerHtml += '<div style="margin-top:12px;text-align:center;"><button class="btn btn-outline" style="font-size:12px;" onclick="openPresetManageModal()">プリセット管理</button></div>';
         innerHtml += '<div class="modal-actions"><button class="btn btn-outline" onclick="closePresetApplyModal()">閉じる</button></div>';
         innerHtml += '</div>';
         modal.innerHTML = innerHtml;
       }).catch(function () { alert('プリセットの読み込みに失敗しました'); closePresetApplyModal(); });
+  }
+
+  window.openPresetApplyModal = function () {
+    var modal = document.getElementById('presetApplyModal');
+    if (!modal) return;
+    var loc = effectivePresetLocationForApply();
+    setStoredPresetLocation(loc);
+    modal.innerHTML = '<div class="modal-box"><div class="modal-title">📋 プリセットを適用</div><div class="loading" style="padding:16px;">読み込み中...</div><div class="modal-actions"><button class="btn btn-outline" onclick="closePresetApplyModal()">閉じる</button></div></div>';
+    modal.classList.add('open');
+    _fillPresetApplyModal(loc);
+  };
+
+  window.switchFedPresetLocation = function (loc, ctx) {
+    if (loc !== 'cafe' && loc !== 'nekomata') return;
+    setStoredPresetLocation(loc);
+    if (ctx === 'apply') _fillPresetApplyModal(loc);
+    else if (ctx === 'manage') _fillPresetManageModal(loc);
+    else if (ctx === 'assign') _fillPresetAssignModal(loc);
   };
 
   window.closePresetApplyModal = function () {
@@ -2140,9 +2784,84 @@ function toggleFold(id, btn) {
     if (modal) modal.classList.remove('open');
   };
 
+  function _fillPresetAssignModal(loc) {
+    var modal = document.getElementById('presetApplyModal');
+    if (!modal) return;
+    var sp = (currentCatData && currentCatData.species) || 'cat';
+    setStoredPresetLocation(loc);
+    fetch(feedingPresetsListUrl(sp, loc), { headers: apiHeaders(), cache: 'no-store' })
+      .then(function (r) { return r.json(); })
+      .then(function (data) {
+        var presets = data.presets || [];
+        var currentId = currentCatData && currentCatData.assigned_preset_id;
+        var innerHtml = '<div class="modal-box" style="max-height:85vh;overflow-y:auto;">';
+        innerHtml += '<div class="modal-title">🔗 プリセット紐づけ</div>';
+        innerHtml += '<p style="font-size:12px;color:var(--text-dim);margin:0 0 10px;">業務終了時にこのプリセットが自動で再適用されます。</p>';
+        innerHtml += renderPresetLocationSwitcher(loc, 'assign');
+
+        innerHtml += '<div style="margin-bottom:8px;">';
+        innerHtml += '<div class="preset-assign-item' + (!currentId ? ' active' : '') + '" onclick="assignPreset(null)" style="cursor:pointer;padding:10px 12px;border-radius:8px;margin-bottom:4px;background:' + (!currentId ? 'rgba(168,139,250,0.15)' : 'var(--surface)') + ';border:1px solid ' + (!currentId ? 'var(--primary,#a78bfa)' : 'var(--border,rgba(255,255,255,0.08))') + ';">';
+        innerHtml += '<div style="font-size:13px;font-weight:600;color:var(--text-main);">紐づけ解除（なし）</div>';
+        innerHtml += '</div>';
+
+        for (var i = 0; i < presets.length; i++) {
+          var ps = presets[i];
+          var isActive = currentId === ps.id;
+          innerHtml += '<div class="preset-assign-item' + (isActive ? ' active' : '') + '" onclick="assignPreset(' + ps.id + ')" style="cursor:pointer;padding:10px 12px;border-radius:8px;margin-bottom:4px;background:' + (isActive ? 'rgba(168,139,250,0.15)' : 'var(--surface)') + ';border:1px solid ' + (isActive ? 'var(--primary,#a78bfa)' : 'var(--border,rgba(255,255,255,0.08))') + ';">';
+          innerHtml += '<div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:6px;">';
+          innerHtml += '<div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;">' + presetLocationBadgeHtml(ps.location_id) + '<b style="font-size:13px;">' + escapeHtml(ps.name) + '</b></div>';
+          if (isActive) innerHtml += '<span style="font-size:11px;color:var(--primary,#a78bfa);font-weight:600;">✔ 現在</span>';
+          innerHtml += '</div>';
+          innerHtml += _renderPresetItemsSummary(ps.items || [], ps.total_kcal);
+          innerHtml += '</div>';
+        }
+        innerHtml += '</div>';
+        innerHtml += '<div class="modal-actions"><button class="btn btn-outline" onclick="closePresetApplyModal()">閉じる</button></div>';
+        innerHtml += '</div>';
+        modal.innerHTML = innerHtml;
+      }).catch(function () { alert('プリセットの読み込みに失敗しました'); closePresetApplyModal(); });
+  }
+
+  window.openAssignPresetModal = function () {
+    var modal = document.getElementById('presetApplyModal');
+    if (!modal) return;
+    var loc = effectivePresetLocationForApply();
+    setStoredPresetLocation(loc);
+    modal.innerHTML = '<div class="modal-box"><div class="modal-title">🔗 プリセット紐づけ</div><div class="loading" style="padding:16px;">読み込み中...</div><div class="modal-actions"><button class="btn btn-outline" onclick="closePresetApplyModal()">閉じる</button></div></div>';
+    modal.classList.add('open');
+    _fillPresetAssignModal(loc);
+  };
+
+  window.assignPreset = function (presetId) {
+    fetch(API_BASE + '/cats/' + encodeURIComponent(catId), {
+      method: 'PUT',
+      headers: apiHeaders(), cache: 'no-store',
+      body: JSON.stringify({ assigned_preset_id: presetId }),
+    }).then(function (r) { return r.json(); })
+    .then(function (data) {
+      if (data.error) { alert('エラー: ' + (data.message || data.error)); return; }
+      if (currentCatData) {
+        currentCatData.assigned_preset_id = presetId;
+        currentCatData.assigned_preset_name = null;
+      }
+      closePresetApplyModal();
+      loadFeedingSection();
+      fetch(API_BASE + '/cats/' + encodeURIComponent(catId), { headers: apiHeaders(), cache: 'no-store' })
+        .then(function (r) { return r.json(); })
+        .then(function (d) {
+          if (d.cat) {
+            currentCatData.assigned_preset_id = d.cat.assigned_preset_id;
+            currentCatData.assigned_preset_name = d.cat.assigned_preset_name;
+            currentCatData.assigned_preset_description = d.cat.assigned_preset_description;
+            loadFeedingSection();
+          }
+        });
+    }).catch(function () { alert('紐づけの保存に失敗しました'); });
+  };
+
   window.applyPreset = function (presetId) {
     fetch(API_BASE + '/feeding/presets/' + presetId + '/apply', {
-      method: 'POST', headers: apiHeaders(), body: JSON.stringify({ cat_id: catId })
+      method: 'POST', headers: apiHeaders(), cache: 'no-store', body: JSON.stringify({ cat_id: catId })
     }).then(function (r) { return r.json(); })
     .then(function (data) {
       if (data.error) { alert('エラー: ' + (data.message || data.error)); return; }
@@ -2152,57 +2871,105 @@ function toggleFold(id, btn) {
     }).catch(function () { alert('適用に失敗しました'); });
   };
 
-  // プリセット管理モーダル
-  window.openPresetManageModal = function () {
-    closePresetApplyModal();
+  function _fillPresetManageModal(loc) {
+    var area = document.getElementById('presetManageContent');
     var modal = document.getElementById('presetApplyModal');
-    if (!modal) return;
-    modal.innerHTML = '<div class="modal-box" style="max-height:85vh;overflow-y:auto;"><div class="modal-title">⚙️ プリセット管理</div><div id="presetManageContent" class="loading" style="padding:16px;">読み込み中...</div><div class="modal-actions"><button class="btn btn-outline" onclick="closePresetApplyModal()">閉じる</button></div></div>';
-    modal.classList.add('open');
+    if (!area || !modal) return;
+    var sp = (currentCatData && currentCatData.species) || 'cat';
+    setStoredPresetLocation(loc);
+    area.className = 'loading';
+    area.style.padding = '16px';
+    area.textContent = '読み込み中...';
 
-    fetch(API_BASE + '/feeding/presets', { headers: apiHeaders() })
+    fetch(feedingPresetsListUrl(sp, loc), { headers: apiHeaders(), cache: 'no-store' })
       .then(function (r) { return r.json(); })
       .then(function (data) {
         var presets = data.presets || [];
-        var area = document.getElementById('presetManageContent');
-        if (!area) return;
         var h = '';
-        h += '<button class="btn btn-primary" style="font-size:12px;margin-bottom:12px;" onclick="openCreatePresetModal()">+ 新規プリセット</button>';
+        h += renderPresetLocationSwitcher(loc, 'manage');
+        h += '<p style="font-size:11px;color:var(--text-dim);margin:0 0 10px;line-height:1.45;">上のタブで拠点を選んでから <b>+ 新規プリセット</b> を押すと、その拠点（<b>' + escapeHtml(presetLocShortLabel(loc)) + '</b>）用として登録されます。</p>';
+        h += '<button class="btn btn-primary" style="font-size:12px;margin-bottom:12px;width:100%;" onclick="openCreatePresetModal()">+ 新規プリセット（' + escapeHtml(presetLocShortLabel(loc)) + '）</button>';
         if (presets.length === 0) {
-          h += '<div class="empty-msg">プリセットなし</div>';
+          h += '<div class="empty-msg">この拠点のプリセットはまだありません。タブを切り替えると他拠点の一覧が表示されます。</div>';
         }
         for (var i = 0; i < presets.length; i++) {
           var ps = presets[i];
+          var ploc = ps.location_id === 'nekomata' ? 'nekomata' : 'cafe';
           h += '<div style="background:var(--surface);border-radius:8px;padding:10px 12px;margin-bottom:8px;">';
-          h += '<div style="display:flex;justify-content:space-between;align-items:center;">';
-          h += '<b>' + escapeHtml(ps.name) + '</b>';
-          h += '<div><button class="btn-edit-small" onclick="editPresetItems(' + ps.id + ')" title="中身編集">✏️</button> <button class="btn-edit-small" style="color:#f87171;" onclick="deletePreset(' + ps.id + ')" title="削除">🗑</button></div>';
-          h += '</div>';
-          h += '<div style="font-size:11px;color:var(--text-dim);">' + (ps.items || []).length + '品</div>';
-          h += '</div>';
+          h += '<div style="display:flex;justify-content:space-between;align-items:flex-start;gap:8px;">';
+          h += '<div style="flex:1;min-width:0;"><div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;margin-bottom:4px;">' + presetLocationBadgeHtml(ps.location_id) + '<b>' + escapeHtml(ps.name) + '</b></div>';
+          h += '<div style="font-size:11px;color:var(--text-dim);">' + (ps.items || []).length + '品</div></div>';
+          h += '<div style="display:flex;flex-direction:column;align-items:flex-end;gap:4px;flex-shrink:0;">';
+          h += '<button type="button" class="btn-edit-small" style="font-size:10px;" onclick="cyclePresetLocation(' + ps.id + ',\'' + ploc + '\')" title="拠点を切替">🏷 拠点切替</button>';
+          h += '<div><button class="btn-edit-small" onclick="renamePreset(' + ps.id + ',\'' + escapeHtml(ps.name).replace(/'/g, "\\'") + '\')" title="名前変更">📝</button> <button class="btn-edit-small" onclick="editPresetItems(' + ps.id + ')" title="中身編集">✏️</button> <button class="btn-edit-small" style="color:#f87171;" onclick="deletePreset(' + ps.id + ')" title="削除">🗑</button></div>';
+          h += '</div></div></div></div>';
         }
         area.className = '';
+        area.style.padding = '';
         area.innerHTML = h;
+      }).catch(function () {
+        area.className = '';
+        area.style.padding = '';
+        area.innerHTML = '<div class="empty-msg">読み込みに失敗しました</div>';
       });
+  }
+
+  // プリセット管理モーダル
+  window.openPresetManageModal = function () {
+    var modal = document.getElementById('presetApplyModal');
+    if (!modal) return;
+    var loc = getStoredPresetLocation();
+    modal.innerHTML = '<div class="modal-box" style="max-height:85vh;overflow-y:auto;"><div class="modal-title">⚙️ プリセット管理</div><div id="presetManageContent" class="loading" style="padding:16px;">読み込み中...</div><div class="modal-actions"><button class="btn btn-outline" onclick="closePresetApplyModal()">閉じる</button></div></div>';
+    modal.classList.add('open');
+    _fillPresetManageModal(loc);
+  };
+
+  window.cyclePresetLocation = function (id, cur) {
+    var next = cur === 'nekomata' ? 'cafe' : 'nekomata';
+    var nextJa = next === 'nekomata' ? '猫又療養所' : 'BAKENEKO CAFE';
+    if (!confirm('このプリセットの拠点を「' + nextJa + '」に変更しますか？')) return;
+    fetch(API_BASE + '/feeding/presets/' + id, {
+      method: 'PUT', headers: apiHeaders(), cache: 'no-store',
+      body: JSON.stringify({ location_id: next }),
+    }).then(function (r) { return r.json(); })
+    .then(function (data) {
+      if (data.error) { alert('エラー: ' + (data.message || data.error)); return; }
+      _fillPresetManageModal(getStoredPresetLocation());
+    }).catch(function () { alert('拠点の更新に失敗しました'); });
+  };
+
+  window.renamePreset = function (id, currentName) {
+    var newName = prompt('新しいプリセット名を入力', currentName);
+    if (!newName || newName === currentName) return;
+    fetch(API_BASE + '/feeding/presets/' + id, {
+      method: 'PUT', headers: apiHeaders(), cache: 'no-store',
+      body: JSON.stringify({ name: newName }),
+    }).then(function (r) { return r.json(); })
+    .then(function (data) {
+      if (data.error) { alert('エラー: ' + (data.message || data.error)); return; }
+      _fillPresetManageModal(getStoredPresetLocation());
+    }).catch(function () { alert('名前変更に失敗しました'); });
   };
 
   window.deletePreset = function (id) {
     if (!confirm('このプリセットを削除しますか？')) return;
-    fetch(API_BASE + '/feeding/presets/' + id, { method: 'DELETE', headers: apiHeaders() })
+    fetch(API_BASE + '/feeding/presets/' + id, { method: 'DELETE', headers: apiHeaders(), cache: 'no-store' })
       .then(function (r) { return r.json(); })
       .then(function (data) {
         if (data.error) { alert('エラー: ' + (data.message || data.error)); return; }
-        openPresetManageModal();
+        _fillPresetManageModal(getStoredPresetLocation());
       });
   };
 
   window.openCreatePresetModal = function () {
+    var loc = getStoredPresetLocation();
+    if (!confirm('拠点「' + presetLocShortLabel(loc) + '」用のプリセットを新規作成します。\n（別の拠点の場合は、一覧の上でタブを切り替えてから再度「+ 新規」を押してください）')) return;
     var name = prompt('プリセット名を入力してください（例: 腎臓ケアセット）');
     if (!name) return;
-    var desc = prompt('説明（任意）', '');
+    var desc = prompt('説明（任意・プリセット全体のメモ）', '');
     fetch(API_BASE + '/feeding/presets', {
-      method: 'POST', headers: apiHeaders(),
-      body: JSON.stringify({ name: name, description: desc || null })
+      method: 'POST', headers: apiHeaders(), cache: 'no-store',
+      body: JSON.stringify({ name: name, description: desc || null, location_id: loc })
     }).then(function (r) { return r.json(); })
     .then(function (data) {
       if (data.error) { alert('エラー: ' + (data.message || data.error)); return; }
@@ -2216,63 +2983,167 @@ function toggleFold(id, btn) {
     modal.innerHTML = '<div class="modal-box" style="max-height:85vh;overflow-y:auto;"><div class="modal-title">📋 プリセット フード編集</div><div id="presetItemsContent" class="loading" style="padding:16px;">読み込み中...</div><div class="modal-actions"><button class="btn btn-outline" onclick="openPresetManageModal()">戻る</button></div></div>';
     modal.classList.add('open');
 
-    fetch(API_BASE + '/feeding/presets/' + presetId + '/items', { headers: apiHeaders() })
+    fetch(API_BASE + '/feeding/presets/' + presetId + '/items', { headers: apiHeaders(), cache: 'no-store' })
       .then(function (r) { return r.json(); })
       .then(function (data) {
         var items = data.items || [];
+        _presetItemsEditCache = { presetId: presetId, items: items };
         var area = document.getElementById('presetItemsContent');
         if (!area) return;
-        var h = '';
+
+        var morningItems = [];
+        var eveningItems = [];
         for (var i = 0; i < items.length; i++) {
-          var it = items[i];
-          h += '<div style="display:flex;justify-content:space-between;align-items:center;padding:6px 0;border-bottom:1px solid rgba(255,255,255,0.05);">';
-          h += '<span style="font-size:12px;">' + escapeHtml(slotLabel(it.meal_slot)) + ': ' + escapeHtml(it.food_name || '') + ' ' + it.amount_g + 'g</span>';
-          h += '<button class="btn-edit-small" style="color:#f87171;" onclick="deletePresetItem(' + presetId + ',' + it.id + ')">🗑</button>';
-          h += '</div>';
+          if (items[i].meal_slot === 'evening') { eveningItems.push(items[i]); }
+          else { morningItems.push(items[i]); }
         }
-        h += '<div style="margin-top:12px;">';
-        h += '<button class="btn btn-primary" style="font-size:12px;" onclick="addPresetItemPrompt(' + presetId + ')">+ フード追加</button>';
-        h += '</div>';
+
+        var h = '';
+        h += _renderPresetSlotGroup('☀️ 朝ごはん', 'morning', morningItems, presetId);
+        h += _renderPresetSlotGroup('🌙 夕ごはん', 'evening', eveningItems, presetId);
         area.className = '';
         area.innerHTML = h;
       });
   };
 
+  function _renderPresetSlotGroup(title, slot, items, presetId) {
+    var totalKcal = 0;
+    for (var k = 0; k < items.length; k++) {
+      totalKcal += (items[k].amount_g || 0) * (items[k].kcal_per_100g || 0) / 100;
+    }
+    var h = '<div style="margin-bottom:14px;">';
+    h += '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;">';
+    h += '<div style="font-size:13px;font-weight:700;color:var(--text-main);">' + title + '</div>';
+    if (totalKcal > 0) h += '<span style="font-size:11px;color:var(--accent,#fb923c);">' + Math.round(totalKcal) + ' kcal</span>';
+    h += '</div>';
+    if (items.length === 0) {
+      h += '<div style="font-size:12px;color:var(--text-dim);padding:8px 0;">未登録</div>';
+    } else {
+      for (var i = 0; i < items.length; i++) {
+        var it = items[i];
+        var kcal = Math.round((it.amount_g || 0) * (it.kcal_per_100g || 0) / 100);
+        h += '<div style="padding:6px 8px;background:var(--surface);border-radius:6px;margin-bottom:4px;">';
+        h += '<div style="display:flex;justify-content:space-between;align-items:flex-start;gap:6px;">';
+        h += '<div style="flex:1;min-width:0;font-size:12px;">' + escapeHtml(it.food_name || '') + ' <b>' + it.amount_g + 'g</b>';
+        if (kcal) h += ' <span style="color:var(--text-dim);font-size:11px;">(' + kcal + 'kcal)</span>';
+        if (it.scheduled_time) h += ' <span style="color:var(--text-dim);font-size:10px;">⏰' + escapeHtml(it.scheduled_time) + '</span>';
+        if (it.notes && String(it.notes).trim()) {
+          h += '<div style="font-size:10px;color:var(--text-dim);margin-top:4px;line-height:1.35;">📝 ' + escapeHtml(String(it.notes).trim()) + '</div>';
+        }
+        h += '</div>';
+        h += '<div style="display:flex;gap:2px;flex-shrink:0;">';
+        h += '<button type="button" class="btn-edit-small" style="font-size:11px;" onclick="openEditPresetItem(' + presetId + ',' + it.id + ')" title="量・メモなどを変更">✏️</button>';
+        h += '<button type="button" class="btn-edit-small" style="color:#f87171;font-size:11px;" onclick="deletePresetItem(' + presetId + ',' + it.id + ')">🗑</button>';
+        h += '</div></div></div>';
+      }
+    }
+    h += '<button class="btn btn-outline" style="font-size:11px;margin-top:4px;padding:4px 10px;" onclick="addPresetItemForSlot(' + presetId + ',\'' + slot + '\')">+ 追加</button>';
+    h += '</div>';
+    return h;
+  }
+
   window.deletePresetItem = function (presetId, itemId) {
-    fetch(API_BASE + '/feeding/presets/' + presetId + '/items/' + itemId, { method: 'DELETE', headers: apiHeaders() })
+    fetch(API_BASE + '/feeding/presets/' + presetId + '/items/' + itemId, { method: 'DELETE', headers: apiHeaders(), cache: 'no-store' })
       .then(function (r) { return r.json(); })
       .then(function () { editPresetItems(presetId); });
   };
 
   window.addPresetItemPrompt = function (presetId) {
+    addPresetItemForSlot(presetId, 'morning');
+  };
+
+  var _editingPresetItemId = null;
+  var _presetItemsEditCache = null;
+
+  window.openEditPresetItem = function (presetId, itemId) {
+    var it = null;
+    if (_presetItemsEditCache && _presetItemsEditCache.presetId === presetId && _presetItemsEditCache.items) {
+      for (var i = 0; i < _presetItemsEditCache.items.length; i++) {
+        if (_presetItemsEditCache.items[i].id === itemId) { it = _presetItemsEditCache.items[i]; break; }
+      }
+    }
+    if (!it) { alert('データが見つかりません。プリセット一覧を開き直してください。'); return; }
     _pendingPresetId = presetId;
-    openAddPlanModal();
+    _editingPresetItemId = itemId;
+    _addPlanMode = 'preset';
+    var presetModal = document.getElementById('presetApplyModal');
+    if (presetModal) presetModal.classList.remove('open');
+
+    _editingPlanId = null;
     var titleEl = document.querySelector('#addPlanModal .modal-title');
-    if (titleEl) titleEl.textContent = '📋 プリセットにフード追加';
-    var submitBtn = document.querySelector('#addPlanModal .btn-primary');
-    if (submitBtn) submitBtn.setAttribute('onclick', 'submitPresetItem()');
+    if (titleEl) titleEl.textContent = '📋 プリセット項目を編集';
+    if (document.getElementById('apSlot')) document.getElementById('apSlot').value = it.meal_slot || 'morning';
+    if (document.getElementById('apAmount')) document.getElementById('apAmount').value = it.amount_g != null ? String(it.amount_g) : '';
+    if (document.getElementById('apTime')) document.getElementById('apTime').value = it.scheduled_time ? String(it.scheduled_time).slice(0, 5) : '';
+    if (document.getElementById('apNotes')) document.getElementById('apNotes').value = it.notes || '';
+    if (document.getElementById('apKcalPreview')) document.getElementById('apKcalPreview').style.display = 'none';
+    ensureFoodList(function () {
+      if (it.food_id) setFoodSearchValue('apFoodId', it.food_id);
+      calcPlanKcal();
+    });
+    var modal = document.getElementById('addPlanModal');
+    if (modal) modal.classList.add('open');
+  };
+
+  window.addPresetItemForSlot = function (presetId, slot) {
+    _pendingPresetId = presetId;
+    _editingPresetItemId = null;
+    _addPlanMode = 'preset';
+    var presetModal = document.getElementById('presetApplyModal');
+    if (presetModal) presetModal.classList.remove('open');
+
+    _editingPlanId = null;
+    var titleEl = document.querySelector('#addPlanModal .modal-title');
+    if (titleEl) titleEl.textContent = '📋 プリセットに追加（' + slotLabelShort(slot) + '）';
+    if (document.getElementById('apSlot')) document.getElementById('apSlot').value = slot;
+    if (document.getElementById('apAmount')) document.getElementById('apAmount').value = '';
+    if (document.getElementById('apTime')) document.getElementById('apTime').value = '';
+    if (document.getElementById('apNotes')) document.getElementById('apNotes').value = '';
+    if (document.getElementById('apKcalPreview')) document.getElementById('apKcalPreview').style.display = 'none';
+    setFoodSearchValue('apFoodId', '');
+    ensureFoodList(function () {});
+    var modal = document.getElementById('addPlanModal');
+    if (modal) modal.classList.add('open');
   };
 
   var _pendingPresetId = null;
 
-  window.submitPresetItem = function () {
+  window.submitAddPlan = function () {
+    if (_addPlanMode === 'preset') {
+      _doSubmitPresetItem();
+    } else {
+      submitPlan();
+    }
+  };
+
+  function _doSubmitPresetItem() {
     var foodId = document.getElementById('apFoodId') ? document.getElementById('apFoodId').value : '';
     var slot = document.getElementById('apSlot') ? document.getElementById('apSlot').value : 'morning';
     var amountG = document.getElementById('apAmount') ? parseFloat(document.getElementById('apAmount').value) : 0;
     var time = document.getElementById('apTime') ? document.getElementById('apTime').value : '';
     if (!foodId || !amountG) { alert('フードと量は必須です'); return; }
-    fetch(API_BASE + '/feeding/presets/' + _pendingPresetId + '/items', {
-      method: 'POST', headers: apiHeaders(),
-      body: JSON.stringify({ food_id: foodId, meal_slot: slot, amount_g: amountG, scheduled_time: time || null })
+    if (!_pendingPresetId) { alert('プリセットが選択されていません'); return; }
+    var presetNotes = document.getElementById('apNotes') ? document.getElementById('apNotes').value : '';
+    var payload = { food_id: foodId, meal_slot: slot, amount_g: amountG, scheduled_time: time || null, notes: presetNotes ? presetNotes.trim() : null };
+    var url = API_BASE + '/feeding/presets/' + _pendingPresetId + '/items';
+    var method = 'POST';
+    var savingEdit = !!_editingPresetItemId;
+    if (_editingPresetItemId) {
+      url = API_BASE + '/feeding/presets/' + _pendingPresetId + '/items/' + _editingPresetItemId;
+      method = 'PUT';
+    }
+    fetch(url, {
+      method: method, headers: apiHeaders(), cache: 'no-store',
+      body: JSON.stringify(payload)
     }).then(function (r) { return r.json(); })
     .then(function (data) {
       if (data.error) { alert('エラー: ' + (data.message || data.error)); return; }
       closeAddPlanModal();
-      var submitBtn = document.querySelector('#addPlanModal .btn-primary');
-      if (submitBtn) submitBtn.setAttribute('onclick', 'submitPlan()');
+      var presetModal = document.getElementById('presetApplyModal');
+      if (presetModal) presetModal.classList.add('open');
       editPresetItems(_pendingPresetId);
-    }).catch(function () { alert('追加に失敗しました'); });
-  };
+    }).catch(function () { alert(savingEdit ? '更新に失敗しました' : '追加に失敗しました'); });
+  }
 
   // 音声で給餌記録
   window.startFeedingVoice = function () {
@@ -2284,9 +3155,12 @@ function toggleFold(id, btn) {
     sr.onresult = function (e) {
       var text = e.results[0][0].transcript;
       if (confirm('音声入力: 「' + text + '」\nこの内容で記録しますか？')) {
+        var vPayload = { text: text, context: 'feeding' };
+        try { var fl = localStorage.getItem('nyagi_dash_location'); if (fl && fl !== 'all') vPayload.filter_location = fl; } catch (_) {}
+        try { var fs = localStorage.getItem('nyagi_dash_status'); if (fs && fs !== 'all') vPayload.filter_status = fs; } catch (_) {}
         fetch(API_BASE.replace('/ops', '/ops') + '/voice/submit', {
-          method: 'POST', headers: apiHeaders(),
-          body: JSON.stringify({ text: text, context: 'feeding', cat_id: catId })
+          method: 'POST', headers: apiHeaders(), cache: 'no-store',
+          body: JSON.stringify(vPayload)
         }).then(function (r) { return r.json(); })
         .then(function (data) {
           if (data.error) { alert('エラー: ' + (data.message || data.error)); return; }
@@ -2306,7 +3180,7 @@ function toggleFold(id, btn) {
     if (!sel) { cb(); return; }
     if (_feedFoodsList.length > 0) { populateFoodSelect(sel, _feedFoodsList); cb(); return; }
     var sp = (currentCatData && currentCatData.species) || 'cat';
-    fetch(API_BASE + '/feeding/foods?species=' + sp, { headers: apiHeaders() })
+    fetch(API_BASE + '/feeding/foods?species=' + sp, { headers: apiHeaders(), cache: 'no-store' })
       .then(function (r) { return r.json(); })
       .then(function (data) {
         _feedFoodsList = data.foods || [];
@@ -2321,7 +3195,7 @@ function toggleFold(id, btn) {
     var val = sel.value ? parseInt(sel.value, 10) : null;
     fetch(API_BASE + '/cats/' + encodeURIComponent(catId), {
       method: 'PUT',
-      headers: apiHeaders(),
+      headers: apiHeaders(), cache: 'no-store',
       body: JSON.stringify({ meals_per_day: val }),
     }).then(function (r) { return r.json(); })
     .then(function (data) {
@@ -2339,7 +3213,7 @@ function toggleFold(id, btn) {
     _editingLogId = logId;
     var titleEl = document.querySelector('#feedingLogModal .modal-title');
     if (titleEl) titleEl.textContent = '🍽 給餌ログを編集';
-    if (document.getElementById('flDate')) document.getElementById('flDate').value = log.log_date || new Date().toISOString().slice(0, 10);
+    if (document.getElementById('flDate')) document.getElementById('flDate').value = log.log_date || todayJstYmd();
     if (document.getElementById('flSlot')) document.getElementById('flSlot').value = log.meal_slot || 'morning';
     if (document.getElementById('flOfferedG')) document.getElementById('flOfferedG').value = log.offered_g != null ? log.offered_g : '';
     if (document.getElementById('flEatenPct')) document.getElementById('flEatenPct').value = log.eaten_pct != null ? log.eaten_pct : '';
@@ -2349,115 +3223,76 @@ function toggleFold(id, btn) {
     var sel = document.getElementById('flFoodId');
     if (sel && _feedFoodsList.length === 0) {
       var sp = (currentCatData && currentCatData.species) || 'cat';
-      fetch(API_BASE + '/feeding/foods?species=' + sp, { headers: apiHeaders() })
+      fetch(API_BASE + '/feeding/foods?species=' + sp, { headers: apiHeaders(), cache: 'no-store' })
         .then(function (r) { return r.json(); })
         .then(function (data) {
           _feedFoodsList = data.foods || [];
           populateFoodSelect(sel, _feedFoodsList);
-          if (log.food_id) sel.value = log.food_id;
+          if (log.food_id) setFoodSearchValue('flFoodId', log.food_id);
           if (document.getElementById('feedingLogModal')) document.getElementById('feedingLogModal').classList.add('open');
         });
     } else {
       if (sel && _feedFoodsList.length > 0) {
         populateFoodSelect(sel, _feedFoodsList);
-        if (log.food_id) sel.value = log.food_id;
+        if (log.food_id) setFoodSearchValue('flFoodId', log.food_id);
       }
       if (document.getElementById('feedingLogModal')) document.getElementById('feedingLogModal').classList.add('open');
     }
   };
 
-  function lifeStageLabel(stage) {
-    var labels = { adult: '成猫', kitten: '子猫', senior: 'シニア', diet: 'ダイエット' };
+  function lifeStageLabel(stage, species) {
+    var sp = species || 'cat';
+    if (sp === 'dog') {
+      var dogLabels = { adult: '成犬', puppy: '子犬', senior: 'シニア犬' };
+      return dogLabels[stage] || (stage || '成犬');
+    }
+    var labels = { adult: '成猫', kitten: '子猫', senior: 'シニア', diet: 'ダイエット', puppy: '子犬' };
     return labels[stage] || (stage || '成猫');
   }
 
   function slotLabel(slot) {
+    var labels = { morning: '☀️ 朝', afternoon: '☀️ 昼', evening: '🌙 夕' };
+    return labels[slot] || slot;
+  }
+  function slotLabelShort(slot) {
     var labels = { morning: '朝', afternoon: '昼', evening: '夕' };
     return labels[slot] || slot;
   }
 
-  // ── 食事メモカード ────────────────────────────────────────────────────────────
-
-  function loadFeedingMemo() {
-    if (!feedingMemoArea) return;
-    feedingMemoArea.innerHTML = '';
-    fetch(API_BASE + '/cat-notes?cat_id=' + encodeURIComponent(catId) + '&category=feeding,nutrition&limit=200', { headers: apiHeaders() })
-      .then(function (r) { return r.json(); })
-      .then(function (data) {
-        renderFeedingMemo(data.notes || []);
-      }).catch(function () {
-        feedingMemoArea.innerHTML = '';
-      });
-  }
-
-  function classifyFeedingNote(note) {
-    var t = note || '';
-    if (t.indexOf('前日残り') === 0) return { tag: '残り', cls: 'fm-leftover' };
-    if (t.indexOf('■ご飯指示') === 0) return { tag: '指示', cls: 'fm-instruction' };
-    if (t.indexOf('基本量') === 0) return { tag: '基本量', cls: 'fm-amount' };
-    if (t.indexOf('カロリー評価') !== -1) return { tag: 'kcal', cls: 'fm-calorie' };
-    return { tag: 'メモ', cls: 'fm-other' };
-  }
-
-  function renderFeedingMemo(notes) {
-    if (!feedingMemoArea) return;
-    if (!notes.length) { feedingMemoArea.innerHTML = ''; return; }
-
-    var byDate = {};
-    var dates = [];
-    for (var i = 0; i < notes.length; i++) {
-      var d = (notes[i].created_at || '').slice(0, 10) || '不明';
-      if (!byDate[d]) { byDate[d] = []; dates.push(d); }
-      byDate[d].push(notes[i]);
+  function _renderPresetItemsSummary(items, totalKcal) {
+    var morn = [];
+    var eve = [];
+    for (var i = 0; i < items.length; i++) {
+      if (items[i].meal_slot === 'evening') { eve.push(items[i]); }
+      else { morn.push(items[i]); }
     }
-
-    var visibleDays = 3;
-    var foldId = 'fmFold';
-
-    var html = '<div class="detail-section">';
-    html += '<div class="detail-title">🍽 食事メモ</div>';
-    html += '<div style="background:var(--surface);border-radius:8px;padding:8px 10px;">';
-
-    for (var di = 0; di < dates.length; di++) {
-      var dt = dates[di];
-      var hidden = di >= visibleDays;
-      if (hidden && di === visibleDays) {
-        html += '<div id="' + foldId + '" style="display:none;">';
-      }
-      var label = formatShortDate(dt);
-      html += '<div style="font-size:11px;color:var(--accent);font-weight:700;margin-top:' + (di === 0 ? '0' : '8px') + ';margin-bottom:2px;">📅 ' + escapeHtml(label) + '</div>';
-
-      var items = byDate[dt];
-      for (var ni = 0; ni < items.length; ni++) {
-        var n = items[ni];
-        var time = (n.created_at || '').slice(11, 16) || '';
-        var cls = classifyFeedingNote(n.note);
-        html += '<div class="fm-row">';
-        if (time) html += '<span class="fm-time">' + time + '</span>';
-        html += '<span class="fm-tag ' + cls.cls + '">' + cls.tag + '</span>';
-        html += '<span class="fm-body">' + escapeHtml(n.note) + '</span>';
-        html += '</div>';
+    var h = '<div style="margin-top:4px;">';
+    if (morn.length > 0) {
+      h += '<div style="font-size:10px;color:var(--accent,#fb923c);font-weight:600;margin-top:2px;">☀️ 朝</div>';
+      for (var m = 0; m < morn.length; m++) {
+        h += '<div style="font-size:11px;color:var(--text-dim);padding:1px 0 1px 10px;">' + escapeHtml(morn[m].food_name || '') + ' ' + morn[m].amount_g + 'g';
+        if (morn[m].notes && String(morn[m].notes).trim()) {
+          h += '<span style="display:block;font-size:10px;color:var(--text-dim);opacity:0.9;margin-top:2px;">📝 ' + escapeHtml(String(morn[m].notes).trim()) + '</span>';
+        }
+        h += '</div>';
       }
     }
-
-    if (dates.length > visibleDays) {
-      html += '</div>';
-      html += '<button class="fold-toggle" onclick="toggleFold(\'' + foldId + '\', this)">▼ 過去分を表示（' + (dates.length - visibleDays) + '日分）</button>';
+    if (eve.length > 0) {
+      h += '<div style="font-size:10px;color:var(--accent,#fb923c);font-weight:600;margin-top:2px;">🌙 夕</div>';
+      for (var e = 0; e < eve.length; e++) {
+        h += '<div style="font-size:11px;color:var(--text-dim);padding:1px 0 1px 10px;">' + escapeHtml(eve[e].food_name || '') + ' ' + eve[e].amount_g + 'g';
+        if (eve[e].notes && String(eve[e].notes).trim()) {
+          h += '<span style="display:block;font-size:10px;color:var(--text-dim);opacity:0.9;margin-top:2px;">📝 ' + escapeHtml(String(eve[e].notes).trim()) + '</span>';
+        }
+        h += '</div>';
+      }
     }
-
-    html += '</div></div>';
-    feedingMemoArea.innerHTML = html;
-  }
-
-  function formatShortDate(dateStr) {
-    if (!dateStr || dateStr.length < 10) return dateStr || '';
-    var parts = dateStr.split('-');
-    var m = parseInt(parts[1], 10);
-    var d = parseInt(parts[2], 10);
-    var days = ['日', '月', '火', '水', '木', '金', '土'];
-    var dt = new Date(dateStr + 'T00:00:00+09:00');
-    var dow = days[dt.getDay()] || '';
-    return m + '/' + d + '(' + dow + ')';
+    if (items.length === 0) {
+      h += '<div style="font-size:11px;color:var(--text-dim);">未登録</div>';
+    }
+    if (totalKcal) h += '<div style="font-size:11px;color:var(--accent,#fb923c);margin-top:2px;">計 ' + totalKcal + ' kcal</div>';
+    h += '</div>';
+    return h;
   }
 
   // 給餌ログ記録モーダル
@@ -2469,7 +3304,7 @@ function toggleFold(id, btn) {
     _editingLogId = null;
     var titleEl = document.querySelector('#feedingLogModal .modal-title');
     if (titleEl) titleEl.textContent = '🍽 給餌ログを記録';
-    var today = new Date().toISOString().slice(0, 10);
+    var today = todayJstYmd();
     if (document.getElementById('flDate')) document.getElementById('flDate').value = today;
     document.getElementById('flKcalPreview').style.display = 'none';
     document.getElementById('flFoodInfo').textContent = '';
@@ -2477,17 +3312,16 @@ function toggleFold(id, btn) {
     document.getElementById('flEatenPct').value = '';
     document.getElementById('flNote').value = '';
 
+    setFoodSearchValue('flFoodId', '');
     var sel = document.getElementById('flFoodId');
     if (sel && _feedFoodsList.length === 0) {
       var sp = (currentCatData && currentCatData.species) || 'cat';
-      fetch(API_BASE + '/feeding/foods?species=' + sp, { headers: apiHeaders() })
+      fetch(API_BASE + '/feeding/foods?species=' + sp, { headers: apiHeaders(), cache: 'no-store' })
         .then(function (r) { return r.json(); })
         .then(function (data) {
           _feedFoodsList = data.foods || [];
           populateFoodSelect(sel, _feedFoodsList);
         });
-    } else if (sel) {
-      sel.value = '';
     }
 
     if (document.getElementById('feedingLogModal')) {
@@ -2495,30 +3329,369 @@ function toggleFold(id, btn) {
     }
   };
 
-  function populateFoodSelect(sel, foods) {
-    sel.innerHTML = '<option value="">-- 選択 --</option>';
-    var typeLabels = { therapeutic: '🏥 療法食', complete: '🍚 総合栄養食', supplement: '🥫 一般食', treat: '🍬 おやつ' };
+  var _typeLabels = { therapeutic: '🏥 療法食', complete: '🍚 総合栄養食', general: '🥫 一般食', supplement: '🥫 一般食(補助)', treat: '🍬 おやつ' };
+  var _typeOrder = ['therapeutic', 'complete', 'general', 'supplement', 'treat'];
+
+  var _touchStartY = null;
+  var _TAP_THRESHOLD = 10;
+
+  function _addTapHandler(el, handler) {
+    el.addEventListener('mousedown', function (e) { e.preventDefault(); handler(); });
+    el.addEventListener('touchstart', function (e) { _touchStartY = e.touches[0].clientY; }, { passive: true });
+    el.addEventListener('touchend', function (e) {
+      if (_touchStartY !== null && e.changedTouches && e.changedTouches.length > 0) {
+        var dy = Math.abs(e.changedTouches[0].clientY - _touchStartY);
+        if (dy < _TAP_THRESHOLD) { e.preventDefault(); handler(); }
+      }
+      _touchStartY = null;
+    });
+  }
+
+  function _formTag(f) {
+    return f === 'dry' ? '(ﾄﾞﾗｲ)' : f === 'wet' ? '(ｳｪｯﾄ)' : f === 'liquid' ? '(液状)' : '';
+  }
+
+  function _foodDisplayName(food) {
+    return food.name + ' ' + _formTag(food.form);
+  }
+
+  function _matchesQuery(food, words) {
+    var haystack = ((food.name || '') + ' ' + (food.brand || '') + ' ' + (food.flavor || '') + ' ' + (food.form || '')).toLowerCase();
+    for (var w = 0; w < words.length; w++) {
+      if (haystack.indexOf(words[w]) === -1) return false;
+    }
+    return true;
+  }
+
+  function _renderFoodDropdown(dropdownEl, foods, query, onSelect) {
+    dropdownEl.innerHTML = '';
+    var words = query.toLowerCase().replace(/[\u3000]/g, ' ').split(/\s+/).filter(function (w) { return w.length > 0; });
     var groups = {};
+    var totalCount = 0;
+    var maxItems = words.length > 0 ? 50 : 20;
     for (var i = 0; i < foods.length; i++) {
+      if (totalCount >= maxItems) break;
+      if (words.length > 0 && !_matchesQuery(foods[i], words)) continue;
       var ft = foods[i].food_type || 'complete';
       if (!groups[ft]) groups[ft] = [];
       groups[ft].push(foods[i]);
+      totalCount++;
     }
-    var order = ['therapeutic', 'complete', 'supplement', 'treat'];
-    for (var oi = 0; oi < order.length; oi++) {
-      var key = order[oi];
+    var hasAny = false;
+    for (var oi = 0; oi < _typeOrder.length; oi++) {
+      var key = _typeOrder[oi];
       if (!groups[key] || groups[key].length === 0) continue;
-      var grp = document.createElement('optgroup');
-      grp.label = typeLabels[key] || key;
+      hasAny = true;
+      var lbl = document.createElement('div');
+      lbl.className = 'food-search-group-label';
+      lbl.textContent = _typeLabels[key] || key;
+      dropdownEl.appendChild(lbl);
       for (var gi = 0; gi < groups[key].length; gi++) {
         var f = groups[key][gi];
-        var opt = document.createElement('option');
-        opt.value = f.id;
-        var formTag = f.form === 'dry' ? '(ﾄﾞﾗｲ)' : f.form === 'wet' ? '(ｳｪｯﾄ)' : f.form === 'liquid' ? '(液状)' : '';
-        opt.textContent = f.name + ' ' + formTag;
-        grp.appendChild(opt);
+        var item = document.createElement('div');
+        item.className = 'food-search-item';
+        item.setAttribute('data-food-id', f.id);
+        var nameSpan = document.createElement('span');
+        nameSpan.textContent = _foodDisplayName(f);
+        item.appendChild(nameSpan);
+        if (f.kcal_per_100g) {
+          var kcalSpan = document.createElement('span');
+          kcalSpan.className = 'food-search-item-kcal';
+          kcalSpan.textContent = f.kcal_per_100g + ' kcal/100g';
+          item.appendChild(kcalSpan);
+        }
+        (function (foodObj) {
+          _addTapHandler(item, function () { onSelect(foodObj); });
+        })(f);
+        dropdownEl.appendChild(item);
       }
-      sel.appendChild(grp);
+    }
+    if (!hasAny && words.length > 0) {
+      var empty = document.createElement('div');
+      empty.className = 'food-search-empty';
+      empty.textContent = '「' + query + '」に一致するフードなし';
+      dropdownEl.appendChild(empty);
+
+      var webBtn = document.createElement('div');
+      webBtn.className = 'food-search-item';
+      webBtn.style.cssText = 'color:#60a5fa;font-weight:600;justify-content:center;gap:6px;border-top:1px solid rgba(255,255,255,0.08);margin-top:4px;padding-top:10px;';
+      webBtn.textContent = '🔍 「' + query + '」をWeb検索して登録';
+      (function (q, dd, sel) {
+        _addTapHandler(webBtn, function () { _webSearchAndRegister(q, dd, sel); });
+      })(query, dropdownEl, onSelect);
+      dropdownEl.appendChild(webBtn);
+    } else if (!hasAny) {
+      var emptyMsg = document.createElement('div');
+      emptyMsg.className = 'food-search-empty';
+      emptyMsg.textContent = 'フードが登録されていません';
+      dropdownEl.appendChild(emptyMsg);
+    } else if (words.length === 0 && totalCount >= maxItems) {
+      var hint = document.createElement('div');
+      hint.className = 'food-search-empty';
+      hint.textContent = '…他にもあります。キーワードで絞り込んでください';
+      dropdownEl.appendChild(hint);
+    }
+    if (hasAny && words.length >= 2) {
+      var webBtnExtra = document.createElement('div');
+      webBtnExtra.className = 'food-search-item';
+      webBtnExtra.style.cssText = 'color:#60a5fa;font-size:12px;justify-content:center;gap:4px;border-top:1px solid rgba(255,255,255,0.06);margin-top:4px;padding-top:8px;';
+      webBtnExtra.textContent = '🔍 「' + query + '」をWeb検索';
+      (function (q, dd, sel) {
+        _addTapHandler(webBtnExtra, function () { _webSearchAndRegister(q, dd, sel); });
+      })(query, dropdownEl, onSelect);
+      dropdownEl.appendChild(webBtnExtra);
+    }
+  }
+
+  var _webSearching = false;
+
+  function _webSearchAndRegister(query, dropdownEl, onSelectCb) {
+    if (_webSearching) return;
+    _webSearching = true;
+    dropdownEl.innerHTML = '<div class="food-search-empty" style="color:#60a5fa;">🔍 「' + escapeHtml(query) + '」を検索中...</div>';
+
+    var sp = (currentCatData && currentCatData.species) || 'cat';
+    fetch(API_BASE + '/feeding/foods/search', {
+      method: 'POST', headers: apiHeaders(), cache: 'no-store',
+      body: JSON.stringify({ query: query, species: sp })
+    }).then(function (r) { return r.json(); })
+    .then(function (data) {
+      _webSearching = false;
+      dropdownEl.innerHTML = '';
+
+      if (data.status === 'ok' && data.extracted && (data.extracted.name || data.extracted.kcal_per_100g)) {
+        _showWebFoodResult(dropdownEl, data.extracted, data.url, data.candidates || [], onSelectCb);
+      } else if (data.candidates && data.candidates.length > 0) {
+        _showWebCandidates(dropdownEl, data.candidates, onSelectCb);
+      } else {
+        var noResult = document.createElement('div');
+        noResult.className = 'food-search-empty';
+        noResult.textContent = 'Web検索結果なし — フードDBページからURL直接入力してください';
+        dropdownEl.appendChild(noResult);
+      }
+    }).catch(function () {
+      _webSearching = false;
+      dropdownEl.innerHTML = '<div class="food-search-empty" style="color:#f87171;">検索に失敗しました</div>';
+    });
+  }
+
+  function _showWebFoodResult(dropdownEl, extracted, url, candidates, onSelectCb) {
+    var lbl = document.createElement('div');
+    lbl.className = 'food-search-group-label';
+    lbl.textContent = '🌐 Web検索結果';
+    dropdownEl.appendChild(lbl);
+
+    var mainItem = document.createElement('div');
+    mainItem.className = 'food-search-item';
+    mainItem.style.cssText = 'flex-direction:column;align-items:flex-start;padding:10px;background:rgba(96,165,250,0.08);border-radius:6px;margin:4px 6px;';
+    var nameText = (extracted.brand ? extracted.brand + ' ' : '') + (extracted.name || '不明');
+    mainItem.innerHTML = '<div style="font-weight:600;font-size:13px;">' + escapeHtml(nameText) + '</div>'
+      + (extracted.kcal_per_100g ? '<div style="font-size:11px;color:var(--accent);">' + extracted.kcal_per_100g + ' kcal/100g</div>' : '')
+      + (extracted.category ? '<div style="font-size:10px;color:var(--text-dim);">' + escapeHtml(extracted.category) + '</div>' : '')
+      + '<div style="font-size:11px;color:#4ade80;font-weight:600;margin-top:4px;">↑ タップでDB登録＆選択</div>';
+
+    (function (ext, u) {
+      _addTapHandler(mainItem, function () { _registerAndSelect(ext, u, dropdownEl, onSelectCb); });
+    })(extracted, url);
+    dropdownEl.appendChild(mainItem);
+
+    if (candidates.length > 1) {
+      var altLbl = document.createElement('div');
+      altLbl.className = 'food-search-group-label';
+      altLbl.textContent = '他の候補（タップでスクレイプ）';
+      dropdownEl.appendChild(altLbl);
+      for (var ci = 1; ci < Math.min(candidates.length, 4); ci++) {
+        _appendCandidateItem(dropdownEl, candidates[ci], onSelectCb);
+      }
+    }
+  }
+
+  function _showWebCandidates(dropdownEl, candidates, onSelectCb) {
+    var lbl = document.createElement('div');
+    lbl.className = 'food-search-group-label';
+    lbl.textContent = '🌐 候補（タップでデータ取得＆登録）';
+    dropdownEl.appendChild(lbl);
+    for (var ci = 0; ci < Math.min(candidates.length, 5); ci++) {
+      _appendCandidateItem(dropdownEl, candidates[ci], onSelectCb);
+    }
+  }
+
+  function _appendCandidateItem(dropdownEl, candidate, onSelectCb) {
+    var cItem = document.createElement('div');
+    cItem.className = 'food-search-item';
+    cItem.style.cssText = 'font-size:12px;';
+    var domain = '';
+    try { domain = new URL(candidate.url).hostname.replace('www.', ''); } catch (_) {}
+    cItem.innerHTML = '<span>' + escapeHtml(candidate.title || candidate.url) + '</span><span style="font-size:10px;color:var(--text-dim);">' + escapeHtml(domain) + '</span>';
+    (function (c) {
+      _addTapHandler(cItem, function () { _scrapeAndRegister(c.url, dropdownEl, onSelectCb); });
+    })(candidate);
+    dropdownEl.appendChild(cItem);
+  }
+
+  function _scrapeAndRegister(url, dropdownEl, onSelectCb) {
+    dropdownEl.innerHTML = '<div class="food-search-empty" style="color:#60a5fa;">📥 データ取得中...</div>';
+    fetch(API_BASE + '/feeding/foods/scrape', {
+      method: 'POST', headers: apiHeaders(), cache: 'no-store',
+      body: JSON.stringify({ url: url })
+    }).then(function (r) { return r.json(); })
+    .then(function (data) {
+      if (data.status === 'ok' && data.extracted && (data.extracted.name || data.extracted.kcal_per_100g)) {
+        _registerAndSelect(data.extracted, url, dropdownEl, onSelectCb);
+      } else {
+        dropdownEl.innerHTML = '<div class="food-search-empty" style="color:#fb923c;">データ抽出失敗 — フードDBページからURL入力してください</div>';
+      }
+    }).catch(function () {
+      dropdownEl.innerHTML = '<div class="food-search-empty" style="color:#f87171;">取得に失敗しました</div>';
+    });
+  }
+
+  function _registerAndSelect(extracted, url, dropdownEl, onSelectCb) {
+    if (!extracted.name) { alert('製品名が取得できませんでした'); return; }
+    if (!extracted.kcal_per_100g) {
+      var kcalInput = prompt('カロリー（kcal/100g）を入力してください\n製品名: ' + extracted.name, '');
+      if (!kcalInput) return;
+      extracted.kcal_per_100g = parseFloat(kcalInput);
+      if (isNaN(extracted.kcal_per_100g) || extracted.kcal_per_100g <= 0) { alert('有効なカロリー値を入力してください'); return; }
+    }
+
+    dropdownEl.innerHTML = '<div class="food-search-empty" style="color:#4ade80;">📝 フードDB登録中...</div>';
+
+    var body = {
+      brand: extracted.brand || null,
+      name: extracted.name,
+      category: extracted.category || '総合栄養食',
+      food_type: extracted.category === '療法食' ? 'therapeutic' : 'complete',
+      form: extracted.form || 'dry',
+      species: (currentCatData && currentCatData.species) || 'cat',
+      kcal_per_100g: extracted.kcal_per_100g,
+      protein_pct: extracted.protein_pct || null,
+      fat_pct: extracted.fat_pct || null,
+      fiber_pct: extracted.fiber_pct || null,
+      water_pct: extracted.water_pct || null,
+      product_url: url || null,
+    };
+
+    fetch(API_BASE + '/feeding/foods/import', {
+      method: 'POST', headers: apiHeaders(), cache: 'no-store',
+      body: JSON.stringify(body)
+    }).then(function (r) { return r.json(); })
+    .then(function (data) {
+      var food = null;
+      if (data.status === 'created' && data.food) {
+        food = data.food;
+      } else if (data.status === 'duplicate' && data.existing) {
+        food = data.existing;
+      }
+      if (food) {
+        _feedFoodsList.push(food);
+        var sel = document.getElementById('apFoodId');
+        if (sel) {
+          var opt = document.createElement('option');
+          opt.value = food.id;
+          opt.textContent = _foodDisplayName(food);
+          sel.appendChild(opt);
+        }
+        onSelectCb(food);
+      } else {
+        dropdownEl.innerHTML = '<div class="food-search-empty" style="color:#f87171;">登録に失敗: ' + escapeHtml(data.message || data.error || '') + '</div>';
+      }
+    }).catch(function () {
+      dropdownEl.innerHTML = '<div class="food-search-empty" style="color:#f87171;">登録に失敗しました</div>';
+    });
+  }
+
+  function _initFoodSearch(selectId, wrapId, searchId, clearId, dropdownId, onChangeCallback) {
+    var sel = document.getElementById(selectId);
+    var wrap = document.getElementById(wrapId);
+    var input = document.getElementById(searchId);
+    var clearBtn = document.getElementById(clearId);
+    var dropdown = document.getElementById(dropdownId);
+    if (!sel || !wrap || !input || !dropdown) return;
+
+    var selectFood = function (food) {
+      sel.value = food.id;
+      input.value = _foodDisplayName(food);
+      wrap.classList.add('has-value');
+      wrap.classList.remove('open');
+      if (onChangeCallback) onChangeCallback();
+    };
+
+    input.addEventListener('input', function () {
+      var q = input.value.trim();
+      if (sel.value && q !== _foodDisplayName(_findFood(sel.value))) {
+        sel.value = '';
+        wrap.classList.remove('has-value');
+        if (onChangeCallback) onChangeCallback();
+      }
+      _renderFoodDropdown(dropdown, _feedFoodsList, q, selectFood);
+      wrap.classList.add('open');
+    });
+
+    input.addEventListener('focus', function () {
+      _renderFoodDropdown(dropdown, _feedFoodsList, input.value.trim(), selectFood);
+      wrap.classList.add('open');
+    });
+
+    clearBtn.addEventListener('click', function () {
+      sel.value = '';
+      input.value = '';
+      wrap.classList.remove('has-value');
+      wrap.classList.remove('open');
+      if (onChangeCallback) onChangeCallback();
+    });
+
+    document.addEventListener('click', function (e) {
+      if (!wrap.contains(e.target)) {
+        wrap.classList.remove('open');
+      }
+    });
+  }
+
+  function _findFood(foodId) {
+    for (var i = 0; i < _feedFoodsList.length; i++) {
+      if (_feedFoodsList[i].id === foodId) return _feedFoodsList[i];
+    }
+    return null;
+  }
+
+  function setFoodSearchValue(selectId, foodId) {
+    var sel = document.getElementById(selectId);
+    if (!sel) return;
+    sel.value = foodId || '';
+    var wrapId = selectId === 'apFoodId' ? 'apFoodSearchWrap' : 'flFoodSearchWrap';
+    var searchId = selectId === 'apFoodId' ? 'apFoodSearch' : 'flFoodSearch';
+    var wrap = document.getElementById(wrapId);
+    var input = document.getElementById(searchId);
+    if (!input) return;
+    if (foodId) {
+      var food = _findFood(foodId);
+      if (food) {
+        input.value = _foodDisplayName(food);
+        if (wrap) wrap.classList.add('has-value');
+        return;
+      }
+    }
+    input.value = '';
+    if (wrap) wrap.classList.remove('has-value');
+  }
+
+  var _foodSearchInited = {};
+  function populateFoodSelect(sel, foods) {
+    sel.innerHTML = '<option value="">-- 選択 --</option>';
+    for (var i = 0; i < foods.length; i++) {
+      var opt = document.createElement('option');
+      opt.value = foods[i].id;
+      opt.textContent = _foodDisplayName(foods[i]);
+      sel.appendChild(opt);
+    }
+    if (sel.id === 'apFoodId' && !_foodSearchInited['ap']) {
+      _foodSearchInited['ap'] = true;
+      _initFoodSearch('apFoodId', 'apFoodSearchWrap', 'apFoodSearch', 'apFoodClear', 'apFoodDropdown', function () { calcPlanKcal(); });
+    }
+    if (sel.id === 'flFoodId' && !_foodSearchInited['fl']) {
+      _foodSearchInited['fl'] = true;
+      _initFoodSearch('flFoodId', 'flFoodSearchWrap', 'flFoodSearch', 'flFoodClear', 'flFoodDropdown', function () { onFoodSelect(); });
     }
   }
 
@@ -2604,7 +3777,7 @@ function toggleFold(id, btn) {
 
     fetch(url, {
       method: method,
-      headers: apiHeaders(),
+      headers: apiHeaders(), cache: 'no-store',
       body: JSON.stringify(body),
     }).then(function (r) { return r.json(); })
     .then(function (data) {
@@ -2651,7 +3824,7 @@ function toggleFold(id, btn) {
 
     fetch(API_BASE + '/health/records', {
       method: 'POST',
-      headers: apiHeaders(),
+      headers: apiHeaders(), cache: 'no-store',
       body: JSON.stringify(body),
     }).then(function (r) { return r.json(); })
     .then(function (data) {
@@ -2670,14 +3843,55 @@ function toggleFold(id, btn) {
 
   var _clearScheduleId = null;
 
+  var _clinicFileData = null;
+
   window.openClinicRecordModal = function (prefillType, prefillDate) {
     _clearScheduleId = null;
+    _clinicFileData = null;
     var today = new Date().toISOString().slice(0, 10);
     document.getElementById('crDate').value = prefillDate || today;
     document.getElementById('crType').value = prefillType || 'checkup';
     document.getElementById('crContent').value = '';
     document.getElementById('crNextDue').value = '';
+    document.getElementById('crFileInput').value = '';
+    document.getElementById('crFileName').textContent = '';
+    document.getElementById('crFileClear').style.display = 'none';
     document.getElementById('clinicRecordModal').classList.add('open');
+  };
+
+  window.onClinicFileSelected = function (input) {
+    if (!input.files || !input.files[0]) return;
+    var file = input.files[0];
+    if (file.size > 5 * 1024 * 1024) {
+      alert('ファイルサイズが大きすぎます（5MB以下）');
+      input.value = '';
+      return;
+    }
+    var allowed = ['application/pdf', 'image/jpeg', 'image/png', 'image/gif', 'image/webp'];
+    if (allowed.indexOf(file.type) === -1) {
+      alert('対応形式: PDF・画像（JPEG/PNG/GIF/WebP）');
+      input.value = '';
+      return;
+    }
+    var reader = new FileReader();
+    reader.onload = function (e) {
+      _clinicFileData = {
+        name: file.name,
+        mime: file.type,
+        size: file.size,
+        data: e.target.result,
+      };
+      document.getElementById('crFileName').textContent = file.name;
+      document.getElementById('crFileClear').style.display = '';
+    };
+    reader.readAsDataURL(file);
+  };
+
+  window.clearClinicFile = function () {
+    _clinicFileData = null;
+    document.getElementById('crFileInput').value = '';
+    document.getElementById('crFileName').textContent = '';
+    document.getElementById('crFileClear').style.display = 'none';
   };
 
   window.closeClinicRecordModal = function () {
@@ -2689,7 +3903,7 @@ function toggleFold(id, btn) {
     if (!confirm('この予定を受診済みにしますか？')) return;
     fetch(API_BASE + '/health/records/' + recordId, {
       method: 'PUT',
-      headers: apiHeaders(),
+      headers: apiHeaders(), cache: 'no-store',
       body: JSON.stringify({ next_due: null, value: (scheduledDate || '') + ' 受診済み' }),
     }).then(function (r) { return r.json(); })
     .then(function (data) {
@@ -2706,11 +3920,40 @@ function toggleFold(id, btn) {
     });
   };
 
+  window.deleteVetSchedule = function (recordId) {
+    if (!confirm('この病院予定を削除しますか？')) return;
+    fetch(API_BASE + '/health/records/' + recordId, {
+      method: 'DELETE',
+      headers: apiHeaders(), cache: 'no-store',
+    }).then(function (r) { return r.json(); })
+    .then(function (data) {
+      if (data.error) { alert('削除エラー: ' + (data.message || data.error)); return; }
+      loadClinicRecords();
+      loadScoreCard();
+    }).catch(function () { alert('削除に失敗しました'); });
+  };
+
+  window.editVetScheduleDate = function (recordId, currentDate) {
+    var newDate = prompt('新しい予定日（YYYY-MM-DD）:', currentDate);
+    if (!newDate || newDate === currentDate) return;
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(newDate)) { alert('日付形式が正しくありません（YYYY-MM-DD）'); return; }
+    fetch(API_BASE + '/health/records/' + recordId, {
+      method: 'PUT',
+      headers: apiHeaders(), cache: 'no-store',
+      body: JSON.stringify({ next_due: newDate }),
+    }).then(function (r) { return r.json(); })
+    .then(function (data) {
+      if (data.error) { alert('エラー: ' + (data.message || data.error)); return; }
+      loadClinicRecords();
+      loadScoreCard();
+    }).catch(function () { alert('更新に失敗しました'); });
+  };
+
   window.deleteClinicRecord = function (recordId) {
     if (!confirm('この病院記録を削除しますか？\nこの操作は取り消せません。')) return;
     fetch(API_BASE + '/health/records/' + recordId, {
       method: 'DELETE',
-      headers: apiHeaders(),
+      headers: apiHeaders(), cache: 'no-store',
     }).then(function (r) { return r.json(); })
     .then(function (data) {
       if (data.error) { alert('削除エラー: ' + (data.message || data.error)); return; }
@@ -2735,29 +3978,37 @@ function toggleFold(id, btn) {
       details: { note: content },
       next_due: nextDue,
     };
+    if (_clinicFileData) {
+      body.documents = _clinicFileData;
+    }
 
+    var btn = document.getElementById('crSubmitBtn');
+    if (btn) { btn.disabled = true; btn.textContent = '📝 AI整理中…'; }
     var scheduleIdToClear = _clearScheduleId;
 
     fetch(API_BASE + '/health/records', {
       method: 'POST',
-      headers: apiHeaders(),
+      headers: apiHeaders(), cache: 'no-store',
       body: JSON.stringify(body),
     }).then(function (r) { return r.json(); })
     .then(function (data) {
-      if (data.error) { alert('エラー: ' + (data.message || data.error)); return; }
+      if (data.error) { alert('エラー: ' + (data.message || data.error)); if (btn) { btn.disabled = false; btn.textContent = '保存'; } return; }
       if (scheduleIdToClear) {
         return fetch(API_BASE + '/health/records/' + scheduleIdToClear, {
           method: 'PUT',
-          headers: apiHeaders(),
+          headers: apiHeaders(), cache: 'no-store',
           body: JSON.stringify({ next_due: null }),
         });
       }
     }).then(function () {
       _clearScheduleId = null;
+      _clinicFileData = null;
+      if (btn) { btn.disabled = false; btn.textContent = '保存'; }
       closeClinicRecordModal();
       loadClinicRecords();
       loadScoreCard();
     }).catch(function () {
+      if (btn) { btn.disabled = false; btn.textContent = '保存'; }
       alert('病院記録の保存に失敗しました');
     });
   };
@@ -2797,7 +4048,7 @@ function toggleFold(id, btn) {
 
     fetch(API_BASE + '/health/records', {
       method: 'POST',
-      headers: apiHeaders(),
+      headers: apiHeaders(), cache: 'no-store',
       body: JSON.stringify(body),
     }).then(function (r) { return r.json(); })
     .then(function (data) {
@@ -2833,7 +4084,7 @@ function toggleFold(id, btn) {
 
     fetch(API_BASE + '/cats/' + encodeURIComponent(catId), {
       method: 'PUT',
-      headers: apiHeaders(),
+      headers: apiHeaders(), cache: 'no-store',
       body: JSON.stringify({ location_id: locationId, status: status }),
     })
     .then(function (res) { return res.json(); })
@@ -2857,6 +4108,75 @@ function toggleFold(id, btn) {
       alert('通信エラーです');
     });
   };
+
+  // ── 猫写真アップロード ─────────────────────────────────────────────────────────
+
+  window.triggerCatPhotoUpload = function () {
+    var input = document.getElementById('catPhotoInput');
+    if (input) input.click();
+  };
+
+  window.onCatPhotoSelected = function (input) {
+    if (!input.files || !input.files[0]) return;
+    var file = input.files[0];
+    if (file.size > 10 * 1024 * 1024) { alert('ファイルが大きすぎます（10MB以下）'); return; }
+
+    var reader = new FileReader();
+    reader.onload = function (e) {
+      var img = new Image();
+      img.onload = function () {
+        var canvas = document.createElement('canvas');
+        var size = 300;
+        var sx = 0, sy = 0, sw = img.width, sh = img.height;
+        if (sw > sh) { sx = (sw - sh) / 2; sw = sh; }
+        else { sy = (sh - sw) / 2; sh = sw; }
+        canvas.width = size;
+        canvas.height = size;
+        var ctx = canvas.getContext('2d');
+        ctx.drawImage(img, sx, sy, sw, sh, 0, 0, size, size);
+        var dataUrl = canvas.toDataURL('image/jpeg', 0.85);
+        saveCatPhoto(dataUrl);
+      };
+      img.src = e.target.result;
+    };
+    reader.readAsDataURL(file);
+  };
+
+  function saveCatPhoto(dataUrl) {
+    var wrap = document.querySelector('.cat-avatar-wrap');
+    if (wrap) {
+      var existing = wrap.querySelector('.cat-avatar-img, .cat-header-emoji, #catAvatarFallback');
+      if (existing) existing.outerHTML = '<img class="cat-avatar-img" src="' + dataUrl + '" alt="">';
+      var hiddenImg = wrap.querySelector('#catAvatarImg');
+      if (hiddenImg) hiddenImg.remove();
+    }
+
+    fetch(API_BASE + '/cats/' + encodeURIComponent(catId), {
+      method: 'PUT', headers: apiHeaders(), cache: 'no-store',
+      body: JSON.stringify({ photo_url: dataUrl }),
+    }).then(function (r) { return r.json(); })
+    .then(function (data) {
+      if (data.error) { alert('写真の保存に失敗: ' + (data.message || data.error)); return; }
+      if (currentCatData) currentCatData.photo_url = 'r2:cat-photos/' + catId + '.jpg';
+    }).catch(function () { alert('写真の保存に失敗しました'); });
+  }
+
+  function loadCatPhotoFromR2() {
+    fetch(API_BASE + '/cats/' + encodeURIComponent(catId) + '/photo?t=' + Date.now(), {
+      headers: apiHeaders(), cache: 'no-store',
+    }).then(function (r) {
+      if (!r.ok) throw new Error('not found');
+      return r.blob();
+    }).then(function (blob) {
+      var url = URL.createObjectURL(blob);
+      var img = document.getElementById('catAvatarImg');
+      var fallback = document.getElementById('catAvatarFallback');
+      if (img) { img.src = url; img.style.display = ''; }
+      if (fallback) fallback.style.display = 'none';
+    }).catch(function () {
+      /* R2 photo not available — keep emoji fallback visible */
+    });
+  }
 
   // ── 名前変更モーダル ─────────────────────────────────────────────────────────
 
@@ -2883,7 +4203,7 @@ function toggleFold(id, btn) {
 
     fetch(API_BASE + '/cats/' + encodeURIComponent(catId), {
       method: 'PUT',
-      headers: apiHeaders(),
+      headers: apiHeaders(), cache: 'no-store',
       body: JSON.stringify({ name: newName }),
     })
     .then(function (res) { return res.json(); })
@@ -2911,13 +4231,13 @@ function toggleFold(id, btn) {
   var careTypesCache = [];
 
   window.openCareModal = function () {
-    var today = new Date().toISOString().slice(0, 10);
+    var today = todayJstYmd();
     document.getElementById('careDate').value = today;
     document.getElementById('careDone').value = '1';
     document.getElementById('careTypeVoice').value = '';
     document.getElementById('careType').value = '';
     if (careTypesCache.length === 0) {
-      fetch(API_BASE + '/health/care-types', { headers: apiHeaders() }).then(function (r) { return r.json(); })
+      fetch(API_BASE + '/health/care-types', { headers: apiHeaders(), cache: 'no-store' }).then(function (r) { return r.json(); })
         .then(function (data) {
           careTypesCache = data.care_types || [];
           populateCareTypeSelect();
@@ -2998,7 +4318,7 @@ function toggleFold(id, btn) {
 
     fetch(API_BASE + '/health/records', {
       method: 'POST',
-      headers: apiHeaders(),
+      headers: apiHeaders(), cache: 'no-store',
       body: JSON.stringify(body),
     }).then(function (r) { return r.json(); })
     .then(function (data) {
@@ -3042,7 +4362,7 @@ function toggleFold(id, btn) {
 
     fetch(API_BASE + '/health/records', {
       method: 'POST',
-      headers: apiHeaders(),
+      headers: apiHeaders(), cache: 'no-store',
       body: JSON.stringify(body),
     }).then(function (r) { return r.json(); })
     .then(function (data) {
@@ -3075,10 +4395,13 @@ function toggleFold(id, btn) {
       value: value,
       details: details,
     };
+    if (careDone && (recordType === 'care' || recordType === 'eye_discharge')) {
+      body.recorded_time = nowJstHm();
+    }
 
     fetch(API_BASE + '/health/records', {
       method: 'POST',
-      headers: apiHeaders(),
+      headers: apiHeaders(), cache: 'no-store',
       body: JSON.stringify(body),
     }).then(function (r) { return r.json(); })
     .then(function (data) {
@@ -3094,6 +4417,47 @@ function toggleFold(id, btn) {
 
   function renderInfoCell(label, value) {
     return '<div class="info-cell"><div class="info-label">' + escapeHtml(label) + '</div><div class="info-value">' + escapeHtml(value) + '</div></div>';
+  }
+
+  // ── 次回投薬日計算 ─────────────────────────────────────────────────────────────
+  var _DOW_MAP = { '日': 0, '月': 1, '火': 2, '水': 3, '木': 4, '金': 5, '土': 6 };
+
+  function _shouldDose(freq, dateStr, startDate) {
+    if (!freq || freq === '毎日') return true;
+    if (freq === '必要時') return false;
+    var d = new Date(dateStr + 'T00:00:00Z');
+    if (freq.indexOf('週:') === 0) {
+      var days = freq.slice(2).split(',');
+      var dow = d.getUTCDay();
+      for (var i = 0; i < days.length; i++) { if (_DOW_MAP[days[i].trim()] === dow) return true; }
+      return false;
+    }
+    if (freq.indexOf('月1:') === 0) {
+      var dayOfMonth = parseInt(freq.slice(3), 10);
+      return d.getUTCDate() === dayOfMonth;
+    }
+    var daysBetween = Math.round((d - new Date(startDate + 'T00:00:00Z')) / 86400000);
+    if (daysBetween < 0) return false;
+    if (freq === '隔日' || freq === '隔日(A)') return daysBetween % 2 === 0;
+    if (freq === '隔日(B)') return daysBetween % 2 === 1;
+    return true;
+  }
+
+  function calcNextDoseDate(freq, startDate) {
+    var today = new Date();
+    for (var i = 1; i <= 60; i++) {
+      var check = new Date(today.getTime() + i * 86400000);
+      var ds = check.toISOString().slice(0, 10);
+      if (_shouldDose(freq, ds, startDate || ds)) return ds;
+    }
+    return null;
+  }
+
+  function formatFreqLabel(freq) {
+    if (!freq) return '毎日';
+    if (freq.indexOf('週:') === 0) return '毎週 ' + freq.slice(2);
+    if (freq.indexOf('月1:') === 0) return '毎月' + freq.slice(3) + '日';
+    return freq;
   }
 
   // ── ユーティリティ ────────────────────────────────────────────────────────────
@@ -3140,7 +4504,7 @@ function toggleFold(id, btn) {
     var dateStr = y + '-' + mo + '-' + d;
     var url = API_BASE + '/tasks?date=' + dateStr + '&cat_id=' + encodeURIComponent(catId);
 
-    fetch(url, { headers: apiHeaders() })
+    fetch(url, { headers: apiHeaders(), cache: 'no-store' })
       .then(function (res) { return res.json(); })
       .then(function (data) {
         var tasks = data.tasks || [];
@@ -3178,7 +4542,7 @@ function toggleFold(id, btn) {
   window.catTaskDone = function (taskId) {
     fetch(API_BASE + '/tasks/' + taskId + '/done', {
       method: 'POST',
-      headers: apiHeaders(),
+      headers: apiHeaders(), cache: 'no-store',
       body: JSON.stringify({}),
     }).then(function (res) {
       if (res.ok) loadCatTasks();
@@ -3192,7 +4556,7 @@ function toggleFold(id, btn) {
     catNotesArea.innerHTML = '<div class="detail-section"><div class="section-header"><div class="detail-title">📝 注意事項</div><button class="btn-add" onclick="openCatNoteModal()">+ 追加</button></div><div class="loading" style="padding:16px;">読み込み中...</div></div>';
 
     fetch(API_BASE + '/cat-notes?cat_id=' + encodeURIComponent(catId) + '&exclude_categories=feeding,nutrition,medication&limit=30', {
-      headers: apiHeaders(),
+      headers: apiHeaders(), cache: 'no-store',
     }).then(function (res) { return res.json(); })
     .then(function (data) {
       renderCatNotes(data.notes || []);
@@ -3273,7 +4637,7 @@ function toggleFold(id, btn) {
 
     fetch(API_BASE + '/cat-notes', {
       method: 'POST',
-      headers: apiHeaders(),
+      headers: apiHeaders(), cache: 'no-store',
       body: JSON.stringify({
         cat_id: catId,
         note: note,
@@ -3293,7 +4657,7 @@ function toggleFold(id, btn) {
   window.togglePin = function (noteId, pinned) {
     fetch(API_BASE + '/cat-notes/' + noteId, {
       method: 'PUT',
-      headers: apiHeaders(),
+      headers: apiHeaders(), cache: 'no-store',
       body: JSON.stringify({ pinned: pinned }),
     }).then(function (r) { return r.json(); })
     .then(function () { loadCatNotes(); })
@@ -3309,7 +4673,7 @@ function toggleFold(id, btn) {
       if (mod === 'weight') { loadWeightChart(); loadCalorieSection(); }
       if (mod === 'stool') { loadStoolSection(); }
       if (mod === 'health' || mod === 'vomiting' || mod === 'behavior') { loadCareSection(); loadHealthRecords(); loadClinicRecords(); }
-      if (mod === 'feeding') { loadFeedingSection(); loadFeedingMemo(); }
+      if (mod === 'feeding') { loadFeedingSection(); }
       if (mod === 'medication') { loadMedicationSchedule(); }
     } catch (_) {}
   };
@@ -3367,6 +4731,306 @@ function toggleFold(id, btn) {
 
   window.stopInlineVoice = function () {
     if (_inlineSR) { try { _inlineSR.abort(); } catch (_) {} _inlineSR = null; }
+  };
+
+  // ── 投薬プリセット ─────────────────────────────────────────────────────────────
+
+  var _medPresets = [];
+  var _editingMedPresetId = null;
+
+  window.deleteMedPresetConfirm = function (presetId) {
+    if (!confirm('このプリセットを削除しますか？')) return;
+    fetch(API_BASE + '/health/medication-presets/' + presetId, {
+      method: 'DELETE', headers: apiHeaders(), cache: 'no-store',
+    }).then(function (r) { return r.json(); })
+    .then(function (data) {
+      if (data.error) { alert('エラー: ' + (data.message || data.error)); return; }
+      _medActiveTab = 'preset';
+      loadMedicationSchedule();
+    }).catch(function () { alert('削除に失敗しました'); });
+  };
+
+  window.editMedPreset = function (presetId) {
+    _editingMedPresetId = presetId;
+    var p = null;
+    for (var i = 0; i < _medPresets.length; i++) {
+      if (_medPresets[i].id === presetId) { p = _medPresets[i]; break; }
+    }
+    var titleEl = document.getElementById('mpEditTitle');
+    if (titleEl && p) titleEl.textContent = '📋 ' + p.name + ' の編集';
+
+    var editModal = document.getElementById('medPresetEditModal');
+    if (editModal) editModal.classList.add('open');
+
+    loadMedPresetMedicines();
+    loadMedPresetItems(presetId);
+  };
+
+  function loadMedPresetMedicines() {
+    var sel = document.getElementById('mpMedicineId');
+    if (!sel) return;
+    if (_medicinesList && _medicinesList.length > 0) {
+      populateMedPresetMedicineSelect(sel);
+      _initMedSearch();
+      return;
+    }
+    var sp = (currentCatData && currentCatData.species) || 'cat';
+    fetch(API_BASE + '/health/medicines?species=' + sp, { headers: apiHeaders(), cache: 'no-store' })
+      .then(function (r) { return r.json(); })
+      .then(function (data) {
+        _medicinesList = data.medicines || [];
+        populateMedPresetMedicineSelect(sel);
+        _initMedSearch();
+      });
+  }
+
+  function populateMedPresetMedicineSelect(sel) {
+    sel.innerHTML = '<option value="">選択してください</option>';
+    for (var i = 0; i < _medicinesList.length; i++) {
+      var m = _medicinesList[i];
+      var opt = document.createElement('option');
+      opt.value = m.id;
+      opt.textContent = m.name + (m.form ? ' (' + m.form + ')' : '');
+      sel.appendChild(opt);
+    }
+  }
+
+  // ── 薬検索UI ──
+  function _initMedSearch() {
+    var input = document.getElementById('mpMedSearchInput');
+    var dropdown = document.getElementById('mpMedSearchDropdown');
+    var sel = document.getElementById('mpMedicineId');
+    if (!input || !dropdown || !sel) return;
+
+    input.removeEventListener('input', _onMedSearchInput);
+    input.addEventListener('input', _onMedSearchInput);
+    input.removeEventListener('focus', _onMedSearchFocus);
+    input.addEventListener('focus', _onMedSearchFocus);
+    document.removeEventListener('click', _onMedSearchBlur);
+    document.addEventListener('click', _onMedSearchBlur);
+  }
+
+  function _onMedSearchInput() { _renderMedDropdown(); }
+  function _onMedSearchFocus() { _renderMedDropdown(); }
+  function _onMedSearchBlur(e) {
+    var wrap = document.getElementById('mpMedSearchWrap');
+    if (wrap && !wrap.contains(e.target)) {
+      var dd = document.getElementById('mpMedSearchDropdown');
+      if (dd) dd.style.display = 'none';
+    }
+  }
+
+  function _renderMedDropdown() {
+    var input = document.getElementById('mpMedSearchInput');
+    var dropdown = document.getElementById('mpMedSearchDropdown');
+    if (!input || !dropdown) return;
+    var q = input.value.trim().toLowerCase();
+
+    var filtered = _medicinesList;
+    if (q) {
+      filtered = _medicinesList.filter(function (m) {
+        var label = (m.name || '') + ' ' + (m.form || '') + ' ' + (m.category || '');
+        return label.toLowerCase().indexOf(q) !== -1;
+      });
+    }
+
+    if (filtered.length === 0) {
+      dropdown.innerHTML = '<div style="padding:8px;color:var(--text-dim);font-size:12px;">該当なし</div>';
+      dropdown.style.display = 'block';
+      return;
+    }
+
+    var html = '';
+    for (var i = 0; i < Math.min(filtered.length, 30); i++) {
+      var m = filtered[i];
+      var label = escapeHtml(m.name) + (m.form ? ' <span style="color:var(--text-dim);font-size:11px;">(' + escapeHtml(m.form) + ')</span>' : '');
+      html += '<div class="food-search-item" data-med-id="' + escapeHtml(m.id) + '" data-med-name="' + escapeHtml(m.name + (m.form ? ' (' + m.form + ')' : '')) + '">' + label + '</div>';
+    }
+    dropdown.innerHTML = html;
+    dropdown.style.display = 'block';
+
+    var items = dropdown.querySelectorAll('.food-search-item');
+    for (var j = 0; j < items.length; j++) {
+      items[j].addEventListener('click', function () {
+        var medId = this.getAttribute('data-med-id');
+        var medName = this.getAttribute('data-med-name');
+        var sel = document.getElementById('mpMedicineId');
+        if (sel) sel.value = medId;
+        var inp = document.getElementById('mpMedSearchInput');
+        if (inp) inp.value = medName;
+        dropdown.style.display = 'none';
+      });
+    }
+  }
+
+  // ── 新規薬登録 ──
+  window.toggleNewMedForm = function () {
+    var form = document.getElementById('mpNewMedForm');
+    if (form) form.style.display = form.style.display === 'none' ? 'block' : 'none';
+  };
+
+  window.registerNewMedicine = function () {
+    var nameEl = document.getElementById('mpNewMedName');
+    var name = nameEl ? nameEl.value.trim() : '';
+    if (!name) { alert('薬名を入力してください'); return; }
+
+    var btn = document.querySelector('#mpNewMedForm .btn-primary');
+    if (btn) { btn.disabled = true; btn.textContent = '🔍 情報取得中...'; }
+
+    fetch(API_BASE + '/health/medicines', {
+      method: 'POST', headers: apiHeaders(), cache: 'no-store',
+      body: JSON.stringify({ name: name }),
+    }).then(function (r) { return r.json(); })
+    .then(function (data) {
+      if (btn) { btn.disabled = false; btn.textContent = '登録して選択'; }
+      if (data.error) { alert('エラー: ' + (data.message || data.error)); return; }
+      var med = data.medicine;
+      _medicinesList.push(med);
+      var sel = document.getElementById('mpMedicineId');
+      if (sel) {
+        var opt = document.createElement('option');
+        opt.value = med.id;
+        opt.textContent = med.name + (med.form ? ' (' + med.form + ')' : '');
+        sel.appendChild(opt);
+        sel.value = med.id;
+      }
+      var inp = document.getElementById('mpMedSearchInput');
+      if (inp) inp.value = med.name + (med.form ? ' (' + med.form + ')' : '');
+      if (nameEl) nameEl.value = '';
+      var form = document.getElementById('mpNewMedForm');
+      if (form) form.style.display = 'none';
+
+      var msg = '「' + med.name + '」を登録しました';
+      if (data.ai_enriched) {
+        var details = [];
+        if (med.category && med.category !== 'other') details.push('分類: ' + med.category);
+        if (med.form) details.push('剤形: ' + med.form);
+        if (med.generic_name) details.push('一般名: ' + med.generic_name);
+        if (med.notes) details.push('備考: ' + med.notes);
+        if (details.length) msg += '\n\n📋 自動取得情報:\n' + details.join('\n');
+      }
+      alert(msg);
+    }).catch(function () {
+      if (btn) { btn.disabled = false; btn.textContent = '登録して選択'; }
+      alert('登録に失敗しました');
+    });
+  };
+
+  // ── 頻度の切り替え ──
+  window.onMpFreqChange = function () {
+    var val = document.getElementById('mpFrequency') ? document.getElementById('mpFrequency').value : '';
+    var wk = document.getElementById('mpFreqWeekly');
+    var mo = document.getElementById('mpFreqMonthly');
+    if (wk) wk.style.display = val === 'weekly' ? 'block' : 'none';
+    if (mo) mo.style.display = val === 'monthly' ? 'block' : 'none';
+  };
+
+  function loadMedPresetItems(presetId) {
+    fetch(API_BASE + '/health/medication-presets/' + presetId + '/items', { headers: apiHeaders(), cache: 'no-store' })
+      .then(function (r) { return r.json(); })
+      .then(function (data) {
+        renderMedPresetItems(data.items || []);
+      });
+  }
+
+  function renderMedPresetItems(items) {
+    var el = document.getElementById('mpEditItemList');
+    if (!el) return;
+    if (items.length === 0) {
+      el.innerHTML = '<div class="empty-msg">薬が登録されていません</div>';
+      return;
+    }
+    var html = '';
+    for (var i = 0; i < items.length; i++) {
+      var it = items[i];
+      var slots = [];
+      try { slots = JSON.parse(it.time_slots || '[]'); } catch (_) {}
+      var slotLabels = '';
+      for (var s = 0; s < slots.length; s++) {
+        var cls = slots[s] === '朝' ? 'background:rgba(250,204,21,0.2);color:#facc15;' : slots[s] === '晩' ? 'background:rgba(129,140,248,0.2);color:#818cf8;' : 'background:rgba(74,222,128,0.15);color:#4ade80;';
+        slotLabels += '<span style="display:inline-block;padding:1px 6px;border-radius:4px;font-size:10px;font-weight:600;' + cls + '">' + escapeHtml(slots[s]) + '</span> ';
+      }
+      html += '<div style="display:flex;justify-content:space-between;align-items:center;padding:8px 10px;background:var(--surface);border-radius:6px;margin-bottom:4px;">';
+      html += '<div>';
+      html += '<div style="font-size:13px;font-weight:600;">' + escapeHtml(it.medicine_name || '') + '</div>';
+      html += '<div style="font-size:11px;color:var(--text-dim);">';
+      if (it.dosage_amount) html += it.dosage_amount + (it.dosage_unit ? escapeHtml(it.dosage_unit) : '') + ' ';
+      html += escapeHtml(formatFreqLabel(it.frequency || '毎日')) + ' ';
+      html += slotLabels;
+      if (it.route) html += '(' + escapeHtml(it.route) + ')';
+      html += '</div></div>';
+      html += '<button class="btn-med-stop" onclick="deleteMedPresetItemConfirm(' + it.id + ')" title="削除">🗑</button>';
+      html += '</div>';
+    }
+    el.innerHTML = html;
+  }
+
+  window.addMedPresetItem = function () {
+    var medId = document.getElementById('mpMedicineId') ? document.getElementById('mpMedicineId').value : '';
+    if (!medId) { alert('薬を選択してください'); return; }
+    var amount = document.getElementById('mpDosageAmount') ? parseFloat(document.getElementById('mpDosageAmount').value) : null;
+    var unit = document.getElementById('mpDosageUnit') ? document.getElementById('mpDosageUnit').value : '';
+    var freqSelect = document.getElementById('mpFrequency') ? document.getElementById('mpFrequency').value : '毎日';
+    var route = document.getElementById('mpRoute') ? document.getElementById('mpRoute').value : '経口';
+
+    // 頻度の値を組み立て
+    var freq = freqSelect;
+    if (freqSelect === 'weekly') {
+      var dowChecks = document.querySelectorAll('input[name="mpDow"]:checked');
+      var days = [];
+      for (var d = 0; d < dowChecks.length; d++) days.push(dowChecks[d].value);
+      if (days.length === 0) { alert('曜日を1つ以上選択してください'); return; }
+      freq = '週:' + days.join(',');
+    } else if (freqSelect === 'monthly') {
+      var dayOfMonth = document.getElementById('mpMonthDay') ? parseInt(document.getElementById('mpMonthDay').value, 10) : 0;
+      if (!dayOfMonth || dayOfMonth < 1 || dayOfMonth > 28) { alert('1〜28の日付を入力してください'); return; }
+      freq = '月1:' + dayOfMonth;
+    }
+
+    var checks = document.querySelectorAll('#mpSlotChecks input[type="checkbox"]:checked');
+    var slots = [];
+    for (var c = 0; c < checks.length; c++) slots.push(checks[c].value);
+    if (slots.length === 0) { alert('タイミング（朝/晩）を1つ以上選択してください'); return; }
+
+    fetch(API_BASE + '/health/medication-presets/' + _editingMedPresetId + '/items', {
+      method: 'POST', headers: apiHeaders(), cache: 'no-store',
+      body: JSON.stringify({
+        medicine_id: medId,
+        dosage_amount: amount || null,
+        dosage_unit: unit || null,
+        frequency: freq,
+        time_slots: slots,
+        route: route,
+      }),
+    }).then(function (r) { return r.json(); })
+    .then(function (data) {
+      if (data.error) { alert('エラー: ' + (data.message || data.error)); return; }
+      var selEl = document.getElementById('mpMedicineId');
+      if (selEl) selEl.value = '';
+      var inp = document.getElementById('mpMedSearchInput');
+      if (inp) inp.value = '';
+      var amtEl = document.getElementById('mpDosageAmount');
+      if (amtEl) amtEl.value = '';
+      loadMedPresetItems(_editingMedPresetId);
+    }).catch(function () { alert('追加に失敗しました'); });
+  };
+
+  window.deleteMedPresetItemConfirm = function (itemId) {
+    if (!confirm('この薬をプリセットから削除しますか？')) return;
+    fetch(API_BASE + '/health/medication-presets/' + _editingMedPresetId + '/items/' + itemId, {
+      method: 'DELETE', headers: apiHeaders(), cache: 'no-store',
+    }).then(function (r) { return r.json(); })
+    .then(function (data) {
+      if (data.error) { alert('エラー: ' + (data.message || data.error)); return; }
+      loadMedPresetItems(_editingMedPresetId);
+    }).catch(function () { alert('削除に失敗しました'); });
+  };
+
+  window.closeMedPresetEditModal = function () {
+    var editModal = document.getElementById('medPresetEditModal');
+    if (editModal) editModal.classList.remove('open');
+    _medActiveTab = 'preset';
+    loadMedicationSchedule();
   };
 
 })();

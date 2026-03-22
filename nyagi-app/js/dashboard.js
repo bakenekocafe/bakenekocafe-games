@@ -26,6 +26,10 @@
       var stored = localStorage.getItem('nyagi_creds');
       if (stored) return JSON.parse(stored);
     } catch (_) {}
+    try {
+      var m = document.cookie.match(/(?:^|; )nyagi_creds=([^;]*)/);
+      if (m) { var p = JSON.parse(decodeURIComponent(m[1])); if (p && p.staffId) { localStorage.setItem('nyagi_creds', JSON.stringify(p)); return p; } }
+    } catch (_) {}
     return null;
   }
 
@@ -148,8 +152,8 @@
     var q = locationQuery();
     var ctrl = new AbortController();
     var timeoutId = setTimeout(function () { ctrl.abort(); }, 30000);
-    var morningReq = fetch(API_BASE + '/morning' + q, { headers: apiHeaders(), signal: ctrl.signal }).then(function (r) { return r.json(); });
-    var eveningReq = fetch(API_BASE + '/evening' + q, { headers: apiHeaders(), signal: ctrl.signal }).then(function (r) { return r.json(); });
+    var morningReq = fetch(API_BASE + '/morning' + q, { headers: apiHeaders(), cache: 'no-store', signal: ctrl.signal }).then(function (r) { return r.json(); });
+    var eveningReq = fetch(API_BASE + '/evening' + q, { headers: apiHeaders(), cache: 'no-store', signal: ctrl.signal }).then(function (r) { return r.json(); });
 
     Promise.all([morningReq, eveningReq])
       .then(function (results) {
@@ -485,7 +489,7 @@
       saveBtn.textContent = '保存中…';
       fetch(_origin + '/api/ops/health/records/' + recordId, {
         method: 'PUT',
-        headers: apiHeaders(),
+        headers: apiHeaders(), cache: 'no-store',
         body: JSON.stringify({ booked_date: bookedValue }),
       }).then(function (r) { return r.json(); })
       .then(function (data) {
@@ -503,7 +507,7 @@
     var today = new Date().toISOString().slice(0, 10);
     function postLog(id) {
       var endpoint = HEALTH_API_BASE + '/medication-logs/' + id + '/' + action;
-      fetch(endpoint, { method: 'POST', headers: apiHeaders(), body: JSON.stringify({}) })
+      fetch(endpoint, { method: 'POST', headers: apiHeaders(), cache: 'no-store', body: JSON.stringify({}) })
         .then(function (r) { return r.json(); })
         .then(function (data) {
           if (data.error) { alert('エラー: ' + (data.message || data.error)); return; }
@@ -515,7 +519,7 @@
       postLog(logId);
       return;
     }
-    fetch(HEALTH_API_BASE + '/medication-logs?cat_id=' + encodeURIComponent(catId) + '&date=' + today, { headers: apiHeaders() })
+    fetch(HEALTH_API_BASE + '/medication-logs?cat_id=' + encodeURIComponent(catId) + '&date=' + today, { headers: apiHeaders(), cache: 'no-store' })
       .then(function (r) { return r.json(); })
       .then(function (data) {
         var logs = data.logs || [];
@@ -787,7 +791,7 @@
     var d = ('0' + today.getDate()).slice(-2);
     var dateStr = y + '-' + mo + '-' + d;
     var url = _origin + '/api/ops/tasks?date=' + dateStr + '&group_by=attribute';
-    fetch(url, { headers: apiHeaders() })
+    fetch(url, { headers: apiHeaders(), cache: 'no-store' })
       .then(function (r) { return r.json(); })
       .then(function (data) {
         var prog = data.progress || {};

@@ -22,6 +22,10 @@ function loadCredentials() {
     var raw = localStorage.getItem('nyagi_creds');
     if (raw) return JSON.parse(raw);
   } catch (_) {}
+  try {
+    var m = document.cookie.match(/(?:^|; )nyagi_creds=([^;]*)/);
+    if (m) { var p = JSON.parse(decodeURIComponent(m[1])); if (p && p.staffId) { localStorage.setItem('nyagi_creds', JSON.stringify(p)); return p; } }
+  } catch (_) {}
   return null;
 }
 
@@ -72,7 +76,7 @@ function handleUrlScrape(url) {
 
   fetch(API_BASE + '/foods/scrape', {
     method: 'POST',
-    headers: apiHeaders(),
+    headers: apiHeaders(), cache: 'no-store',
     body: JSON.stringify({ url: url })
   })
   .then(function(r) { return r.json(); })
@@ -82,10 +86,15 @@ function handleUrlScrape(url) {
 
     if (data.status === 'ok' && data.extracted) {
       showPreview(data.extracted, url);
-      showToast('データ取得成功', 'success');
+      var ext = data.extracted;
+      var summary = [];
+      if (ext.name) summary.push(ext.name);
+      if (ext.kcal_per_100g) summary.push(ext.kcal_per_100g + 'kcal/100g');
+      if (ext.brand) summary.push(ext.brand);
+      showToast('取得成功' + (summary.length ? ': ' + summary.join(' / ') : '') + ' — 確認して登録', 'success');
     } else {
       showPreview({}, url);
-      showToast('自動取得失敗 — 手動入力してください', 'warning');
+      showToast('自動取得失敗 — 下のフォームに手動入力してください', 'warning');
     }
   })
   .catch(function(err) {
@@ -104,10 +113,11 @@ function handleTextSearch(query) {
   btn.textContent = '検索中...';
   hideCandidates();
 
+  var species = currentSpeciesFilter !== 'all' ? currentSpeciesFilter : 'cat';
   fetch(API_BASE + '/foods/search', {
     method: 'POST',
-    headers: apiHeaders(),
-    body: JSON.stringify({ query: query })
+    headers: apiHeaders(), cache: 'no-store',
+    body: JSON.stringify({ query: query, species: species })
   })
   .then(function(r) { return r.json(); })
   .then(function(data) {
@@ -118,16 +128,20 @@ function handleTextSearch(query) {
       currentPreviewUrl = data.url || '';
       showPreview(data.extracted, data.url);
       showCandidates(data.candidates || []);
-      showToast('「' + query + '」のデータを取得しました', 'success');
+      var ext = data.extracted;
+      var summary = [];
+      if (ext.name) summary.push(ext.name);
+      if (ext.kcal_per_100g) summary.push(ext.kcal_per_100g + 'kcal/100g');
+      showToast('取得成功' + (summary.length ? ': ' + summary.join(' / ') : '') + ' — 確認して登録', 'success');
     } else if (data.status === 'partial') {
       currentPreviewUrl = data.url || '';
       showPreview({}, data.url);
       showCandidates(data.candidates || []);
-      showToast('ページからデータ抽出不可 — 候補を選択 or 手動入力', 'warning');
+      showToast('候補あり — 候補を選択するか手動入力してください', 'warning');
     } else if (data.status === 'no_results') {
-      showToast('検索結果なし — URLを直接入力してください', 'warning');
+      showToast('検索結果なし — URLを直接貼り付けてください', 'warning');
     } else {
-      showToast('検索失敗: ' + (data.message || ''), 'error');
+      showToast('検索失敗: ' + (data.message || '') + ' — URLを直接貼り付けてください', 'error');
     }
   })
   .catch(function(err) {
@@ -212,6 +226,10 @@ function showPreview(data, url) {
   var form = data.form || (url && url.indexOf('dry') !== -1 ? 'dry' : '');
   if (form) document.getElementById('pForm').value = form;
 
+  if (data.species && (data.species === 'cat' || data.species === 'dog')) {
+    document.getElementById('pSpecies').value = data.species;
+  }
+
   card.classList.toggle('has-data', filledCount > 2);
 
   if (filledCount > 2) {
@@ -282,7 +300,7 @@ function handleRegister() {
 
   fetch(API_BASE + '/foods/import', {
     method: 'POST',
-    headers: apiHeaders(),
+    headers: apiHeaders(), cache: 'no-store',
     body: JSON.stringify(body)
   })
   .then(function(r) { return r.json(); })
@@ -297,7 +315,13 @@ function handleRegister() {
       loadFoodList();
     } else if (data.status === 'duplicate') {
       var reason = data.reason === 'url' ? 'URL一致' : 'ブランド+名前一致';
-      showToast('重複: ' + reason + ' — 「' + data.existing.name + '」は登録済み', 'warning');
+      if (data.enriched) {
+        showToast('既存データ更新: ' + data.enriched_fields + '項目追加 — 「' + data.existing.name + '」', 'success');
+        showPreview(data.existing, data.existing.product_url);
+        loadFoodList();
+      } else {
+        showToast('重複: ' + reason + ' — 「' + data.existing.name + '」は登録済み', 'warning');
+      }
     } else if (data.error === 'missing_fields') {
       showToast('必須項目不足: ' + data.message, 'error');
     } else {
@@ -320,7 +344,7 @@ function parseFloatOrNull(id) {
 
 function loadFoodList() {
   fetch(API_BASE + '/foods?active=0', {
-    headers: apiHeaders()
+    headers: apiHeaders(), cache: 'no-store'
   })
   .then(function(r) { return r.json(); })
   .then(function(data) {

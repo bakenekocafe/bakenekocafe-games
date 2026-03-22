@@ -183,6 +183,16 @@
   white-space: nowrap;
 }
 
+.vc-panel-filter {
+  font-size: 10px;
+  color: var(--text-dim);
+  background: var(--surface-alt);
+  padding: 2px 8px;
+  border-radius: 4px;
+  white-space: nowrap;
+  grid-column: 1 / -1;
+}
+
 .vc-panel-minimize {
   background: none;
   border: none;

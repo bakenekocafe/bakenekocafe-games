@@ -469,6 +469,21 @@
       opacity: 0.5;
     }
     .cat-note-pin:hover { opacity: 1; }
+    .cat-note-actions {
+      display: flex;
+      gap: 12px;
+      margin-top: 8px;
+      font-size: 11px;
+    }
+    .cat-note-actions button {
+      background: none;
+      border: none;
+      padding: 0;
+      cursor: pointer;
+      color: var(--accent, #93c5fd);
+      text-decoration: underline;
+    }
+    .cat-note-actions button.cat-note-del { color: #f87171; }
 
     /* モーダル */
     .modal-overlay {
@@ -860,6 +875,7 @@
     <div id="basicInfoArea"></div>
     <div id="catNotesArea"></div>
     <div id="catTasksArea"></div>
+    <div id="healthRecordsArea"></div>
     <div id="weightChartArea"></div>
     <div id="calorieArea" style="scroll-margin-top: 16px;"></div>
     <div id="feedingArea"></div>
@@ -867,7 +883,6 @@
     <div id="stoolArea"></div>
     <div id="urineArea"></div>
     <div id="medicationScheduleArea"></div>
-    <div id="healthRecordsArea"></div>
     <div id="vetScheduleArea"></div>
     <div id="clinicRecordsArea"></div>
     <div id="actionsArea"></div>
@@ -975,10 +990,11 @@
   <!-- プリセット適用/管理モーダル -->
   <div id="presetApplyModal" class="modal-overlay"></div>
 
-  <!-- 注意事項追加モーダル -->
+  <!-- 注意事項追加・編集モーダル -->
   <div id="catNoteModal" class="modal-overlay">
     <div class="modal-box">
-      <div class="modal-title">注意事項を追加</div>
+      <div class="modal-title" id="cnModalTitle">注意事項を追加</div>
+      <input type="hidden" id="cnEditId" value="">
       <div class="form-group">
         <label class="form-label">内容 * <button type="button" class="inline-mic-btn" data-voice-for="cnNote" onclick="startInlineVoice('cnNote')">🎤</button></label>
         <textarea id="cnNote" class="form-textarea" placeholder="気づきや注意事項を記入..." style="min-height:80px;"></textarea>
@@ -1003,6 +1019,22 @@
       <div class="modal-actions">
         <button class="btn btn-outline" onclick="closeCatNoteModal()">キャンセル</button>
         <button class="btn btn-primary" onclick="submitCatNote()">保存</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- 内部メモ（cats.internal_note）編集 -->
+  <div id="internalNoteModal" class="modal-overlay">
+    <div class="modal-box">
+      <div class="modal-title">内部メモを編集</div>
+      <p style="font-size:12px;color:var(--text-dim);margin:0 0 10px;">スタッフ向けの注意事項（公開プロフィールの説明欄とは別）</p>
+      <div class="form-group">
+        <label class="form-label">内容 <button type="button" class="inline-mic-btn" data-voice-for="inNoteText" onclick="startInlineVoice('inNoteText')">🎤</button></label>
+        <textarea id="inNoteText" class="form-textarea" placeholder="ケア上の注意など..." style="min-height:120px;"></textarea>
+      </div>
+      <div class="modal-actions">
+        <button class="btn btn-outline" onclick="closeInternalNoteModal()">キャンセル</button>
+        <button class="btn btn-primary" onclick="submitInternalNote()">保存</button>
       </div>
     </div>
   </div>
@@ -1453,7 +1485,7 @@
   <script src="config.js?v=202"></script>
   <script src="js/login-gate.js?v=202"></script>
   <script src="js/app.js?v=202"></script>
-  <script src="js/cat-detail.js?v=202"></script>
+  <script src="js/cat-detail.js?v=210"></script>
   <script src="js/voice-console.js?v=202"></script>
 </body>
 </html>

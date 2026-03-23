@@ -12,6 +12,432 @@
     var o = (window.NYAGI_API_ORIGIN != null) ? window.NYAGI_API_ORIGIN : '';
     return o + '/api/ops/cats/overview';
   }
+
+  function apiOpsBase() {
+    var o = (window.NYAGI_API_ORIGIN != null) ? window.NYAGI_API_ORIGIN : '';
+    return o + '/api/ops';
+  }
+
+  /** JST の YYYY-MM-DD */
+  function todayJstYmd() {
+    return new Date().toLocaleDateString('sv-SE', { timeZone: 'Asia/Tokyo' });
+  }
+
+  /** JST の HH:mm */
+  function nowJstHm() {
+    return new Date().toLocaleTimeString('en-GB', {
+      timeZone: 'Asia/Tokyo',
+      hour: '2-digit',
+      minute: '2-digit',
+      hour12: false,
+    });
+  }
+
+  function escAttr(s) {
+    return String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;');
+  }
+
+  /** cat.html モーダルと同じ value（排便・排尿） */
+  var OPT_STOOL_STATUS = '<option value="">状態</option><option value="健康">健康</option><option value="硬い">硬い</option><option value="軟便">軟便</option><option value="下痢">下痢</option><option value="血便小">血便小</option><option value="血便大（異常）">血便大（異常）</option>';
+  var OPT_URINE_STATUS = '<option value="">状態</option><option value="なし（異常）">なし（異常）</option><option value="なし">なし</option><option value="少量">少量</option><option value="普通">普通</option><option value="多い">多い</option><option value="血尿小">血尿小</option><option value="血尿大（異常）">血尿大（異常）</option>';
+  var OPT_SLOT = '<option value="">帯</option><option value="朝">朝</option><option value="昼">昼</option><option value="夜">夜</option><option value="途中">途中</option>';
+  var OPT_CARE_TYPE = '<option value="">項目</option><option value="care:ブラシ">ブラシ</option><option value="care:アゴ">アゴ</option><option value="care:耳">耳</option><option value="care:爪切り">爪切り</option><option value="care:肉球">肉球</option><option value="care:お尻">お尻</option><option value="eye_discharge:目ヤニ拭き">目ヤニ拭き</option>';
+  var OPT_CARE_DONE = '<option value="1">実施</option><option value="0">スキップ</option>';
+
+  /** DB英語キー → フォーム選択肢（日本語） */
+  var STOOL_EN_TO_JA = { normal: '健康', hard: '硬い', soft: '軟便', liquid: '下痢', recorded: '記録あり' };
+  var URINE_EN_TO_JA = { normal: '普通', hard: '多い', soft: '少量', liquid: 'なし（異常）', recorded: '記録あり' };
+
+  function excretionFormValue(kind, raw) {
+    var s = raw == null ? '' : String(raw);
+    if (kind === 'urine') return URINE_EN_TO_JA[s] || s;
+    return STOOL_EN_TO_JA[s] || s;
+  }
+
+  var _ovInlineHandlersBound = false;
+
+  function postHealthRecord(body, btn) {
+    var prevText = btn ? btn.textContent : '';
+    if (btn) { btn.disabled = true; btn.textContent = '…'; }
+    fetch(apiOpsBase() + '/health/records', {
+      method: 'POST',
+      headers: apiHeaders(),
+      cache: 'no-store',
+      body: JSON.stringify(body),
+    }).then(function (r) { return r.json(); })
+      .then(function (data) {
+        if (btn) { btn.disabled = false; btn.textContent = prevText; }
+        if (data.error) { alert('エラー: ' + (data.message || data.error)); return; }
+        fetchData(0);
+      }).catch(function () {
+        if (btn) { btn.disabled = false; btn.textContent = prevText; }
+        alert('保存に失敗しました');
+      });
+  }
+
+  function putHealthRecord(recordId, body, btn) {
+    var prevText = btn ? btn.textContent : '';
+    if (btn) { btn.disabled = true; btn.textContent = '…'; }
+    fetch(apiOpsBase() + '/health/records/' + encodeURIComponent(recordId), {
+      method: 'PUT',
+      headers: apiHeaders(),
+      cache: 'no-store',
+      body: JSON.stringify(body),
+    }).then(function (r) { return r.json(); })
+      .then(function (data) {
+        if (btn) { btn.disabled = false; btn.textContent = prevText; }
+        if (data.error) { alert('エラー: ' + (data.message || data.error)); return; }
+        fetchData(0);
+      }).catch(function () {
+        if (btn) { btn.disabled = false; btn.textContent = prevText; }
+        alert('保存に失敗しました');
+      });
+  }
+
+  function putVoiceExcretion(voiceInputId, body, btn) {
+    var prevText = btn ? btn.textContent : '';
+    if (btn) { btn.disabled = true; btn.textContent = '…'; }
+    fetch(apiOpsBase() + '/voice/inputs/' + encodeURIComponent(voiceInputId) + '/excretion', {
+      method: 'PUT',
+      headers: apiHeaders(),
+      cache: 'no-store',
+      body: JSON.stringify(body),
+    }).then(function (r) { return r.json(); })
+      .then(function (data) {
+        if (btn) { btn.disabled = false; btn.textContent = prevText; }
+        if (data.error) { alert('エラー: ' + (data.message || data.error)); return; }
+        fetchData(0);
+      }).catch(function () {
+        if (btn) { btn.disabled = false; btn.textContent = prevText; }
+        alert('保存に失敗しました');
+      });
+  }
+
+  function deleteVoiceExcretion(voiceInputId, btn) {
+    if (!voiceInputId) return;
+    if (!confirm('この音声記録を削除しますか？\n（紐づく健康記録があれば一緒に削除します）')) return;
+    var prevText = btn ? btn.textContent : '';
+    if (btn) { btn.disabled = true; btn.textContent = '…'; }
+    fetch(apiOpsBase() + '/voice/inputs/' + encodeURIComponent(voiceInputId) + '/excretion', {
+      method: 'DELETE',
+      headers: apiHeaders(),
+      cache: 'no-store',
+    }).then(function (r) { return r.json(); })
+      .then(function (data) {
+        if (btn) { btn.disabled = false; btn.textContent = prevText; }
+        if (data.error) { alert('エラー: ' + (data.message || data.error)); return; }
+        fetchData(0);
+      }).catch(function () {
+        if (btn) { btn.disabled = false; btn.textContent = prevText; }
+        alert('削除に失敗しました');
+      });
+  }
+
+  function deleteHealthRecord(recordId, btn) {
+    if (!recordId) return;
+    if (!confirm('この記録を削除しますか？')) return;
+    var prevText = btn ? btn.textContent : '';
+    if (btn) { btn.disabled = true; btn.textContent = '…'; }
+    fetch(apiOpsBase() + '/health/records/' + encodeURIComponent(recordId), {
+      method: 'DELETE',
+      headers: apiHeaders(),
+      cache: 'no-store',
+    }).then(function (r) { return r.json(); })
+      .then(function (data) {
+        if (btn) { btn.disabled = false; btn.textContent = prevText; }
+        if (data.error) { alert('エラー: ' + (data.message || data.error)); return; }
+        fetchData(0);
+      }).catch(function () {
+        if (btn) { btn.disabled = false; btn.textContent = prevText; }
+        alert('削除に失敗しました');
+      });
+  }
+
+  function medLogPost(btn, pathSuffix) {
+    var id = btn.getAttribute('data-log-id');
+    if (!id) return;
+    var prevText = btn.textContent;
+    btn.disabled = true;
+    btn.textContent = '…';
+    fetch(apiOpsBase() + '/health/medication-logs/' + encodeURIComponent(id) + '/' + pathSuffix, {
+      method: 'POST',
+      headers: apiHeaders(),
+      cache: 'no-store',
+      body: JSON.stringify({}),
+    }).then(function (r) { return r.json(); })
+      .then(function (data) {
+        btn.disabled = false;
+        btn.textContent = prevText;
+        if (data.error) { alert('エラー: ' + (data.message || data.error)); return; }
+        fetchData(0);
+      }).catch(function () {
+        btn.disabled = false;
+        btn.textContent = prevText;
+        alert('記録に失敗しました');
+      });
+  }
+
+  function saveMedDone(btn) {
+    medLogPost(btn, 'done');
+  }
+
+  function saveMedSkip(btn) {
+    medLogPost(btn, 'skip');
+  }
+
+  function saveTaskAction(btn, action) {
+    var id = btn.getAttribute('data-task-id');
+    if (!id) return;
+    var path = action === 'skip' ? 'skip' : 'done';
+    var prevText = btn.textContent;
+    btn.disabled = true;
+    btn.textContent = '…';
+    fetch(apiOpsBase() + '/tasks/' + encodeURIComponent(id) + '/' + path, {
+      method: 'POST',
+      headers: apiHeaders(),
+      cache: 'no-store',
+      body: JSON.stringify({}),
+    }).then(function (r) { return r.json(); })
+      .then(function (data) {
+        btn.disabled = false;
+        btn.textContent = prevText;
+        if (data.error) { alert('エラー: ' + (data.message || data.error)); return; }
+        fetchData(0);
+      }).catch(function () {
+        btn.disabled = false;
+        btn.textContent = prevText;
+        alert('更新に失敗しました');
+      });
+  }
+
+  function saveInlineStool(catId, form, btn) {
+    var st = form.querySelector('.ov-sel-st');
+    var slot = form.querySelector('.ov-sel-slot');
+    var dt = form.querySelector('.ov-inp-date');
+    var value = st && st.value;
+    if (!value) { alert('状態を選択してください'); return; }
+    var recordDate = dt && dt.value;
+    if (!recordDate) { alert('日付を入力してください'); return; }
+    var details = (slot && slot.value) ? slot.value : null;
+    postHealthRecord({
+      cat_id: catId,
+      record_type: 'stool',
+      record_date: recordDate,
+      value: value,
+      details: details,
+    }, btn);
+  }
+
+  function saveInlineUrine(catId, form, btn) {
+    var st = form.querySelector('.ov-sel-ur');
+    var slot = form.querySelector('.ov-sel-slot');
+    var dt = form.querySelector('.ov-inp-date');
+    var value = st && st.value;
+    if (!value) { alert('状態を選択してください'); return; }
+    var recordDate = dt && dt.value;
+    if (!recordDate) { alert('日付を入力してください'); return; }
+    var details = (slot && slot.value) ? slot.value : null;
+    postHealthRecord({
+      cat_id: catId,
+      record_type: 'urine',
+      record_date: recordDate,
+      value: value,
+      details: details,
+    }, btn);
+  }
+
+  function saveInlineWeight(catId, form, btn) {
+    var inp = form.querySelector('.ov-inp-weight');
+    var dt = form.querySelector('.ov-inp-date');
+    var value = inp && String(inp.value || '').trim();
+    if (!value) { alert('体重を入力してください'); return; }
+    var recordDate = dt && dt.value;
+    if (!recordDate) { alert('日付を入力してください'); return; }
+    postHealthRecord({
+      cat_id: catId,
+      record_type: 'weight',
+      record_date: recordDate,
+      recorded_time: nowJstHm(),
+      value: value,
+      details: null,
+      next_due: null,
+    }, btn);
+  }
+
+  function saveInlineCare(catId, form, btn) {
+    var sel = form.querySelector('.ov-sel-care-type');
+    var doneSel = form.querySelector('.ov-sel-care-done');
+    var dt = form.querySelector('.ov-inp-date');
+    var careVal = sel && sel.value;
+    if (!careVal) { alert('ケア項目を選択してください'); return; }
+    var recordDate = dt && dt.value;
+    if (!recordDate) { alert('日付を入力してください'); return; }
+    var careDone = doneSel && doneSel.value === '1';
+    var parts = careVal.split(':');
+    var recordType = parts[0] || 'care';
+    var details = parts.slice(1).join(':') || '';
+    var body = {
+      cat_id: catId,
+      record_type: recordType,
+      record_date: recordDate,
+      value: careDone ? '記録' : '×',
+      details: details,
+    };
+    if (careDone && (recordType === 'care' || recordType === 'eye_discharge')) {
+      body.recorded_time = nowJstHm();
+    }
+    postHealthRecord(body, btn);
+  }
+
+  function bindOverviewInlineHandlers() {
+    if (_ovInlineHandlersBound) return;
+    _ovInlineHandlersBound = true;
+    cardArea.addEventListener('click', function (ev) {
+      var hrEdit = ev.target.closest && ev.target.closest('.btn-ov-hr-edit');
+      if (hrEdit) {
+        ev.preventDefault();
+        ev.stopPropagation();
+        var rowE = hrEdit.closest('.ov-ex-row');
+        if (!rowE) return;
+        rowE.classList.add('is-editing');
+        var kindE = rowE.getAttribute('data-hr-kind') || 'stool';
+        var rawE = rowE.getAttribute('data-hr-value') || '';
+        var mappedE = excretionFormValue(kindE, rawE);
+        var selE = rowE.querySelector(kindE === 'urine' ? '.ov-ex-sel-ur' : '.ov-ex-sel-st');
+        if (selE) {
+          selE.value = mappedE;
+          if (selE.value !== mappedE && rawE) selE.value = rawE;
+        }
+        var slotE = rowE.querySelector('.ov-ex-sel-slot');
+        if (slotE) slotE.value = rowE.getAttribute('data-hr-details') || '';
+        var dtE = rowE.querySelector('.ov-ex-inp-date');
+        if (dtE) dtE.value = rowE.getAttribute('data-hr-date') || todayJstYmd();
+        return;
+      }
+      var hrCancel = ev.target.closest && ev.target.closest('.btn-ov-hr-cancel');
+      if (hrCancel) {
+        ev.preventDefault();
+        ev.stopPropagation();
+        var rowC = hrCancel.closest('.ov-ex-row');
+        if (rowC) rowC.classList.remove('is-editing');
+        return;
+      }
+      var hrSave = ev.target.closest && ev.target.closest('.btn-ov-hr-save');
+      if (hrSave) {
+        ev.preventDefault();
+        ev.stopPropagation();
+        var rowS = hrSave.closest('.ov-ex-row');
+        if (!rowS) return;
+        var idS = rowS.getAttribute('data-record-id');
+        var voiceOnlyS = rowS.getAttribute('data-voice-input-id');
+        var kindS = rowS.getAttribute('data-hr-kind') || 'stool';
+        var stS = rowS.querySelector(kindS === 'urine' ? '.ov-ex-sel-ur' : '.ov-ex-sel-st');
+        var slotS = rowS.querySelector('.ov-ex-sel-slot');
+        var dtS = rowS.querySelector('.ov-ex-inp-date');
+        var valS = stS && stS.value;
+        if (!valS) { alert('状態を選択してください'); return; }
+        var rdS = dtS && dtS.value;
+        if (!rdS) { alert('日付を入力してください'); return; }
+        var detS = (slotS && slotS.value) ? slotS.value : null;
+        if (idS) {
+          putHealthRecord(idS, { value: valS, details: detS, record_date: rdS }, hrSave);
+        } else if (voiceOnlyS) {
+          putVoiceExcretion(voiceOnlyS, { value: valS, details: detS, record_date: rdS }, hrSave);
+        }
+        return;
+      }
+      var hrDel = ev.target.closest && ev.target.closest('.btn-ov-hr-del');
+      if (hrDel) {
+        ev.preventDefault();
+        ev.stopPropagation();
+        var rowD = hrDel.closest('.ov-ex-row');
+        if (!rowD) return;
+        var recD = rowD.getAttribute('data-record-id');
+        var voiceOnlyD = rowD.getAttribute('data-voice-input-id');
+        if (recD) deleteHealthRecord(recD, hrDel);
+        else if (voiceOnlyD) deleteVoiceExcretion(voiceOnlyD, hrDel);
+        return;
+      }
+      var medBtn = ev.target.closest && ev.target.closest('.btn-ov-med-done');
+      if (medBtn) {
+        ev.preventDefault();
+        ev.stopPropagation();
+        saveMedDone(medBtn);
+        return;
+      }
+      var medSkipBtn = ev.target.closest && ev.target.closest('.btn-ov-med-skip');
+      if (medSkipBtn) {
+        ev.preventDefault();
+        ev.stopPropagation();
+        saveMedSkip(medSkipBtn);
+        return;
+      }
+      var taskDoneBtn = ev.target.closest && ev.target.closest('.btn-ov-task-done');
+      if (taskDoneBtn) {
+        ev.preventDefault();
+        ev.stopPropagation();
+        saveTaskAction(taskDoneBtn, 'done');
+        return;
+      }
+      var taskSkipBtn = ev.target.closest && ev.target.closest('.btn-ov-task-skip');
+      if (taskSkipBtn) {
+        ev.preventDefault();
+        ev.stopPropagation();
+        saveTaskAction(taskSkipBtn, 'skip');
+        return;
+      }
+      var btn = ev.target.closest && ev.target.closest('.btn-ov-save');
+      if (!btn) return;
+      ev.preventDefault();
+      ev.stopPropagation();
+      var kind = btn.getAttribute('data-kind');
+      var form = btn.closest('.inline-form');
+      if (!form || !kind) return;
+      var catId = form.getAttribute('data-cat-id');
+      if (!catId) return;
+      if (kind === 'stool') saveInlineStool(catId, form, btn);
+      else if (kind === 'urine') saveInlineUrine(catId, form, btn);
+      else if (kind === 'weight') saveInlineWeight(catId, form, btn);
+      else if (kind === 'care') saveInlineCare(catId, form, btn);
+    });
+  }
+
+  function buildStoolInlineEdit(c) {
+    return '<div class="inline-form" data-cat-id="' + escAttr(c.id) + '">' +
+      '<select class="ov-inline-select ov-sel-st">' + OPT_STOOL_STATUS + '</select>' +
+      '<select class="ov-inline-select ov-sel-slot">' + OPT_SLOT + '</select>' +
+      '<input type="date" class="ov-inline-date ov-inp-date" value="' + escAttr(todayJstYmd()) + '">' +
+      '<button type="button" class="btn btn-primary btn-ov-save" data-kind="stool">保存</button>' +
+      '</div>';
+  }
+
+  function buildUrineInlineEdit(c) {
+    return '<div class="inline-form" data-cat-id="' + escAttr(c.id) + '">' +
+      '<select class="ov-inline-select ov-sel-ur">' + OPT_URINE_STATUS + '</select>' +
+      '<select class="ov-inline-select ov-sel-slot">' + OPT_SLOT + '</select>' +
+      '<input type="date" class="ov-inline-date ov-inp-date" value="' + escAttr(todayJstYmd()) + '">' +
+      '<button type="button" class="btn btn-primary btn-ov-save" data-kind="urine">保存</button>' +
+      '</div>';
+  }
+
+  function buildWeightInlineEdit(c) {
+    var ph = c.weight_latest !== null && c.weight_latest !== undefined ? String(c.weight_latest) : 'kg';
+    return '<div class="inline-form" data-cat-id="' + escAttr(c.id) + '">' +
+      '<input type="number" class="ov-inline-num ov-inp-weight" step="0.1" min="0" placeholder="' + escAttr(ph) + '" title="体重(kg)" style="width:4.5rem;">' +
+      '<input type="date" class="ov-inline-date ov-inp-date" value="' + escAttr(todayJstYmd()) + '">' +
+      '<button type="button" class="btn btn-primary btn-ov-save" data-kind="weight">保存</button>' +
+      '</div>';
+  }
+
+  function buildCareInlineEdit(c) {
+    return '<div class="inline-form" data-cat-id="' + escAttr(c.id) + '">' +
+      '<select class="ov-inline-select ov-sel-care-type">' + OPT_CARE_TYPE + '</select>' +
+      '<select class="ov-inline-select ov-sel-care-done">' + OPT_CARE_DONE + '</select>' +
+      '<input type="date" class="ov-inline-date ov-inp-date" value="' + escAttr(todayJstYmd()) + '">' +
+      '<button type="button" class="btn btn-primary btn-ov-save" data-kind="care">保存</button>' +
+      '</div>';
+  }
+
   var MODE_KEY = 'nyagi_cats_mode';
 
   var LOC_KEY = 'nyagi_dash_location';
@@ -393,6 +819,7 @@
     html += renderItemCard_Feeding();
     html += renderItemCard_Medical();
     cardArea.innerHTML = html;
+    bindOverviewInlineHandlers();
 
     var opened = loadFolded();
     var hasSavedState = opened && typeof opened === 'object' && Object.keys(opened).length > 0;
@@ -418,8 +845,89 @@
 
   }
 
-  function itemRow(c, content) {
+  function itemRowReadonly(c, content) {
     return '<a href="' + catLink(c.id) + '" class="item-row" style="display:flex;align-items:center;gap:8px;text-decoration:none;color:inherit;-webkit-tap-highlight-color:rgba(255,255,255,0.1);">' + content + '</a>';
+  }
+
+  function itemRowEditable(c, valuesHtml, editHtml) {
+    var editBlock = editHtml ? '<div class="item-inline-edit">' + editHtml + '</div>' : '';
+    return '<div class="item-row item-row-editable">' +
+      '<a href="' + catLink(c.id) + '" class="item-cat-name item-cat-link">' + alertDot(c.alert_level) + esc(c.name) + '</a>' +
+      '<div class="item-values">' + valuesHtml + '</div>' +
+      editBlock +
+      '</div>';
+  }
+
+  function excretionEditBlockStool() {
+    return '<div class="ov-ex-edit">' +
+      '<select class="ov-inline-select ov-ex-sel-st">' + OPT_STOOL_STATUS + '</select>' +
+      '<select class="ov-inline-select ov-ex-sel-slot">' + OPT_SLOT + '</select>' +
+      '<input type="date" class="ov-inline-date ov-ex-inp-date">' +
+      '<button type="button" class="btn btn-primary btn-ov-hr-save">保存</button>' +
+      '<button type="button" class="btn btn-ov-hr-cancel">取消</button>' +
+      '</div>';
+  }
+
+  function excretionEditBlockUrine() {
+    return '<div class="ov-ex-edit">' +
+      '<select class="ov-inline-select ov-ex-sel-ur">' + OPT_URINE_STATUS + '</select>' +
+      '<select class="ov-inline-select ov-ex-sel-slot">' + OPT_SLOT + '</select>' +
+      '<input type="date" class="ov-inline-date ov-ex-inp-date">' +
+      '<button type="button" class="btn btn-primary btn-ov-hr-save">保存</button>' +
+      '<button type="button" class="btn btn-ov-hr-cancel">取消</button>' +
+      '</div>';
+  }
+
+  function buildStoolEntriesHtml(stoolArr) {
+    var arr = stoolArr || [];
+    if (arr.length === 0) return '<span class="dim">未記録</span>';
+    var html = '';
+    for (var i = 0; i < arr.length; i++) {
+      var e = arr[i];
+      if (e.record_id) {
+        var badgeSt = e.voice_input_id ? ' <small class="dim source-badge">音声</small>' : '';
+        html += '<div class="ov-ex-row" data-record-id="' + escAttr(String(e.record_id)) + '" data-hr-value="' + escAttr(e.value_raw == null ? '' : String(e.value_raw)) + '" data-hr-details="' + escAttr(e.details_slot == null ? '' : String(e.details_slot)) + '" data-hr-date="' + escAttr(e.record_date == null ? '' : String(e.record_date)) + '" data-hr-kind="stool">';
+        html += '<div class="ov-ex-display"><span class="ov-ex-text">' + esc(e.time) + ' ' + esc(e.status) + '</span>' + badgeSt;
+        html += '<button type="button" class="btn btn-ov-hr-edit">編集</button>';
+        html += '<button type="button" class="btn btn-ov-hr-del">削除</button></div>';
+        html += excretionEditBlockStool();
+        html += '</div>';
+      } else if (e.voice_input_id) {
+        html += '<div class="ov-ex-row ov-ex-voice-only" data-voice-input-id="' + escAttr(String(e.voice_input_id)) + '" data-hr-value="' + escAttr(e.value_raw == null ? '' : String(e.value_raw)) + '" data-hr-details="' + escAttr(e.details_slot == null ? '' : String(e.details_slot)) + '" data-hr-date="' + escAttr(e.record_date == null ? '' : String(e.record_date)) + '" data-hr-kind="stool">';
+        html += '<div class="ov-ex-display"><span class="ov-ex-text">' + esc(e.time) + ' ' + esc(e.status) + '</span> <small class="dim source-badge">音声</small>';
+        html += '<button type="button" class="btn btn-ov-hr-edit">編集</button>';
+        html += '<button type="button" class="btn btn-ov-hr-del">削除</button></div>';
+        html += excretionEditBlockStool();
+        html += '</div>';
+      }
+    }
+    return html;
+  }
+
+  function buildUrineEntriesHtml(urineArr) {
+    var arr = urineArr || [];
+    if (arr.length === 0) return '<span class="dim">未記録</span>';
+    var html = '';
+    for (var i = 0; i < arr.length; i++) {
+      var e = arr[i];
+      if (e.record_id) {
+        var badgeUr = e.voice_input_id ? ' <small class="dim source-badge">音声</small>' : '';
+        html += '<div class="ov-ex-row" data-record-id="' + escAttr(String(e.record_id)) + '" data-hr-value="' + escAttr(e.value_raw == null ? '' : String(e.value_raw)) + '" data-hr-details="' + escAttr(e.details_slot == null ? '' : String(e.details_slot)) + '" data-hr-date="' + escAttr(e.record_date == null ? '' : String(e.record_date)) + '" data-hr-kind="urine">';
+        html += '<div class="ov-ex-display"><span class="ov-ex-text">' + esc(e.time) + ' ' + esc(e.status) + '</span>' + badgeUr;
+        html += '<button type="button" class="btn btn-ov-hr-edit">編集</button>';
+        html += '<button type="button" class="btn btn-ov-hr-del">削除</button></div>';
+        html += excretionEditBlockUrine();
+        html += '</div>';
+      } else if (e.voice_input_id) {
+        html += '<div class="ov-ex-row ov-ex-voice-only" data-voice-input-id="' + escAttr(String(e.voice_input_id)) + '" data-hr-value="' + escAttr(e.value_raw == null ? '' : String(e.value_raw)) + '" data-hr-details="' + escAttr(e.details_slot == null ? '' : String(e.details_slot)) + '" data-hr-date="' + escAttr(e.record_date == null ? '' : String(e.record_date)) + '" data-hr-kind="urine">';
+        html += '<div class="ov-ex-display"><span class="ov-ex-text">' + esc(e.time) + ' ' + esc(e.status) + '</span> <small class="dim source-badge">音声</small>';
+        html += '<button type="button" class="btn btn-ov-hr-edit">編集</button>';
+        html += '<button type="button" class="btn btn-ov-hr-del">削除</button></div>';
+        html += excretionEditBlockUrine();
+        html += '</div>';
+      }
+    }
+    return html;
   }
 
   function renderItemCard_Stool() {
@@ -429,10 +937,7 @@
     for (var i = 0; i < catsData.length; i++) {
       var c = catsData[i];
       var stool = c.stool_today || [];
-      var vals = '';
-      if (stool.length === 0) vals = '<span class="dim">未記録</span>';
-      else { for (var j = 0; j < stool.length; j++) vals += '<span>' + esc(stool[j].time) + ' ' + esc(stool[j].status) + '</span>'; }
-      html += itemRow(c, '<div class="item-cat-name">' + alertDot(c.alert_level) + esc(c.name) + '</div><div class="item-values">' + vals + '</div>');
+      html += itemRowEditable(c, '<div class="item-values-excretion">' + buildStoolEntriesHtml(stool) + '</div>', buildStoolInlineEdit(c));
     }
     html += '</div></div>';
     return html;
@@ -445,10 +950,7 @@
     for (var i = 0; i < catsData.length; i++) {
       var c = catsData[i];
       var urine = c.urine_today || [];
-      var vals = '';
-      if (urine.length === 0) vals = '<span class="dim">未記録</span>';
-      else { for (var j = 0; j < urine.length; j++) vals += '<span>' + esc(urine[j].time) + ' ' + esc(urine[j].status) + '</span>'; }
-      html += itemRow(c, '<div class="item-cat-name">' + alertDot(c.alert_level) + esc(c.name) + '</div><div class="item-values">' + vals + '</div>');
+      html += itemRowEditable(c, '<div class="item-values-excretion">' + buildUrineEntriesHtml(urine) + '</div>', buildUrineInlineEdit(c));
     }
     html += '</div></div>';
     return html;
@@ -462,7 +964,7 @@
       var c = catsData[i];
       var wStr = c.weight_latest !== null ? (c.weight_latest.toFixed(1) + 'kg' + (c.weight_previous !== null ? ' <span class="trend-' + c.weight_trend + '">' + (Math.abs(c.weight_latest - c.weight_previous) >= 0.05 ? Math.abs(c.weight_latest - c.weight_previous).toFixed(1) : '') + '</span>' : '')) : '<span class="dim">体重--</span>';
       var aStr = c.feeding_today_pct !== null && c.feeding_today_pct !== undefined ? '<span class="' + (c.feeding_today_pct >= 80 ? 'score-color-green' : c.feeding_today_pct >= 50 ? 'score-color-yellow' : 'score-color-red') + '">食欲 ' + c.feeding_today_pct + '%</span>' : '<span class="dim">食欲--</span>';
-      html += itemRow(c, '<div class="item-cat-name">' + alertDot(c.alert_level) + esc(c.name) + '</div><div class="item-values">' + wStr + aStr + '</div>');
+      html += itemRowEditable(c, wStr + aStr, buildWeightInlineEdit(c));
     }
     html += '</div></div>';
     return html;
@@ -489,10 +991,15 @@
           var isSkipped = it.status === 'skipped';
           var itemIcon = isDone ? '✅' : isSkipped ? '⏭️' : '⬜';
           var itemCls = isDone ? 'med-item-done' : isSkipped ? 'med-item-skip' : 'med-item-pending';
-          medVals += '<span class="' + itemCls + '" style="font-size:12px;">' + itemIcon + ' ' + (it.slot ? '<b>' + esc(it.slot) + '</b> ' : '') + esc(it.name) + (it.dosage ? ' <small>' + esc(it.dosage) + '</small>' : '') + '</span>';
+          medVals += '<span class="' + itemCls + '" style="font-size:12px;display:inline-flex;align-items:center;flex-wrap:wrap;gap:4px;">' + itemIcon + ' ' + (it.slot ? '<b>' + esc(it.slot) + '</b> ' : '') + esc(it.name) + (it.dosage ? ' <small>' + esc(it.dosage) + '</small>' : '');
+          if (!isDone && !isSkipped && it.log_id != null && it.log_id !== undefined && String(it.log_id) !== '') {
+            medVals += '<button type="button" class="btn btn-ov-med-done" data-log-id="' + escAttr(String(it.log_id)) + '" style="font-size:10px;padding:2px 8px;">実施</button>';
+            medVals += '<button type="button" class="btn btn-ov-med-skip" data-log-id="' + escAttr(String(it.log_id)) + '" style="font-size:10px;padding:2px 8px;">スキップ</button>';
+          }
+          medVals += '</span>';
         }
       }
-      html += itemRow(c, '<div class="item-cat-name">' + alertDot(c.alert_level) + esc(c.name) + '</div><div class="item-values" style="flex-direction:column;gap:2px;">' + medVals + '</div>');
+      html += itemRowEditable(c, '<div class="item-values-medcol">' + medVals + '</div>', '');
     }
     html += '</div></div>';
     return html;
@@ -509,7 +1016,7 @@
       var careVals = '';
       if (care.length === 0) careVals = '<span class="dim">なし</span>';
       else { for (var j = 0; j < care.length; j++) { var cls = care[j].done ? 'care-done' : 'care-skip'; careVals += '<span class="care-chip ' + cls + '" style="font-size:11px;">' + esc(care[j].type) + (care[j].done && care[j].by ? '<small>' + esc(care[j].by) + '</small>' : '') + '</span>'; } }
-      html += itemRow(c, '<div class="item-cat-name">' + alertDot(c.alert_level) + esc(c.name) + '</div><div class="item-values" style="flex-wrap:wrap;gap:3px 6px;">' + careVals + '</div>');
+      html += itemRowEditable(c, careVals, buildCareInlineEdit(c));
     }
     html += '</div></div>';
     return html;
@@ -521,10 +1028,27 @@
     html += '<div class="item-card-body">';
     for (var i = 0; i < catsData.length; i++) {
       var c = catsData[i];
-      var tasks = c.tasks_today || { done: 0, total: 0 };
+      var tasks = c.tasks_today || { done: 0, total: 0, items: [] };
+      var titems = tasks.items || [];
 
-      var taskVals = tasks.total === 0 ? '<span class="dim">なし</span>' : '<span class="' + (tasks.done >= tasks.total ? 'score-color-green' : tasks.done > 0 ? 'score-color-yellow' : 'score-color-red') + '">' + (tasks.done >= tasks.total ? '✅' : '⏳') + ' ' + tasks.done + '/' + tasks.total + '</span>';
-      html += itemRow(c, '<div class="item-cat-name">' + alertDot(c.alert_level) + esc(c.name) + '</div><div class="item-values">' + taskVals + '</div>');
+      var taskVals = '';
+      if (tasks.total === 0) {
+        taskVals = '<span class="dim">なし</span>';
+      } else {
+        taskVals = '<span class="' + (tasks.done >= tasks.total ? 'score-color-green' : tasks.done > 0 ? 'score-color-yellow' : 'score-color-red') + '" style="font-weight:700;">' + (tasks.done >= tasks.total ? '✅' : '⏳') + ' ' + tasks.done + '/' + tasks.total + '</span>';
+        for (var j = 0; j < titems.length; j++) {
+          var it = titems[j];
+          var timeStr = '';
+          if (it.due_time) {
+            var ds = String(it.due_time);
+            timeStr = '<span class="dim" style="margin-right:4px;">' + esc(ds.length >= 5 ? ds.slice(0, 5) : ds) + '</span>';
+          }
+          taskVals += '<div class="ov-task-line">' + timeStr + '<span class="ov-task-title">' + esc(it.title) + '</span>' +
+            '<button type="button" class="btn btn-ov-task-done" data-task-id="' + escAttr(String(it.id)) + '">完了</button>' +
+            '<button type="button" class="btn btn-ov-task-skip" data-task-id="' + escAttr(String(it.id)) + '">スキップ</button></div>';
+        }
+      }
+      html += itemRowEditable(c, '<div class="item-values-medcol">' + taskVals + '</div>', '');
     }
     html += '</div></div>';
     return html;
@@ -541,7 +1065,7 @@
       var anomVals = '<span class="' + scoreColorClass(c.score_color) + '" style="font-weight:700;">' + (c.health_score !== null ? c.health_score : '--') + '</span>';
       if (anomalies.length === 0) anomVals += '<span class="score-color-green" style="font-size:11px;">異常なし</span>';
       else { for (var j = 0; j < anomalies.length; j++) { var a = anomalies[j]; anomVals += '<span class="badge ' + (a.count >= 3 ? 'badge-red' : a.count >= 2 ? 'badge-orange' : 'badge-yellow') + '">' + esc(a.type) + ' x' + a.count + '</span>'; } }
-      html += itemRow(c, '<div class="item-cat-name">' + alertDot(c.alert_level) + esc(c.name) + '</div><div class="item-values">' + anomVals + '</div>');
+      html += itemRowReadonly(c, '<div class="item-cat-name">' + alertDot(c.alert_level) + esc(c.name) + '</div><div class="item-values">' + anomVals + '</div>');
     }
     html += '</div></div>';
     return html;
@@ -572,7 +1096,7 @@
           planVals += '</div>';
         }
       }
-      html += itemRow(c, '<div class="item-cat-name">' + alertDot(c.alert_level) + esc(c.name) + '</div><div class="item-values" style="flex-direction:column;gap:4px;">' + planVals + '</div>');
+      html += itemRowReadonly(c, '<div class="item-cat-name">' + alertDot(c.alert_level) + esc(c.name) + '</div><div class="item-values" style="flex-direction:column;gap:4px;">' + planVals + '</div>');
     }
     html += '</div></div>';
     return html;
@@ -582,7 +1106,7 @@
     var html = '<div class="item-card">';
     html += '<div class="item-card-title">🏥 医療（中長期）</div>';
     html += '<div class="item-card-body">';
-    var today = new Date().toISOString().slice(0, 10);
+    var today = new Date().toLocaleDateString('sv-SE', { timeZone: 'Asia/Tokyo' });
     for (var i = 0; i < catsData.length; i++) {
       var c = catsData[i];
 
@@ -591,7 +1115,7 @@
       if (c.checkup_next_due) medLongVals += '<span class="badge ' + (c.checkup_next_due <= today ? 'badge-red' : daysUntil(c.checkup_next_due) <= 30 ? 'badge-orange' : 'badge-gray') + '">健診 ' + shortDate(c.checkup_next_due) + '</span>';
       medLongVals += '<span class="badge ' + (c.microchip === 'registered' ? 'badge-green' : 'badge-gray') + '">' + (c.microchip === 'registered' ? 'MC済' : 'MC未') + '</span>';
       if (!c.vaccine_next_due && !c.checkup_next_due) medLongVals += '<span class="dim" style="font-size:11px;">予定なし</span>';
-      html += itemRow(c, '<div class="item-cat-name">' + alertDot(c.alert_level) + esc(c.name) + '</div><div class="item-values">' + medLongVals + '</div>');
+      html += itemRowReadonly(c, '<div class="item-cat-name">' + alertDot(c.alert_level) + esc(c.name) + '</div><div class="item-values">' + medLongVals + '</div>');
     }
     html += '</div></div>';
     return html;

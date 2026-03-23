@@ -40,6 +40,8 @@ function toggleFold(id, btn) {
   var urineArea            = document.getElementById('urineArea');
   
   var catNotesArea         = document.getElementById('catNotesArea');
+  /** renderCatNotes 直近の一覧（編集モーダル用） */
+  var _catNotesListCache   = [];
   var scoreCardArea        = document.getElementById('scoreCardArea');
   var actionsArea          = document.getElementById('actionsArea');
   var reportLink           = document.getElementById('reportLink');
@@ -156,6 +158,41 @@ function toggleFold(id, btn) {
         return data;
       });
     });
+  }
+
+  /** 失敗時は null（給餌セクション全体を落とさない） */
+  function _feedFetchJsonSoft(url) {
+    return fetch(url, { headers: apiHeaders(), cache: 'no-store' }).then(function (r) {
+      return r.text().then(function (text) {
+        if (!r.ok) return null;
+        if (!text) return null;
+        try { return JSON.parse(text); } catch (_) { return null; }
+      });
+    }).catch(function () { return null; });
+  }
+
+  /** DELETE 用: confirm 直後の WebView で fetch が固まる場合のタイムアウト付き */
+  function _fetchDeleteJsonWithTimeout(url, timeoutMs) {
+    var ms = timeoutMs != null ? timeoutMs : 28000;
+    var req = fetch(url, { method: 'DELETE', headers: apiHeaders(), cache: 'no-store' }).then(function (r) {
+      return r.text().then(function (t) {
+        var data = {};
+        try { data = t ? JSON.parse(t) : {}; } catch (_) { data = { error: 'parse', message: t ? t.slice(0, 120) : 'HTTP ' + r.status }; }
+        data._httpOk = r.ok;
+        return data;
+      });
+    });
+    var timeoutP = new Promise(function (_, reject) {
+      setTimeout(function () { reject({ _nyagiTimeout: true }); }, ms);
+    });
+    return Promise.race([req, timeoutP]);
+  }
+
+  /** 給餌ブロックに即時メッセージ（OK 後に無反応に見えないようにする） */
+  function _setFeedingAreaBusy(message) {
+    if (!feedingArea) return;
+    var m = message || '処理中です…';
+    feedingArea.innerHTML = '<div class="detail-section"><div class="detail-title">🍽 給餌プラン</div><div class="loading" style="padding:20px;text-align:center;font-size:14px;color:var(--text-dim);">' + escapeHtml(m) + '</div></div>';
   }
 
   function getQueryParam(name) {
@@ -585,6 +622,125 @@ function toggleFold(id, btn) {
     }
   }
 
+  /** health_scores 行 → グラフ用 { date, value }（日付昇順・食欲スコアありのみ） */
+  function normalizeAppetiteHistoryToPoints(scoreRows) {
+    var rows = scoreRows || [];
+    var pts = [];
+    for (var i = 0; i < rows.length; i++) {
+      var a = rows[i].appetite_score;
+      if (a === null || a === undefined || a === '') continue;
+      var v = Number(a);
+      if (isNaN(v)) continue;
+      var d = rows[i].score_date || '';
+      if (!d) continue;
+      pts.push({ date: d, value: Math.max(0, Math.min(100, v)) });
+    }
+    pts.sort(function (a, b) { return a.date < b.date ? -1 : a.date > b.date ? 1 : 0; });
+    return pts;
+  }
+
+  function appetiteIndexChartBlockHtml(pts) {
+    var h = '<div style="margin-bottom:16px;padding-bottom:14px;border-bottom:1px solid var(--surface-alt);">';
+    h += '<div class="detail-title" style="margin-bottom:4px;">📈 食欲指数（推移）</div>';
+    h += '<div style="font-size:11px;color:var(--text-dim);margin-bottom:8px;line-height:1.45;">健康スコアの内訳（0〜100）。直近7日の給餌「摂取率」から日次算出された値の履歴です（サーバの日次ジョブで保存されます）。</div>';
+    if (!pts || pts.length === 0) {
+      h += '<div class="empty-msg" style="font-size:12px;">まだ履歴がありません。給餌の「あげた」記録が溜まると日次スコアに反映されます。</div>';
+      h += '</div>';
+      return h;
+    }
+    h += '<div class="weight-canvas-wrap"><canvas id="appetiteIndexCanvas" height="150"></canvas></div>';
+    h += '</div>';
+    return h;
+  }
+
+  function paintAppetiteIndexCanvas(pts) {
+    if (!pts || pts.length === 0) return;
+    var canvas = document.getElementById('appetiteIndexCanvas');
+    if (!canvas) return;
+
+    var dpr = window.devicePixelRatio || 1;
+    var displayW = canvas.offsetWidth || 300;
+    var displayH = 150;
+    canvas.width = displayW * dpr;
+    canvas.height = displayH * dpr;
+
+    var ctx = canvas.getContext('2d');
+    ctx.scale(dpr, dpr);
+
+    var W = displayW;
+    var H = displayH;
+    var pad = { top: 14, right: 12, bottom: 28, left: 34 };
+    var cW = W - pad.left - pad.right;
+    var cH = H - pad.top - pad.bottom;
+    var minV = 0;
+    var maxV = 100;
+    var rangeV = 100;
+
+    ctx.fillStyle = '#1e1e2e';
+    ctx.fillRect(0, 0, W, H);
+
+    ctx.strokeStyle = '#2a2a3e';
+    ctx.lineWidth = 1;
+    var yTicks = [100, 75, 50, 25, 0];
+    for (var gi = 0; gi < yTicks.length; gi++) {
+      var yVal = yTicks[gi];
+      var gy = pad.top + cH - (cH * (yVal - minV) / rangeV);
+      ctx.beginPath();
+      ctx.moveTo(pad.left, gy);
+      ctx.lineTo(pad.left + cW, gy);
+      ctx.stroke();
+      ctx.fillStyle = '#888';
+      ctx.font = '10px sans-serif';
+      ctx.textAlign = 'right';
+      ctx.fillText(String(yVal), pad.left - 4, gy + 4);
+    }
+
+    function appetiteChartX(i) {
+      if (pts.length === 1) return pad.left + cW / 2;
+      return pad.left + (cW / (pts.length - 1)) * i;
+    }
+
+    ctx.beginPath();
+    for (var i = 0; i < pts.length; i++) {
+      var x = appetiteChartX(i);
+      var y = pad.top + cH - (cH * (pts[i].value - minV) / rangeV);
+      if (i === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
+    }
+    ctx.lineTo(appetiteChartX(pts.length - 1), pad.top + cH);
+    ctx.lineTo(appetiteChartX(0), pad.top + cH);
+    ctx.closePath();
+    ctx.fillStyle = 'rgba(251,146,60,.18)';
+    ctx.fill();
+
+    ctx.beginPath();
+    for (var j = 0; j < pts.length; j++) {
+      var x2 = appetiteChartX(j);
+      var y2 = pad.top + cH - (cH * (pts[j].value - minV) / rangeV);
+      if (j === 0) ctx.moveTo(x2, y2); else ctx.lineTo(x2, y2);
+    }
+    ctx.strokeStyle = '#fb923c';
+    ctx.lineWidth = 2;
+    ctx.lineJoin = 'round';
+    ctx.stroke();
+
+    for (var k = 0; k < pts.length; k++) {
+      var x3 = appetiteChartX(k);
+      var y3 = pad.top + cH - (cH * (pts[k].value - minV) / rangeV);
+      ctx.beginPath();
+      ctx.arc(x3, y3, 4, 0, Math.PI * 2);
+      ctx.fillStyle = '#fb923c';
+      ctx.fill();
+      var step = Math.max(1, Math.floor(pts.length / 5));
+      if (k % step === 0 || k === pts.length - 1) {
+        ctx.fillStyle = '#888';
+        ctx.font = '9px sans-serif';
+        ctx.textAlign = 'center';
+        var dl = (pts[k].date || '').slice(5);
+        ctx.fillText(dl, x3, pad.top + cH + 14);
+      }
+    }
+  }
+
   // ── ケア実施セクション ─────────────────────────────────────────────────────────
 
   function parseCareDetails(d) {
@@ -692,6 +848,93 @@ function toggleFold(id, btn) {
     return map;
   }
 
+  /** 履歴表示用: 同一日・同一ケア項目は created_at 最新の1件だけ（今日の□と整合） */
+  function dedupeCareHistoryItemsBySlot(items, typesForSort) {
+    if (!items || items.length === 0) return items;
+    var sorted = items.slice().sort(function (a, b) {
+      var ca = (a.created_at || '');
+      var cb = (b.created_at || '');
+      if (ca !== cb) return cb.localeCompare(ca);
+      return (b.id || 0) - (a.id || 0);
+    });
+    var seen = {};
+    var out = [];
+    for (var i = 0; i < sorted.length; i++) {
+      var r = sorted[i];
+      var label = parseCareDetails(r.details);
+      var k = careQuickMapKey(r.record_type, label);
+      if (seen[k]) continue;
+      seen[k] = true;
+      out.push(r);
+    }
+    if (!typesForSort || typesForSort.length === 0) return out;
+    function orderOf(rec) {
+      var lab = parseCareDetails(rec.details);
+      var key = careQuickMapKey(rec.record_type, lab);
+      for (var ti = 0; ti < typesForSort.length; ti++) {
+        var t = typesForSort[ti];
+        if (careQuickMapKey(t.record_type || 'care', t.label || '') === key) return ti;
+      }
+      return 999;
+    }
+    out.sort(function (a, b) { return orderOf(a) - orderOf(b); });
+    return out;
+  }
+
+  /**
+   * 同一日・同一ケア項目の health_records を整理。exceptId が null なら該当行をすべて削除（□解除）。
+   * exceptId ありならその id 以外を削除（新規保存後の重複除去）。
+   */
+  function deleteCareRecordsForSlotExcept(recordDate, recordType, detailLabel, exceptId, done) {
+    var key = careQuickMapKey(recordType, detailLabel);
+    var typeParam = recordType === 'eye_discharge' ? 'eye_discharge' : 'care';
+    fetch(API_BASE + '/health/records?cat_id=' + encodeURIComponent(catId) + '&type=' + encodeURIComponent(typeParam) + '&limit=120', {
+      headers: apiHeaders(), cache: 'no-store',
+    }).then(function (r) { return r.json(); })
+    .then(function (data) {
+      var recs = data.records || [];
+      var toDel = [];
+      for (var i = 0; i < recs.length; i++) {
+        var r = recs[i];
+        if ((r.record_date || '') !== recordDate) continue;
+        if (r.record_type !== recordType) continue;
+        var lab = parseCareDetails(r.details);
+        if (careQuickMapKey(r.record_type, lab) !== key) continue;
+        if (exceptId != null && String(r.id) === String(exceptId)) continue;
+        toDel.push(r.id);
+      }
+      if (toDel.length === 0) {
+        if (done) done(false);
+        return;
+      }
+      var idx = 0;
+      var hadErr = false;
+      function delNext() {
+        if (idx >= toDel.length) {
+          if (done) done(hadErr);
+          return;
+        }
+        fetch(API_BASE + '/health/records/' + encodeURIComponent(toDel[idx]), {
+          method: 'DELETE',
+          headers: apiHeaders(), cache: 'no-store',
+        }).then(function (r) {
+          return r.text().then(function (t) {
+            var d = {};
+            try { d = t ? JSON.parse(t) : {}; } catch (_) { d = {}; }
+            if (!r.ok || d.error) hadErr = true;
+          });
+        }).catch(function () { hadErr = true; })
+        .finally(function () {
+          idx++;
+          delNext();
+        });
+      }
+      delNext();
+    }).catch(function () {
+      if (done) done(true);
+    });
+  }
+
   function renderCareSection(records) {
     var addBtn = '<button class="btn btn-outline btn-sm" style="margin-left:8px;font-size:12px;" onclick="openCareModal()">＋ ケア記録</button>';
     var today = todayJstYmd();
@@ -788,7 +1031,7 @@ function toggleFold(id, btn) {
 
     for (var di = 0; di < dateOrder.length && di < 7; di++) {
       var date = dateOrder[di];
-      var items = byDate[date];
+      var items = dedupeCareHistoryItemsBySlot(byDate[date], types);
       var hidden = (visibleCount > 0 && di >= visibleCount) || (visibleCount === 0 && di >= 1);
       if (hidden && di === Math.max(visibleCount, 1)) {
         html += '<div id="' + foldId + '" class="fold-area" style="display:none;">';
@@ -855,13 +1098,25 @@ function toggleFold(id, btn) {
         if (data.error) {
           alert('エラー: ' + (data.message || data.error));
           el.checked = false;
+          el.disabled = false;
+          el.removeAttribute('data-care-busy');
           return;
         }
-        loadCareSection();
+        var newId = data.record && data.record.id;
+        if (newId) {
+          deleteCareRecordsForSlotExcept(todayJstYmd(), rt, det, newId, function () {
+            el.disabled = false;
+            el.removeAttribute('data-care-busy');
+            loadCareSection();
+          });
+        } else {
+          el.disabled = false;
+          el.removeAttribute('data-care-busy');
+          loadCareSection();
+        }
       }).catch(function () {
         alert('ケア記録の保存に失敗しました');
         el.checked = false;
-      }).finally(function () {
         el.disabled = false;
         el.removeAttribute('data-care-busy');
       });
@@ -872,23 +1127,15 @@ function toggleFold(id, btn) {
       }
       el.setAttribute('data-care-busy', '1');
       el.disabled = true;
-      fetch(API_BASE + '/health/records/' + encodeURIComponent(rid), {
-        method: 'DELETE',
-        headers: apiHeaders(), cache: 'no-store',
-      }).then(function (r) { return r.json(); })
-      .then(function (data) {
-        if (data.error) {
-          alert('削除エラー: ' + (data.message || data.error));
+      deleteCareRecordsForSlotExcept(todayJstYmd(), rt, det, null, function (hadErr) {
+        el.disabled = false;
+        el.removeAttribute('data-care-busy');
+        if (hadErr) {
+          alert('取り消しに失敗しました');
           el.checked = true;
           return;
         }
         loadCareSection();
-      }).catch(function () {
-        alert('削除に失敗しました');
-        el.checked = true;
-      }).finally(function () {
-        el.disabled = false;
-        el.removeAttribute('data-care-busy');
       });
     }
   };
@@ -972,15 +1219,15 @@ function toggleFold(id, btn) {
 
   // ── 共通ヘルパー: 2週間日付リスト / 日別グルーピング / 行レンダリング ──
 
+  /** 直近 n 日の YYYY-MM-DD（日本日付）。排便・排尿一覧の列と record_date を一致させる */
   function buildRecentDays(n) {
     var result = [];
-    var d = new Date();
+    var cur = todayJstYmd();
     for (var i = 0; i < n; i++) {
-      var y = d.getFullYear();
-      var m = ('0' + (d.getMonth() + 1)).slice(-2);
-      var dd = ('0' + d.getDate()).slice(-2);
-      result.push(y + '-' + m + '-' + dd);
-      d.setDate(d.getDate() - 1);
+      result.push(cur);
+      var d = new Date(cur + 'T12:00:00+09:00');
+      d.setTime(d.getTime() - 86400000);
+      cur = d.toLocaleDateString('sv-SE', { timeZone: 'Asia/Tokyo' });
     }
     return result;
   }
@@ -1094,26 +1341,31 @@ function toggleFold(id, btn) {
     if (!clinicRecordsArea) return;
     clinicRecordsArea.innerHTML = '<div class="detail-section"><div class="detail-title">🏥 病院記録</div><div class="loading" style="padding:16px;">読み込み中...</div></div>';
 
-    fetch(API_BASE + '/health/records?cat_id=' + encodeURIComponent(catId) + '&limit=50', {
+    // scope=clinic: API 側で病院系のみ取得（従来は全種別最新50件→クライアント絞り込みで病院行が欠落していた）
+    fetch(API_BASE + '/health/records?cat_id=' + encodeURIComponent(catId) + '&scope=clinic&limit=100', {
       headers: apiHeaders(), cache: 'no-store',
     }).then(function (res) { return res.json(); })
     .then(function (data) {
+      if (data.error) {
+        clinicRecordsArea.innerHTML = '<div class="detail-section"><div class="detail-title">🏥 病院記録</div><div style="padding:16px;color:#f87171;font-size:13px;">読み込みエラー: ' + escapeHtml(String(data.message || data.error)) + '</div></div>';
+        return;
+      }
       var recs = data.records || [];
-      var clinicTypes = { vaccine: 1, checkup: 1, surgery: 1, dental: 1, emergency: 1, test: 1, observation: 1 };
+      var clinicTypes = { vaccine: 1, checkup: 1, surgery: 1, dental: 1, emergency: 1, test: 1, observation: 1, medication_start: 1, medication_end: 1 };
       var filtered = [];
       for (var i = 0; i < recs.length; i++) {
         if (clinicTypes[recs[i].record_type]) filtered.push(recs[i]);
       }
       renderClinicRecords(filtered);
     }).catch(function () {
-      clinicRecordsArea.innerHTML = '';
+      clinicRecordsArea.innerHTML = '<div class="detail-section"><div class="detail-title">🏥 病院記録</div><div style="padding:16px;color:#f87171;font-size:13px;">通信に失敗しました。再読み込みしてください。</div></div>';
     });
   }
 
   var vetScheduleArea = document.getElementById('vetScheduleArea');
 
   function renderClinicRecords(records) {
-    var typeLabels = { vaccine: 'ワクチン', checkup: '健診', surgery: '手術', dental: '歯科', emergency: '緊急', test: '検査', observation: '経過観察' };
+    var typeLabels = { vaccine: 'ワクチン', checkup: '健診', surgery: '手術', dental: '歯科', emergency: '緊急', test: '検査', observation: '経過観察', medication_start: '投薬開始', medication_end: '投薬終了' };
     var todayStr = new Date().toISOString().slice(0, 10);
 
     // ── 病院予定セクション ──
@@ -1791,6 +2043,7 @@ function toggleFold(id, btn) {
         _feedFetchJson(API_BASE + '/health/records?cat_id=' + encodeURIComponent(catId) + '&limit=40'),
         _feedFetchJson(API_BASE + '/feeding/foods'),
         _feedFetchJson(API_BASE + '/feeding/logs?cat_id=' + encodeURIComponent(catId) + '&date=' + yesterday),
+        _feedFetchJsonSoft(API_BASE + '/health-scores?cat_id=' + encodeURIComponent(catId) + '&limit=60'),
       ]).then(function (results) {
         var calcData = results[0];
         _lastCalcData = calcData;
@@ -1798,7 +2051,8 @@ function toggleFold(id, btn) {
         var healthRecs = (results[2] && results[2].records) || [];
         var foodsDb = (results[3] && results[3].foods) || [];
         var yesterdayLogs = (results[4] && results[4].logs) || [];
-        renderFeedingSection(calcData, results[1].logs || [], today, healthRecs, foodsDb, yesterdayLogs);
+        var appetiteHist = (results[5] && results[5].scores) || [];
+        renderFeedingSection(calcData, results[1].logs || [], today, healthRecs, foodsDb, yesterdayLogs, appetiteHist);
       }).catch(function (err) {
         if (retryCount < 2) {
           setTimeout(function () { doFetch(retryCount + 1); }, 1200);
@@ -2244,12 +2498,14 @@ function toggleFold(id, btn) {
     return h;
   }
 
-  function renderFeedingSection(calc, logs, today, healthRecs, foodsDb, yesterdayLogs) {
+  function renderFeedingSection(calc, logs, today, healthRecs, foodsDb, yesterdayLogs, appetiteScoreHistory) {
     healthRecs = healthRecs || [];
     foodsDb = foodsDb || [];
     yesterdayLogs = yesterdayLogs || [];
 
     var html = '<div class="detail-section">';
+    var appetitePts = normalizeAppetiteHistoryToPoints(appetiteScoreHistory || []);
+    html += appetiteIndexChartBlockHtml(appetitePts);
 
     var eveningPlans = [];
     var allPlans = (calc && calc.plans) || [];
@@ -2385,11 +2641,18 @@ function toggleFold(id, btn) {
       var plans = calc.plans || [];
       // プラン0件の分岐でも朝/夕ボタンに使うため、ここで必ず定義する（else 内のみだと undefined で例外→「データ取得に失敗」になる）
       var _slotFixed = ['morning', 'afternoon', 'evening'];
-      var todayLogPlanIds = {};
+      // 同一プランに同日複数ログがあると object 上書きで1件しか持たず、取り消し1回では残りが残って「消えない」ように見える
+      var todayLogsByPlanId = {};
       for (var li = 0; li < logs.length; li++) {
         if (!logs[li].plan_id) continue;
         if (logs[li].log_date && logs[li].log_date !== today) continue;
-        todayLogPlanIds[logs[li].plan_id] = logs[li];
+        var pkey = String(logs[li].plan_id);
+        if (!todayLogsByPlanId[pkey]) todayLogsByPlanId[pkey] = [];
+        todayLogsByPlanId[pkey].push(logs[li]);
+      }
+      for (var pk in todayLogsByPlanId) {
+        if (!todayLogsByPlanId.hasOwnProperty(pk)) continue;
+        todayLogsByPlanId[pk].sort(function (a, b) { return (a.id || 0) - (b.id || 0); });
       }
 
       if (plans.length === 0) {
@@ -2432,15 +2695,20 @@ function toggleFold(id, btn) {
           html += '</div>';
           for (var ii = 0; ii < slot.items.length; ii++) {
             var p = slot.items[ii];
-            var fedLog = todayLogPlanIds[p.id];
-            var isFed = !!fedLog;
+            var fedList = todayLogsByPlanId[String(p.id)] || [];
+            var fedLog = fedList.length ? fedList[fedList.length - 1] : null;
+            var isFed = fedList.length > 0;
+            var undoIdCsv = fedList.map(function (fl) { return fl.id; }).join(',');
             var typeTag = p.plan_type === 'preset' ? '<span style="font-size:9px;background:rgba(168,139,250,0.2);color:#c4b5fd;padding:1px 4px;border-radius:3px;margin-right:4px;">プリセット</span>' :
               p.plan_type === 'nyagi' ? '<span style="font-size:9px;background:rgba(74,222,128,0.2);color:#4ade80;padding:1px 4px;border-radius:3px;margin-right:4px;">NYAGI</span>' : '';
 
             html += '<div style="display:flex;align-items:center;gap:6px;padding:4px 0;border-bottom:1px solid rgba(255,255,255,0.04);">';
 
             if (isFed) {
-              html += '<button type="button" onclick="undoFed(' + fedLog.id + ')" style="font-size:18px;background:none;border:none;cursor:pointer;padding:0;" title="取り消し (' + escapeHtml(fedLog.served_time || '') + ')">✅</button>';
+              var undoTitle = fedList.length > 1
+                ? '取り消し（同日の記録が' + fedList.length + '件あります。まとめて削除します）'
+                : '取り消し (' + escapeHtml(fedLog.served_time || '') + ')';
+              html += '<button type="button" onclick="undoFedMany(\'' + undoIdCsv + '\')" style="font-size:18px;background:none;border:none;cursor:pointer;padding:0;" title="' + escapeHtml(undoTitle) + '">✅' + (fedList.length > 1 ? '<span style="font-size:10px;vertical-align:super;">' + fedList.length + '</span>' : '') + '</button>';
             } else {
               html += '<button type="button" onclick="quickFed(' + p.id + ')" style="font-size:18px;background:none;border:none;cursor:pointer;padding:0;" title="あげた！">⬜</button>';
             }
@@ -2460,10 +2728,10 @@ function toggleFold(id, btn) {
 
             html += '<div style="display:flex;gap:2px;">';
             if (isFed) {
-              html += '<button type="button" class="btn-edit-small" onclick="openFeedingLogModalForEdit(' + fedLog.id + ')" title="食べ残し修正" style="font-size:11px;">🍽</button>';
+              html += '<button type="button" class="btn-edit-small" onclick="openFeedingLogModalForEdit(' + fedLog.id + ')" title="食べ残し修正（最新の1件）" style="font-size:11px;">🍽</button>';
             }
             html += '<button type="button" class="btn-edit-small" onclick="editPlan(' + p.id + ')" title="編集" style="font-size:11px;">✏️</button>';
-            html += '<button type="button" class="btn-edit-small" onclick="deletePlan(' + p.id + ')" title="削除" style="font-size:11px;color:#f87171;">🗑</button>';
+            html += '<button type="button" class="btn-edit-small" onclick="deletePlan(' + p.id + ',\'' + String(p.meal_slot || '').replace(/'/g, '') + '\')" title="削除" style="font-size:11px;color:#f87171;">🗑</button>';
             html += '</div>';
             html += '</div>';
           }
@@ -2515,6 +2783,7 @@ function toggleFold(id, btn) {
     feedingArea.innerHTML = html;
     _feedingLogsCache = logs;
     _feedingSectionRenderedDate = today;
+    setTimeout(function () { paintAppetiteIndexCanvas(appetitePts); }, 0);
   }
 
   window.saveLeftoverFromPlan = function (planId, offeredG) {
@@ -2604,26 +2873,69 @@ function toggleFold(id, btn) {
     }).catch(function () { alert('記録に失敗しました'); });
   };
 
-  window.undoFed = function (logId) {
-    if (!confirm('この給餌記録を取り消しますか？')) return;
-    fetch(API_BASE + '/feeding/logs/' + logId, {
-      method: 'DELETE', headers: apiHeaders(), cache: 'no-store',
-    }).then(function (r) { return r.json(); })
-    .then(function (data) {
-      if (data.error) { alert('エラー: ' + (data.message || data.error)); return; }
-      loadFeedingSection();
-    }).catch(function () { alert('取り消しに失敗しました'); });
+  /** カンマ区切りのログIDを順に削除（同日・同一プランの重複「あげた」対策） */
+  window.undoFedMany = function (idCsv) {
+    var ids = String(idCsv || '').split(',').map(function (x) { return parseInt(x.trim(), 10); }).filter(function (n) { return !isNaN(n); });
+    if (ids.length === 0) { alert('取り消すログが見つかりません'); return; }
+    var msg = ids.length > 1
+      ? 'このプランの給餌記録が ' + ids.length + ' 件あります。まとめて取り消しますか？'
+      : 'この給餌記録を取り消しますか？';
+    if (!confirm(msg)) return;
+    _setFeedingAreaBusy('取り消し中です…（通信に失敗する場合は数十秒後にメッセージが出ます）');
+    function deleteAt(i) {
+      if (i >= ids.length) {
+        loadFeedingSection();
+        return;
+      }
+      _fetchDeleteJsonWithTimeout(API_BASE + '/feeding/logs/' + ids[i], 28000).then(function (data) {
+        if (!data._httpOk || data.error) {
+          alert('エラー: ' + (data.message || data.error || '取り消しに失敗しました'));
+          loadFeedingSection();
+          return;
+        }
+        deleteAt(i + 1);
+      }).catch(function (e) {
+        if (e && e._nyagiTimeout) {
+          alert('取り消しの通信がタイムアウトしました。電波・VPN・ログイン状態を確認し、再読み込みしてください。');
+        } else {
+          alert('取り消しに失敗しました');
+        }
+        loadFeedingSection();
+      });
+    }
+    // confirm 直後に同期的に fetch すると一部 WebView で応答が返らないことがあるため defer
+    setTimeout(function () { deleteAt(0); }, 0);
   };
 
-  window.deletePlan = function (planId) {
-    if (!confirm('この給餌プランを削除しますか？')) return;
-    fetch(API_BASE + '/feeding/plans/' + planId, {
-      method: 'DELETE', headers: apiHeaders(), cache: 'no-store'
-    }).then(function (r) { return r.json(); })
-    .then(function (data) {
-      if (data.error) { alert('エラー: ' + (data.message || data.error)); return; }
-      loadFeedingSection();
-    }).catch(function () { alert('削除に失敗しました'); });
+  window.undoFed = function (logId) {
+    window.undoFedMany(String(logId));
+  };
+
+  window.deletePlan = function (planId, mealSlot) {
+    var slotJa = { morning: '朝', afternoon: '昼', evening: '夕', night: '夕', dinner: '夕' };
+    var sj = mealSlot && slotJa[mealSlot] ? slotJa[mealSlot] : '';
+    var msg = sj
+      ? '🍽 ' + sj + 'の給餌プランを削除しますか？（取り消したい場合はプリセットの「適用」で再登録できます）'
+      : 'この給餌プランを削除しますか？';
+    if (!confirm(msg)) return;
+    _setFeedingAreaBusy('プラン削除中です…');
+    setTimeout(function () {
+      _fetchDeleteJsonWithTimeout(API_BASE + '/feeding/plans/' + planId, 28000).then(function (data) {
+        if (!data._httpOk || data.error) {
+          alert('エラー: ' + (data.message || data.error || '削除に失敗しました'));
+          loadFeedingSection();
+          return;
+        }
+        loadFeedingSection();
+      }).catch(function (e) {
+        if (e && e._nyagiTimeout) {
+          alert('削除の通信がタイムアウトしました。電波・ログインを確認し、再読み込みしてください。');
+        } else {
+          alert('削除に失敗しました');
+        }
+        loadFeedingSection();
+      });
+    }, 0);
   };
 
   window.editPlan = function (planId) {
@@ -4333,7 +4645,7 @@ function toggleFold(id, btn) {
   // ── 排尿記録モーダル ───────────────────────────────────────────────────────────
 
   window.openUrineModal = function () {
-    var today = new Date().toISOString().slice(0, 10);
+    var today = todayJstYmd();
     document.getElementById('urineDate').value = today;
     document.getElementById('urineStatus').value = '';
     document.getElementById('urineDetails').value = '';
@@ -4406,8 +4718,16 @@ function toggleFold(id, btn) {
     }).then(function (r) { return r.json(); })
     .then(function (data) {
       if (data.error) { alert('エラー: ' + (data.message || data.error)); return; }
-      closeCareModal();
-      loadCareSection();
+      var newId = data.record && data.record.id;
+      if (!newId) {
+        closeCareModal();
+        loadCareSection();
+        return;
+      }
+      deleteCareRecordsForSlotExcept(careDate, recordType, details, newId, function () {
+        closeCareModal();
+        loadCareSection();
+      });
     }).catch(function () {
       alert('ケア記録の保存に失敗しました');
     });
@@ -4553,7 +4873,7 @@ function toggleFold(id, btn) {
 
   function loadCatNotes() {
     if (!catNotesArea) return;
-    catNotesArea.innerHTML = '<div class="detail-section"><div class="section-header"><div class="detail-title">📝 注意事項</div><button class="btn-add" onclick="openCatNoteModal()">+ 追加</button></div><div class="loading" style="padding:16px;">読み込み中...</div></div>';
+    catNotesArea.innerHTML = '<div class="detail-section"><div class="section-header"><div class="detail-title">📝 注意事項</div><div style="display:flex;gap:8px;"><button type="button" class="btn-edit-loc" onclick="openInternalNoteModal()">内部メモ</button><button class="btn-add" onclick="openCatNoteModal()">+ 追加</button></div></div><div class="loading" style="padding:16px;">読み込み中...</div></div>';
 
     fetch(API_BASE + '/cat-notes?cat_id=' + encodeURIComponent(catId) + '&exclude_categories=feeding,nutrition,medication&limit=30', {
       headers: apiHeaders(), cache: 'no-store',
@@ -4561,11 +4881,12 @@ function toggleFold(id, btn) {
     .then(function (data) {
       renderCatNotes(data.notes || []);
     }).catch(function () {
-      catNotesArea.innerHTML = '<div class="detail-section"><div class="section-header"><div class="detail-title">📝 注意事項</div><button class="btn-add" onclick="openCatNoteModal()">+ 追加</button></div><div class="empty-msg">読み込みに失敗しました</div></div>';
+      catNotesArea.innerHTML = '<div class="detail-section"><div class="section-header"><div class="detail-title">📝 注意事項</div><div style="display:flex;gap:8px;"><button type="button" class="btn-edit-loc" onclick="openInternalNoteModal()">内部メモ</button><button class="btn-add" onclick="openCatNoteModal()">+ 追加</button></div></div><div class="empty-msg">読み込みに失敗しました</div></div>';
     });
   }
 
   function renderCatNotes(notes) {
+    _catNotesListCache = notes.slice();
     var internalNote = currentCatData ? (currentCatData.internal_note || '') : '';
     var noteTexts = {};
     for (var i = 0; i < notes.length; i++) {
@@ -4573,7 +4894,11 @@ function toggleFold(id, btn) {
     }
 
     var html = '<div class="detail-section">';
-    html += '<div class="section-header"><div class="detail-title">📝 注意事項・メモ</div><button class="btn-add" onclick="openCatNoteModal()">+ 追加</button></div>';
+    html += '<div class="section-header"><div class="detail-title">📝 注意事項・メモ</div>';
+    html += '<div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">';
+    html += '<button type="button" class="btn-edit-loc" onclick="openInternalNoteModal()" title="スタッフ向け内部メモ（cats.internal_note）">内部メモ</button>';
+    html += '<button class="btn-add" onclick="openCatNoteModal()">+ 追加</button>';
+    html += '</div></div>';
 
     var hasContent = false;
 
@@ -4583,8 +4908,16 @@ function toggleFold(id, btn) {
       html += '<span class="cat-note-pin">📋</span>';
       html += '<div class="cat-note-head">';
       html += '<span><span class="cat-note-category general">内部メモ</span></span>';
+      html += '<span><button type="button" class="btn-edit-loc" onclick="openInternalNoteModal()">編集</button></span>';
       html += '</div>';
       html += '<div class="cat-note-body">' + escapeHtml(internalNote) + '</div>';
+      html += '</div>';
+    } else if (currentCatData && (!internalNote || !internalNote.trim())) {
+      hasContent = true;
+      html += '<div class="cat-note-item" style="border:1px dashed rgba(255,255,255,0.15);">';
+      html += '<div class="cat-note-head"><span class="cat-note-category general">内部メモ</span>';
+      html += '<button type="button" class="btn-edit-loc" onclick="openInternalNoteModal()">＋ 追加</button></div>';
+      html += '<div class="empty-msg" style="margin:0;font-size:12px;">未登録（スタッフ向けの長文メモ）</div>';
       html += '</div>';
     }
 
@@ -4602,6 +4935,10 @@ function toggleFold(id, btn) {
       html += '<span>' + formatDate(n.created_at) + '</span>';
       html += '</div>';
       html += '<div class="cat-note-body">' + escapeHtml(n.note) + '</div>';
+      html += '<div class="cat-note-actions">';
+      html += '<button type="button" onclick="openEditCatNote(' + n.id + ')">編集</button>';
+      html += '<button type="button" class="cat-note-del" onclick="deleteCatNoteConfirm(' + n.id + ')">削除</button>';
+      html += '</div>';
       html += '</div>';
     }
 
@@ -4621,19 +4958,84 @@ function toggleFold(id, btn) {
   }
 
   window.openCatNoteModal = function () {
+    var eid = document.getElementById('cnEditId');
+    var ttl = document.getElementById('cnModalTitle');
+    if (eid) eid.value = '';
+    if (ttl) ttl.textContent = '注意事項を追加';
     document.getElementById('cnNote').value = '';
     document.getElementById('cnCategory').value = 'general';
     document.getElementById('cnPinned').checked = false;
     document.getElementById('catNoteModal').classList.add('open');
   };
 
+  window.openEditCatNote = function (noteId) {
+    var row = null;
+    for (var i = 0; i < _catNotesListCache.length; i++) {
+      if (String(_catNotesListCache[i].id) === String(noteId)) {
+        row = _catNotesListCache[i];
+        break;
+      }
+    }
+    if (!row) {
+      alert('メモが見つかりません。一覧を再読み込みしてください。');
+      return;
+    }
+    var eid = document.getElementById('cnEditId');
+    var ttl = document.getElementById('cnModalTitle');
+    if (eid) eid.value = String(row.id);
+    if (ttl) ttl.textContent = '注意事項を編集';
+    document.getElementById('cnNote').value = row.note || '';
+    document.getElementById('cnCategory').value = row.category || 'general';
+    document.getElementById('cnPinned').checked = !!row.pinned;
+    document.getElementById('catNoteModal').classList.add('open');
+  };
+
+  window.deleteCatNoteConfirm = function (noteId) {
+    if (!confirm('この注意事項を削除しますか？')) return;
+    fetch(API_BASE + '/cat-notes/' + encodeURIComponent(noteId), {
+      method: 'DELETE',
+      headers: apiHeaders(), cache: 'no-store',
+    }).then(function (r) { return r.json(); })
+    .then(function (data) {
+      if (data.error) { alert('エラー: ' + (data.message || data.error)); return; }
+      loadCatNotes();
+    }).catch(function () {
+      alert('削除に失敗しました');
+    });
+  };
+
   window.closeCatNoteModal = function () {
     document.getElementById('catNoteModal').classList.remove('open');
+    var eid = document.getElementById('cnEditId');
+    if (eid) eid.value = '';
   };
 
   window.submitCatNote = function () {
     var note = document.getElementById('cnNote').value.trim();
     if (!note) { alert('内容を入力してください'); return; }
+
+    var editIdEl = document.getElementById('cnEditId');
+    var editId = editIdEl && editIdEl.value ? String(editIdEl.value).trim() : '';
+
+    if (editId) {
+      fetch(API_BASE + '/cat-notes/' + encodeURIComponent(editId), {
+        method: 'PUT',
+        headers: apiHeaders(), cache: 'no-store',
+        body: JSON.stringify({
+          note: note,
+          category: document.getElementById('cnCategory').value,
+          pinned: document.getElementById('cnPinned').checked,
+        }),
+      }).then(function (r) { return r.json(); })
+      .then(function (data) {
+        if (data.error) { alert('エラー: ' + (data.message || data.error)); return; }
+        closeCatNoteModal();
+        loadCatNotes();
+      }).catch(function () {
+        alert('保存に失敗しました');
+      });
+      return;
+    }
 
     fetch(API_BASE + '/cat-notes', {
       method: 'POST',
@@ -4648,6 +5050,37 @@ function toggleFold(id, btn) {
     .then(function (data) {
       if (data.error) { alert('エラー: ' + (data.message || data.error)); return; }
       closeCatNoteModal();
+      loadCatNotes();
+    }).catch(function () {
+      alert('保存に失敗しました');
+    });
+  };
+
+  window.openInternalNoteModal = function () {
+    if (!currentCatData) return;
+    var t = document.getElementById('inNoteText');
+    if (t) t.value = currentCatData.internal_note || '';
+    var m = document.getElementById('internalNoteModal');
+    if (m) m.classList.add('open');
+  };
+
+  window.closeInternalNoteModal = function () {
+    var m = document.getElementById('internalNoteModal');
+    if (m) m.classList.remove('open');
+  };
+
+  window.submitInternalNote = function () {
+    var text = document.getElementById('inNoteText');
+    var val = text ? text.value.trim() : '';
+    fetch(API_BASE + '/cats/' + encodeURIComponent(catId), {
+      method: 'PUT',
+      headers: apiHeaders(), cache: 'no-store',
+      body: JSON.stringify({ internal_note: val || null }),
+    }).then(function (r) { return r.json(); })
+    .then(function (data) {
+      if (data.error) { alert('エラー: ' + (data.message || data.error)); return; }
+      if (currentCatData) currentCatData.internal_note = val || null;
+      closeInternalNoteModal();
       loadCatNotes();
     }).catch(function () {
       alert('保存に失敗しました');

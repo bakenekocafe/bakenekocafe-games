@@ -175,6 +175,113 @@
       gap: 4px 8px;
     }
 
+    .item-row-editable {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: flex-start;
+      gap: 6px 8px;
+      padding: 6px 0;
+      border-bottom: 1px solid rgba(255,255,255,0.04);
+      font-size: 13px;
+    }
+    .item-row-editable:last-child { border-bottom: none; }
+    .item-row-editable .item-cat-link {
+      text-decoration: none;
+      color: inherit;
+      font-weight: 600;
+      min-width: 60px;
+      flex-shrink: 0;
+      display: flex;
+      align-items: center;
+      gap: 4px;
+      -webkit-tap-highlight-color: rgba(255,255,255,0.1);
+    }
+    .item-row-editable .item-cat-link:active { opacity: 0.75; }
+    .item-inline-edit {
+      flex: 1 1 100%;
+      margin-top: 2px;
+      padding-top: 6px;
+      border-top: 1px dashed rgba(255,255,255,0.08);
+    }
+    .inline-form {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      gap: 6px;
+    }
+    .ov-inline-select,
+    .ov-inline-date,
+    .ov-inline-num {
+      font-size: 12px;
+      padding: 4px 6px;
+      border-radius: 6px;
+      background: var(--surface-alt, rgba(255,255,255,0.06));
+      color: var(--text-main, #fff);
+      border: 1px solid rgba(255,255,255,0.12);
+      max-width: 100%;
+    }
+    .ov-inline-select { min-height: 30px; }
+    .item-values-medcol {
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+      flex: 1;
+      min-width: 0;
+      width: 100%;
+    }
+    .ov-task-line {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      gap: 6px;
+      font-size: 12px;
+      margin-top: 4px;
+      padding-top: 4px;
+      border-top: 1px dashed rgba(255,255,255,0.06);
+    }
+    .ov-task-line:first-of-type { margin-top: 2px; padding-top: 0; border-top: none; }
+    .ov-task-title { flex: 1 1 120px; min-width: 0; line-height: 1.35; }
+    .btn-ov-task-done, .btn-ov-task-skip, .btn-ov-med-skip {
+      font-size: 10px !important;
+      padding: 2px 8px !important;
+      flex-shrink: 0;
+    }
+
+    .item-values-excretion {
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+      flex: 1;
+      min-width: 0;
+      width: 100%;
+    }
+    .ov-ex-row {
+      padding: 4px 0;
+      border-bottom: 1px dashed rgba(255,255,255,0.06);
+    }
+    .ov-ex-row:last-child { border-bottom: none; }
+    .ov-ex-display {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      gap: 6px;
+    }
+    .ov-ex-text { flex: 1 1 140px; min-width: 0; font-size: 12px; line-height: 1.35; }
+    .btn-ov-hr-edit, .btn-ov-hr-del, .btn-ov-hr-cancel {
+      font-size: 10px !important;
+      padding: 2px 8px !important;
+    }
+    .ov-ex-edit {
+      display: none;
+      flex-wrap: wrap;
+      align-items: center;
+      gap: 6px;
+      margin-top: 6px;
+    }
+    .ov-ex-row.is-editing .ov-ex-display { display: none; }
+    .ov-ex-row.is-editing .ov-ex-edit { display: flex; }
+    .ov-ex-line.ov-ex-voice { font-size: 12px; line-height: 1.4; }
+
     /* ── 共通パーツ ── */
     .alert-dot {
       display: inline-block;
@@ -397,7 +504,7 @@
   <script src="config.js?v=202"></script>
   <script src="js/login-gate.js?v=202"></script>
   <script src="js/app.js?v=202"></script>
-  <script src="js/cats-overview.js?v=202"></script>
+  <script src="js/cats-overview.js?v=207"></script>
   <script src="js/voice-console.js?v=202"></script>
 </body>
 </html>

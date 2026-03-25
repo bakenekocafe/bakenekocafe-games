@@ -296,7 +296,7 @@
       name: c.name,
       species: c.species || 'cat',
       locationId: c.location_id,
-      assignedPresetId: c.assigned_preset_id != null ? c.assigned_preset_id : null,
+      assignedPresetId: null,
     };
     var modal = document.getElementById('ovPresetApplyModal');
     if (!modal) return;
@@ -308,18 +308,36 @@
   function ovOpenPresetAssign(catId) {
     var c = ovFindCat(catId);
     if (!c) return;
-    _ovFeedCtx = {
-      catId: c.id,
-      name: c.name,
-      species: c.species || 'cat',
-      locationId: c.location_id,
-      assignedPresetId: c.assigned_preset_id != null ? c.assigned_preset_id : null,
-    };
     var modal = document.getElementById('ovPresetApplyModal');
     if (!modal) return;
     modal.innerHTML = '<div class="modal-box"><div class="loading" style="padding:16px;">読み込み中...</div></div>';
     modal.classList.add('open');
-    ovFillPresetAssignModal(ovEffectivePresetLoc(c));
+    fetch(apiOpsBase() + '/cats/' + encodeURIComponent(catId), { headers: apiHeaders(), cache: 'no-store' })
+      .then(function (r) { return r.json(); })
+      .then(function (d) {
+        var apid = null;
+        if (d.cat && d.cat.assigned_preset_id != null && d.cat.assigned_preset_id !== '') {
+          apid = d.cat.assigned_preset_id;
+        }
+        _ovFeedCtx = {
+          catId: c.id,
+          name: c.name,
+          species: (d.cat && d.cat.species) || c.species || 'cat',
+          locationId: c.location_id,
+          assignedPresetId: apid,
+        };
+        ovFillPresetAssignModal(ovEffectivePresetLoc(c));
+      })
+      .catch(function () {
+        _ovFeedCtx = {
+          catId: c.id,
+          name: c.name,
+          species: c.species || 'cat',
+          locationId: c.location_id,
+          assignedPresetId: null,
+        };
+        ovFillPresetAssignModal(ovEffectivePresetLoc(c));
+      });
   }
 
   function ovOpenPresetManage(catId) {
@@ -330,7 +348,7 @@
       name: c.name,
       species: c.species || 'cat',
       locationId: c.location_id,
-      assignedPresetId: c.assigned_preset_id != null ? c.assigned_preset_id : null,
+      assignedPresetId: null,
     };
     var modal = document.getElementById('ovPresetApplyModal');
     if (!modal) return;
@@ -504,18 +522,87 @@
       }).catch(function () { alert('保存に失敗しました'); });
   }
 
-  function ovQuickFedPlan(planId) {
-    if (!planId) return;
-    fetch(feedingApiBase() + '/plans/' + encodeURIComponent(planId) + '/fed', {
+  var _ovQfPlanId = null;
+
+  function ovOpenQuickFedModal(planId, foodName, amountG) {
+    _ovQfPlanId = planId;
+    var t = document.getElementById('ovQfTitle');
+    if (t) t.textContent = '🍚 あげた記録';
+    var fn = document.getElementById('ovQfFoodName');
+    if (fn) fn.textContent = foodName || '—';
+    var og = document.getElementById('ovQfOfferedG');
+    if (og) og.value = amountG || '';
+    var m = document.getElementById('ovQuickFedModal');
+    if (m) m.classList.add('open');
+  }
+
+  function ovCloseQuickFedModal() {
+    _ovQfPlanId = null;
+    var m = document.getElementById('ovQuickFedModal');
+    if (m) m.classList.remove('open');
+  }
+
+  function ovSubmitQuickFed() {
+    if (!_ovQfPlanId) return;
+    var og = document.getElementById('ovQfOfferedG');
+    var offeredG = og && og.value ? parseFloat(og.value) : null;
+    var payload = { log_date: todayJstYmd() };
+    if (offeredG != null && offeredG > 0) payload.offered_g = offeredG;
+    fetch(feedingApiBase() + '/plans/' + encodeURIComponent(_ovQfPlanId) + '/fed', {
       method: 'POST',
       headers: apiHeaders(),
       cache: 'no-store',
-      body: JSON.stringify({ log_date: todayJstYmd() }),
+      body: JSON.stringify(payload),
     }).then(function (r) { return r.json(); })
       .then(function (data) {
         if (data.error) { alert('エラー: ' + (data.message || data.error)); return; }
+        ovCloseQuickFedModal();
         fetchData(0);
       }).catch(function () { alert('記録に失敗しました'); });
+  }
+
+  var _ovElLogId = null;
+
+  function ovOpenEditLogModal(logId, foodName, offeredG, eatenPct) {
+    _ovElLogId = logId;
+    var t = document.getElementById('ovElTitle');
+    if (t) t.textContent = '✏️ 給餌ログ編集';
+    var fn = document.getElementById('ovElFoodName');
+    if (fn) fn.textContent = foodName || '—';
+    var og = document.getElementById('ovElOfferedG');
+    if (og) og.value = offeredG || '';
+    var ep = document.getElementById('ovElEatenPct');
+    if (ep) ep.value = eatenPct || '100';
+    var m = document.getElementById('ovEditLogModal');
+    if (m) m.classList.add('open');
+  }
+
+  function ovCloseEditLogModal() {
+    _ovElLogId = null;
+    var m = document.getElementById('ovEditLogModal');
+    if (m) m.classList.remove('open');
+  }
+
+  function ovSubmitEditLog() {
+    if (!_ovElLogId) return;
+    var og = document.getElementById('ovElOfferedG');
+    var ep = document.getElementById('ovElEatenPct');
+    var offeredG = og && og.value ? parseFloat(og.value) : null;
+    var eatenPct = ep && ep.value !== '' ? parseFloat(ep.value) : null;
+    var payload = {};
+    if (offeredG != null) payload.offered_g = offeredG;
+    if (eatenPct != null) payload.eaten_pct = eatenPct;
+    fetch(feedingApiBase() + '/logs/' + encodeURIComponent(_ovElLogId), {
+      method: 'PUT',
+      headers: apiHeaders(),
+      cache: 'no-store',
+      body: JSON.stringify(payload),
+    }).then(function (r) { return r.json(); })
+      .then(function (data) {
+        if (data.error) { alert('エラー: ' + (data.message || data.error)); return; }
+        ovCloseEditLogModal();
+        fetchData(0);
+      }).catch(function () { alert('保存に失敗しました'); });
   }
 
   function ovUndoFedLog(logId) {
@@ -540,6 +627,143 @@
       }).catch(function () { alert('削除に失敗しました'); });
   }
 
+  // ── 残しモーダル ─────────────────────────────────────────────────────────
+
+  var _ovLoCatId = null;
+  var _ovLoEntries = [];
+
+  function yesterdayJstYmd() {
+    var d = new Date(Date.now() + 9 * 3600000);
+    d.setDate(d.getDate() - 1);
+    return d.toISOString().slice(0, 10);
+  }
+
+  function isNightSlot(slot) {
+    var s = (slot || '').toLowerCase();
+    return s === 'evening' || s === 'night' || s === '夕' || s === '晩' || s === '夜';
+  }
+  function isLunchSlot(slot) {
+    var s = (slot || '').toLowerCase();
+    return s === 'afternoon' || s === 'lunch' || s === '昼';
+  }
+
+  function ovOpenLeftoverModal(catId) {
+    _ovLoCatId = catId;
+    _ovLoEntries = [];
+    var c = ovFindCat(catId);
+    var catName = c ? c.name : '';
+    var t = document.getElementById('ovLoTitle');
+    if (t) t.textContent = '🥄 残し記録 — ' + catName;
+    var body = document.getElementById('ovLoBody');
+    if (body) body.innerHTML = '<p style="text-align:center;color:#aaa;padding:16px;">読込中…</p>';
+    var m = document.getElementById('ovLeftoverModal');
+    if (m) m.classList.add('open');
+
+    var todayStr = todayJstYmd();
+    var yesterdayStr = yesterdayJstYmd();
+    var base = feedingApiBase() + '/logs?cat_id=' + encodeURIComponent(catId);
+
+    Promise.all([
+      fetch(base + '&date=' + yesterdayStr, { headers: apiHeaders(), cache: 'no-store' }).then(function (r) { return r.json(); }),
+      fetch(base + '&date=' + todayStr, { headers: apiHeaders(), cache: 'no-store' }).then(function (r) { return r.json(); })
+    ]).then(function (results) {
+      var yesterdayLogs = (results[0].logs || []).filter(function (l) { return isNightSlot(l.meal_slot); });
+      var todayLogs = results[1].logs || [];
+      var todayLunch = todayLogs.filter(function (l) { return isLunchSlot(l.meal_slot); });
+      var todayNight = todayLogs.filter(function (l) { return isNightSlot(l.meal_slot); });
+
+      _ovLoEntries = [];
+      var html = '';
+
+      var sections = [
+        { label: '前日夜', logs: yesterdayLogs },
+        { label: '当日昼', logs: todayLunch },
+        { label: '当日夜', logs: todayNight }
+      ];
+
+      for (var si = 0; si < sections.length; si++) {
+        var sec = sections[si];
+        html += '<div style="margin-bottom:12px;"><div style="font-weight:700;font-size:13px;margin-bottom:4px;border-bottom:1px solid #eee;padding-bottom:2px;">' + esc(sec.label) + '</div>';
+        if (sec.logs.length === 0) {
+          html += '<div style="color:#aaa;font-size:12px;padding:4px 0;">記録なし</div>';
+        } else {
+          for (var li = 0; li < sec.logs.length; li++) {
+            var lg = sec.logs[li];
+            var idx = _ovLoEntries.length;
+            _ovLoEntries.push({ log_id: lg.id, offered_g: lg.offered_g, current_eaten_pct: lg.eaten_pct });
+            var offG = lg.offered_g != null ? lg.offered_g : '—';
+            var fname = lg.food_name || '不明';
+            var curLeftover = '';
+            if (lg.offered_g && lg.eaten_pct != null && lg.eaten_pct < 100) {
+              curLeftover = ' (現在: 残し' + Math.round(lg.offered_g * (100 - lg.eaten_pct) / 100 * 10) / 10 + 'g)';
+            }
+            html += '<div style="display:flex;align-items:center;gap:6px;padding:3px 0;font-size:12px;">';
+            html += '<span style="flex:1;">' + esc(fname) + ' <strong>' + esc(String(offG)) + 'g</strong><span class="dim">' + esc(curLeftover) + '</span></span>';
+            html += '<label style="white-space:nowrap;">残し</label>';
+            html += '<input type="number" class="form-input ov-lo-input" data-lo-idx="' + idx + '" style="width:70px;font-size:12px;padding:2px 4px;" step="0.1" min="0" placeholder="g">';
+            html += '</div>';
+          }
+        }
+        html += '</div>';
+      }
+
+      if (body) body.innerHTML = html;
+    }).catch(function () {
+      if (body) body.innerHTML = '<p style="text-align:center;color:#c44;padding:16px;">読込失敗</p>';
+    });
+  }
+
+  function ovCloseLeftoverModal() {
+    _ovLoCatId = null;
+    _ovLoEntries = [];
+    var m = document.getElementById('ovLeftoverModal');
+    if (m) m.classList.remove('open');
+  }
+
+  function ovSubmitLeftover() {
+    var inputs = document.querySelectorAll('.ov-lo-input');
+    var updates = [];
+    for (var i = 0; i < inputs.length; i++) {
+      var inp = inputs[i];
+      var val = inp.value;
+      if (val === '' || val == null) continue;
+      var leftoverG = parseFloat(val);
+      if (isNaN(leftoverG) || leftoverG < 0) continue;
+      var idx = parseInt(inp.getAttribute('data-lo-idx'), 10);
+      var entry = _ovLoEntries[idx];
+      if (!entry || !entry.log_id) continue;
+      var offG = entry.offered_g;
+      if (!offG || offG <= 0) continue;
+      var newPct = Math.max(0, Math.min(100, Math.round((offG - leftoverG) / offG * 100)));
+      updates.push({ log_id: entry.log_id, eaten_pct: newPct });
+    }
+    if (updates.length === 0) { alert('残し量を入力してください'); return; }
+
+    var pending = updates.length;
+    var errors = [];
+    for (var u = 0; u < updates.length; u++) {
+      (function (upd) {
+        fetch(feedingApiBase() + '/logs/' + encodeURIComponent(upd.log_id), {
+          method: 'PUT',
+          headers: apiHeaders(),
+          cache: 'no-store',
+          body: JSON.stringify({ eaten_pct: upd.eaten_pct }),
+        }).then(function (r) { return r.json(); })
+          .then(function (data) {
+            if (data.error) errors.push(data.message || data.error);
+          }).catch(function () { errors.push('通信エラー'); })
+          .then(function () {
+            pending--;
+            if (pending <= 0) {
+              if (errors.length > 0) alert('一部エラー: ' + errors.join(', '));
+              ovCloseLeftoverModal();
+              fetchData(0);
+            }
+          });
+      })(updates[u]);
+    }
+  }
+
   function ovBindFeedingModalDom() {
     var c1 = document.getElementById('ovCloseAddPlanBtn');
     if (c1 && !c1._ovBound) { c1._ovBound = true; c1.addEventListener('click', ovCloseAddPlanModal); }
@@ -549,6 +773,18 @@
     if (c2 && !c2._ovBound) { c2._ovBound = true; c2.addEventListener('click', ovCloseFlModal); }
     var s2 = document.getElementById('ovSubmitFlBtn');
     if (s2 && !s2._ovBound) { s2._ovBound = true; s2.addEventListener('click', ovSubmitFeedingLog); }
+    var cqf = document.getElementById('ovCloseQfBtn');
+    if (cqf && !cqf._ovBound) { cqf._ovBound = true; cqf.addEventListener('click', ovCloseQuickFedModal); }
+    var sqf = document.getElementById('ovSubmitQfBtn');
+    if (sqf && !sqf._ovBound) { sqf._ovBound = true; sqf.addEventListener('click', ovSubmitQuickFed); }
+    var cel = document.getElementById('ovCloseElBtn');
+    if (cel && !cel._ovBound) { cel._ovBound = true; cel.addEventListener('click', ovCloseEditLogModal); }
+    var sel = document.getElementById('ovSubmitElBtn');
+    if (sel && !sel._ovBound) { sel._ovBound = true; sel.addEventListener('click', ovSubmitEditLog); }
+    var clo = document.getElementById('ovCloseLoBtn');
+    if (clo && !clo._ovBound) { clo._ovBound = true; clo.addEventListener('click', ovCloseLeftoverModal); }
+    var slo = document.getElementById('ovSubmitLoBtn');
+    if (slo && !slo._ovBound) { slo._ovBound = true; slo.addEventListener('click', ovSubmitLeftover); }
   }
 
   function ovHandlePresetModalClick(ev) {
@@ -1039,7 +1275,20 @@
         ev.preventDefault();
         ev.stopPropagation();
         var pid = fmf.getAttribute('data-plan-id');
-        if (pid) ovQuickFedPlan(pid);
+        var fnm = fmf.getAttribute('data-food-name') || '';
+        var amg = fmf.getAttribute('data-amount-g') || '';
+        if (pid) ovOpenQuickFedModal(pid, fnm, amg);
+        return;
+      }
+      var felg = ev.target.closest && ev.target.closest('.btn-ov-feed-editlog');
+      if (felg) {
+        ev.preventDefault();
+        ev.stopPropagation();
+        var elid = felg.getAttribute('data-log-id');
+        var elfn = felg.getAttribute('data-food-name') || '';
+        var elog = felg.getAttribute('data-offered-g') || '';
+        var elep = felg.getAttribute('data-eaten-pct') || '100';
+        if (elid) ovOpenEditLogModal(elid, elfn, elog, elep);
         return;
       }
       var fund = ev.target.closest && ev.target.closest('.btn-ov-feed-undofed');
@@ -1066,6 +1315,14 @@
         var cide = fed.getAttribute('data-cat-id');
         var pide = fed.getAttribute('data-plan-id');
         if (cide && pide) ovOpenAddPlanModal(cide, null, pide);
+        return;
+      }
+      var flft = ev.target.closest && ev.target.closest('.btn-ov-feed-leftover');
+      if (flft) {
+        ev.preventDefault();
+        ev.stopPropagation();
+        var clo = flft.getAttribute('data-cat-id');
+        if (clo) ovOpenLeftoverModal(clo);
         return;
       }
       var hrEdit = ev.target.closest && ev.target.closest('.btn-ov-hr-edit');
@@ -1564,7 +1821,7 @@
   // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
   /** 開いているカード index のみ true。未設定＝すべて折りたたみがデフォルト（カード構成変更時はキーを変えてインデックスずれを防ぐ） */
-  var EXPANDED_KEY = 'nyagi_items_expanded_v8';
+  var EXPANDED_KEY = 'nyagi_items_expanded_v9';
   var LEGACY_FOLD_KEY = 'nyagi_items_folded';
 
   function loadExpandedMap() {
@@ -1598,9 +1855,12 @@
     html += renderItemCard_Stool();
     html += renderItemCard_Urine();
     html += renderItemCard_Weight();
+    html += renderItemCard_Meds();
     html += renderItemCard_FeedingCheck();
     html += renderItemCard_Care();
     html += renderItemCard_Tasks();
+    html += renderItemCard_Anomaly();
+    html += renderItemCard_Medical();
     cardArea.innerHTML = html;
     bindOverviewInlineHandlers();
 
@@ -1775,11 +2035,9 @@
       var plan = c.feeding_plan || [];
       var inner = '';
       var toolbar = '<div class="ov-feed-toolbar" style="display:flex;flex-wrap:wrap;gap:4px;margin-bottom:6px;width:100%;">' +
-        '<button type="button" class="btn btn-outline btn-ov-feed-preset" style="font-size:10px;padding:2px 6px;" data-cat-id="' + escAttr(String(c.id)) + '">📋適用</button>' +
-        '<button type="button" class="btn btn-outline btn-ov-feed-assign" style="font-size:10px;padding:2px 6px;" data-cat-id="' + escAttr(String(c.id)) + '">🔗紐づけ</button>' +
-        '<button type="button" class="btn btn-outline btn-ov-feed-manage" style="font-size:10px;padding:2px 6px;" data-cat-id="' + escAttr(String(c.id)) + '">⚙️管理</button>' +
         '<button type="button" class="btn btn-outline btn-ov-feed-addplan" style="font-size:10px;padding:2px 6px;" data-cat-id="' + escAttr(String(c.id)) + '">＋献立</button>' +
         '<button type="button" class="btn btn-outline btn-ov-feed-log" style="font-size:10px;padding:2px 6px;" data-cat-id="' + escAttr(String(c.id)) + '">📝記録</button>' +
+        '<button type="button" class="btn btn-outline btn-ov-feed-leftover" style="font-size:10px;padding:2px 6px;" data-cat-id="' + escAttr(String(c.id)) + '">🥄残し</button>' +
         '<a href="' + catLink(c.id, 'feedingArea') + '" class="btn btn-outline" style="font-size:10px;padding:2px 6px;text-decoration:none;">詳細</a>' +
         '</div>';
       if (plan.length === 0) {
@@ -1792,19 +2050,24 @@
           if (p.notes) menu += ' <small class="dim">' + esc(p.notes) + '</small>';
           var st = '';
           var pidStr = p.plan_id != null ? String(p.plan_id) : '';
+          var logIdStr = p.log_id != null ? String(p.log_id) : '';
+          var offeredGLogStr = p.offered_g_log != null ? String(p.offered_g_log) : '';
           if (p.fed_today) {
             st = '<span class="feed-done">✅</span>';
             if (p.eaten_pct_today != null && p.eaten_pct_today !== '') st += '<span class="dim">' + esc(String(p.eaten_pct_today)) + '%</span> ';
-            if (p.log_id != null) {
-              st += '<button type="button" class="btn btn-outline btn-ov-feed-undofed" style="font-size:10px;padding:1px 6px;" data-log-id="' + escAttr(String(p.log_id)) + '">取消</button> ';
+            if (logIdStr) {
+              st += '<button type="button" class="btn btn-outline btn-ov-feed-editlog" style="font-size:10px;padding:1px 6px;" data-log-id="' + escAttr(logIdStr) + '" data-food-name="' + escAttr(p.food_name || '') + '" data-offered-g="' + escAttr(offeredGLogStr || String(p.amount_g || '')) + '" data-eaten-pct="' + escAttr(String(p.eaten_pct_today != null ? p.eaten_pct_today : 100)) + '">✏️</button> ';
+              st += '<button type="button" class="btn btn-outline btn-ov-feed-undofed" style="font-size:10px;padding:1px 6px;" data-log-id="' + escAttr(logIdStr) + '">取消</button> ';
             }
           } else if (pidStr) {
-            st = '<button type="button" class="btn btn-primary btn-ov-feed-markfed" style="font-size:10px;padding:1px 8px;" data-plan-id="' + escAttr(pidStr) + '">あげた</button> ';
+            st = '<button type="button" class="btn btn-primary btn-ov-feed-markfed" style="font-size:10px;padding:1px 8px;" data-plan-id="' + escAttr(pidStr) + '" data-food-name="' + escAttr(p.food_name || '') + '" data-amount-g="' + escAttr(String(p.amount_g || '')) + '">あげた</button> ';
           } else {
             st = '<span class="feed-pending">⬜</span> ';
           }
-          if (pidStr) {
+          if (pidStr && !p.fed_today) {
             st += '<button type="button" class="btn btn-outline btn-ov-feed-editplan" style="font-size:10px;padding:1px 6px;" data-cat-id="' + escAttr(String(c.id)) + '" data-plan-id="' + escAttr(pidStr) + '">✏️</button> ';
+          }
+          if (pidStr) {
             st += '<button type="button" class="btn btn-outline btn-ov-feed-delplan" style="font-size:10px;padding:1px 6px;color:#f87171;" data-plan-id="' + escAttr(pidStr) + '" data-cat-name="' + escAttr(c.name) + '">🗑</button>';
           }
           inner += '<div class="ov-feed-line"><span class="ov-feed-slot">' + feedingMealSlotLabelJp(p.meal_slot) + '</span><span class="ov-feed-menu">' + menu + '</span><span class="ov-feed-status" style="text-align:right;">' + st + '</span></div>';
@@ -1865,6 +2128,76 @@
     return html;
   }
 
+  function renderItemCard_Meds() {
+    var html = '<div class="item-card">';
+    html += '<div class="item-card-title">💊 本日の投薬状況</div>';
+    html += '<div class="item-card-body">';
+    for (var i = 0; i < catsData.length; i++) {
+      var c = catsData[i];
+      var meds = c.meds_today || { done: 0, total: 0, items: [] };
+      var items = meds.items || [];
+      var medVals = '';
+      if (meds.total === 0) {
+        medVals = '<span class="dim">投薬予定なし</span>';
+      } else {
+        var mc = meds.done >= meds.total ? 'score-color-green' : meds.done > 0 ? 'score-color-yellow' : 'score-color-red';
+        var allIcon = meds.done >= meds.total ? '✅' : '⏳';
+        medVals = '<span class="' + mc + '" style="font-weight:700;">' + allIcon + ' ' + meds.done + '/' + meds.total + ' 完了</span>';
+        for (var j = 0; j < items.length; j++) {
+          var it = items[j];
+          var isDone = it.status === 'done';
+          var isSkipped = it.status === 'skipped';
+          var itemIcon = isDone ? '✅' : isSkipped ? '⏭️' : '🔴';
+          var itemCls = isDone ? 'med-item-done' : isSkipped ? 'med-item-skip' : 'med-item-pending';
+          medVals += '<span class="' + itemCls + '" style="font-size:12px;">' + itemIcon + ' ' + (it.slot ? '<b>' + esc(it.slot) + '</b> ' : '') + esc(it.name) + (it.dosage ? ' <small>' + esc(it.dosage) + '</small>' : '') + '</span>';
+        }
+      }
+      html += itemRowEditable(c, '<div class="item-values-medcol">' + medVals + '</div>', '');
+    }
+    html += '</div></div>';
+    return html;
+  }
+
+  function renderItemCard_Anomaly() {
+    var html = '<div class="item-card">';
+    html += '<div class="item-card-title">⚠️ 健康異常</div>';
+    html += '<div class="item-card-body">';
+    for (var i = 0; i < catsData.length; i++) {
+      var c = catsData[i];
+      var anomalies = c.anomalies_7d || [];
+      var anomVals = '<span class="' + scoreColorClass(c.score_color) + '" style="font-weight:700;">' + (c.health_score !== null ? c.health_score : '--') + '</span>';
+      if (anomalies.length === 0) {
+        anomVals += '<span class="score-color-green" style="font-size:11px;">異常なし</span>';
+      } else {
+        for (var j = 0; j < anomalies.length; j++) {
+          var a = anomalies[j];
+          anomVals += '<span class="badge ' + (a.count >= 3 ? 'badge-red' : a.count >= 2 ? 'badge-orange' : 'badge-yellow') + '">' + esc(a.type) + ' x' + a.count + '</span>';
+        }
+      }
+      html += itemRowReadonly(c, '<div class="item-cat-name">' + alertDot(c.alert_level) + esc(c.name) + '</div><div class="item-values">' + anomVals + '</div>');
+    }
+    html += '</div></div>';
+    return html;
+  }
+
+  function renderItemCard_Medical() {
+    var html = '<div class="item-card">';
+    html += '<div class="item-card-title">🏥 医療（中長期）</div>';
+    html += '<div class="item-card-body">';
+    var today = new Date().toISOString().slice(0, 10);
+    for (var i = 0; i < catsData.length; i++) {
+      var c = catsData[i];
+      var medLongVals = '';
+      if (c.vaccine_next_due) medLongVals += '<span class="badge ' + (c.vaccine_next_due <= today ? 'badge-red' : daysUntil(c.vaccine_next_due) <= 30 ? 'badge-orange' : 'badge-gray') + '">ワクチン ' + shortDate(c.vaccine_next_due) + '</span>';
+      if (c.checkup_next_due) medLongVals += '<span class="badge ' + (c.checkup_next_due <= today ? 'badge-red' : daysUntil(c.checkup_next_due) <= 30 ? 'badge-orange' : 'badge-gray') + '">健診 ' + shortDate(c.checkup_next_due) + '</span>';
+      medLongVals += '<span class="badge ' + (c.microchip === 'registered' ? 'badge-green' : 'badge-gray') + '">' + (c.microchip === 'registered' ? 'MC済' : 'MC未') + '</span>';
+      if (!c.vaccine_next_due && !c.checkup_next_due) medLongVals += '<span class="dim" style="font-size:11px;">予定なし</span>';
+      html += itemRowReadonly(c, '<div class="item-cat-name">' + alertDot(c.alert_level) + esc(c.name) + '</div><div class="item-values">' + medLongVals + '</div>');
+    }
+    html += '</div></div>';
+    return html;
+  }
+
   // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━
   //  ユーティリティ
   // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━
@@ -1897,6 +2230,20 @@
     var d = document.createElement('div');
     d.appendChild(document.createTextNode(str));
     return d.innerHTML;
+  }
+
+  function shortDate(dateStr) {
+    if (!dateStr) return '';
+    var parts = dateStr.split('-');
+    if (parts.length < 3) return dateStr;
+    return parseInt(parts[1], 10) + '/' + parseInt(parts[2], 10);
+  }
+
+  function daysUntil(dateStr) {
+    var target = new Date(dateStr + 'T00:00:00');
+    var now = new Date();
+    now.setHours(0, 0, 0, 0);
+    return Math.ceil((target - now) / (24 * 60 * 60 * 1000));
   }
 
 })();

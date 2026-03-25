@@ -479,6 +479,50 @@
       padding: 40px;
       color: var(--text-dim);
     }
+
+    /* ── モーダル ── */
+    .modal-overlay {
+      display: none;
+      position: fixed;
+      inset: 0;
+      background: rgba(0,0,0,.6);
+      z-index: 1000;
+      align-items: center;
+      justify-content: center;
+    }
+    .modal-overlay.open { display: flex; }
+    .modal-box {
+      background: var(--bg);
+      border-radius: 12px;
+      padding: 20px;
+      width: 90%;
+      max-width: 400px;
+      max-height: 80vh;
+      overflow-y: auto;
+    }
+    .modal-title {
+      font-size: 16px;
+      font-weight: 700;
+      margin-bottom: 16px;
+    }
+    .modal-actions {
+      display: flex;
+      gap: 10px;
+      margin-top: 16px;
+    }
+    .modal-actions .btn { flex: 1; }
+    .form-group { margin-bottom: 12px; }
+    .form-label { font-size: 12px; color: var(--text-dim); margin-bottom: 4px; display: block; }
+    .form-input, .form-select {
+      width: 100%;
+      box-sizing: border-box;
+      background: var(--surface);
+      color: var(--text-main);
+      border: 1px solid rgba(255,255,255,0.12);
+      border-radius: 8px;
+      padding: 10px 12px;
+      font-size: 14px;
+    }
   </style>
 </head>
 <body>
@@ -589,11 +633,65 @@
     </div>
   </div>
 
+  <!-- あげたモーダル（量調整付き） -->
+  <div id="ovQuickFedModal" class="modal-overlay">
+    <div class="modal-box" style="max-width:340px;">
+      <div class="modal-title" id="ovQfTitle">🍚 あげた記録</div>
+      <div class="form-group">
+        <label class="form-label">フード</label>
+        <div id="ovQfFoodName" style="font-weight:600;padding:4px 0;"></div>
+      </div>
+      <div class="form-group">
+        <label class="form-label">量 (g)</label>
+        <input type="number" id="ovQfOfferedG" class="form-input" step="0.1" min="0">
+      </div>
+      <div class="modal-actions">
+        <button type="button" class="btn btn-outline" id="ovCloseQfBtn">キャンセル</button>
+        <button type="button" class="btn btn-primary" id="ovSubmitQfBtn">記録する</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ログ編集モーダル -->
+  <div id="ovEditLogModal" class="modal-overlay">
+    <div class="modal-box" style="max-width:360px;">
+      <div class="modal-title" id="ovElTitle">✏️ 給餌ログ編集</div>
+      <div class="form-group">
+        <label class="form-label">フード</label>
+        <div id="ovElFoodName" style="font-weight:600;padding:4px 0;"></div>
+      </div>
+      <div class="form-group">
+        <label class="form-label">あげた量 (g)</label>
+        <input type="number" id="ovElOfferedG" class="form-input" step="0.1" min="0">
+      </div>
+      <div class="form-group">
+        <label class="form-label">食べた割合 (%)</label>
+        <input type="number" id="ovElEatenPct" class="form-input" min="0" max="100" value="100">
+      </div>
+      <div class="modal-actions">
+        <button type="button" class="btn btn-outline" id="ovCloseElBtn">キャンセル</button>
+        <button type="button" class="btn btn-primary" id="ovSubmitElBtn">保存</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- 残し記録モーダル -->
+  <div id="ovLeftoverModal" class="modal-overlay">
+    <div class="modal-box" style="max-width:400px;">
+      <div class="modal-title" id="ovLoTitle">🥄 残し記録</div>
+      <div id="ovLoBody" style="max-height:60vh;overflow-y:auto;"></div>
+      <div class="modal-actions">
+        <button type="button" class="btn btn-outline" id="ovCloseLoBtn">キャンセル</button>
+        <button type="button" class="btn btn-primary" id="ovSubmitLoBtn">記録する</button>
+      </div>
+    </div>
+  </div>
+
   <script src="config.js?v=203"></script>
   <script src="js/nyagi-boot-overlay.js?v=203"></script>
   <script src="js/login-gate.js?v=203"></script>
   <script src="js/app.js?v=203"></script>
-  <script src="js/cats-overview.js?v=217"></script>
+  <script src="js/cats-overview.js?v=219"></script>
   <script src="js/voice-console.js?v=203"></script>
 </body>
 </html>

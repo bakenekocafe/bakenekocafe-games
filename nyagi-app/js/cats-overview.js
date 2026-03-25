@@ -2175,21 +2175,19 @@
 
   function renderItemCard_FeedingCheck() {
     var html = '<div class="item-card">';
-    html += '<div class="item-card-title">🍚 ごはん（献立） <small class="dim">一覧から操作</small></div>';
+    html += '<div class="item-card-title">🍚 ごはん <small class="dim">あげた・残し</small></div>';
     html += '<div class="item-card-body">';
-    html += '<div class="ov-feed-hint" style="font-size:11px;color:var(--text-dim);margin-bottom:8px;">プリセット・献立・今日の記録をこの画面で行えます（猫詳細と同じAPI）</div>';
+    html += '<div class="ov-feed-hint" style="font-size:11px;color:var(--text-dim);margin-bottom:8px;">献立の追加・編集・手動記録は「詳細」から行ってください。</div>';
     for (var i = 0; i < catsData.length; i++) {
       var c = catsData[i];
       var plan = c.feeding_plan || [];
       var inner = '';
       var toolbar = '<div class="ov-feed-toolbar" style="display:flex;flex-wrap:wrap;gap:4px;margin-bottom:6px;width:100%;">' +
-        '<button type="button" class="btn btn-outline btn-ov-feed-addplan" style="font-size:10px;padding:2px 6px;" data-cat-id="' + escAttr(String(c.id)) + '">＋献立</button>' +
-        '<button type="button" class="btn btn-outline btn-ov-feed-log" style="font-size:10px;padding:2px 6px;" data-cat-id="' + escAttr(String(c.id)) + '">📝記録</button>' +
         '<button type="button" class="btn btn-outline btn-ov-feed-leftover" style="font-size:10px;padding:2px 6px;" data-cat-id="' + escAttr(String(c.id)) + '">🥄残し</button>' +
         '<a href="' + catLink(c.id, 'feedingArea') + '" class="btn btn-outline" style="font-size:10px;padding:2px 6px;text-decoration:none;">詳細</a>' +
         '</div>';
       if (plan.length === 0) {
-        inner = '<span class="dim">献立未設定</span>';
+        inner = '<span class="dim">献立なし（詳細で設定）</span>';
       } else {
         for (var j = 0; j < plan.length; j++) {
           var p = plan[j];
@@ -2211,12 +2209,6 @@
             st = '<button type="button" class="btn btn-primary btn-ov-feed-markfed" style="font-size:10px;padding:1px 8px;" data-plan-id="' + escAttr(pidStr) + '" data-food-name="' + escAttr(p.food_name || '') + '" data-amount-g="' + escAttr(String(p.amount_g || '')) + '">あげた</button> ';
           } else {
             st = '<span class="feed-pending">⬜</span> ';
-          }
-          if (pidStr && !p.fed_today) {
-            st += '<button type="button" class="btn btn-outline btn-ov-feed-editplan" style="font-size:10px;padding:1px 6px;" data-cat-id="' + escAttr(String(c.id)) + '" data-plan-id="' + escAttr(pidStr) + '">✏️</button> ';
-          }
-          if (pidStr) {
-            st += '<button type="button" class="btn btn-outline btn-ov-feed-delplan" style="font-size:10px;padding:1px 6px;color:#f87171;" data-plan-id="' + escAttr(pidStr) + '" data-cat-name="' + escAttr(c.name) + '">🗑</button>';
           }
           inner += '<div class="ov-feed-line"><span class="ov-feed-slot">' + feedingMealSlotLabelJp(p.meal_slot) + '</span><span class="ov-feed-menu">' + menu + '</span><span class="ov-feed-status" style="text-align:right;">' + st + '</span></div>';
         }

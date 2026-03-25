@@ -37,6 +37,26 @@
     return String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;');
   }
 
+  /** YYYY-MM-DD → 表示用 M/D */
+  function fmtExcretionMdYmd(ymd) {
+    if (!ymd || ymd.length < 10) return '';
+    var m = parseInt(ymd.slice(5, 7), 10);
+    var d = parseInt(ymd.slice(8, 10), 10);
+    if (isNaN(m) || isNaN(d)) return ymd.slice(5);
+    return m + '/' + d;
+  }
+
+  /** 項目ごと 排便・排尿 1行分の表示（日付＋帯/時刻＋状態） */
+  function ovExcretionLineText(e) {
+    var parts = [];
+    var md = fmtExcretionMdYmd(e.record_date);
+    if (md) parts.push(md);
+    var t = e.time != null ? String(e.time).trim() : '';
+    if (t) parts.push(t);
+    if (e.status) parts.push(e.status);
+    return parts.join(' ');
+  }
+
   /** cat.html モーダルと同じ value（排便・排尿） */
   var OPT_STOOL_STATUS = '<option value="">状態</option><option value="健康">健康</option><option value="硬い">硬い</option><option value="軟便">軟便</option><option value="下痢">下痢</option><option value="血便小">血便小</option><option value="血便大（異常）">血便大（異常）</option>';
   var OPT_URINE_STATUS = '<option value="">状態</option><option value="なし（異常）">なし（異常）</option><option value="なし">なし</option><option value="少量">少量</option><option value="普通">普通</option><option value="多い">多い</option><option value="血尿小">血尿小</option><option value="血尿大（異常）">血尿大（異常）</option>';
@@ -56,6 +76,697 @@
 
   var _ovInlineHandlersBound = false;
 
+  var NYAGI_PRESET_LOC_KEY = 'nyagi_feeding_preset_location';
+  var _ovFeedCtx = null;
+  var _ovFoodsCache = null;
+  var _ovFoodsSpecies = null;
+  var _ovEditingPlanId = null;
+  var _ovPresetItemsCache = null;
+  var _ovPendingPresetItem = null;
+
+  function feedingApiBase() {
+    return apiOpsBase() + '/feeding';
+  }
+
+  function ovGetStoredPresetLocation() {
+    try {
+      var v = localStorage.getItem(NYAGI_PRESET_LOC_KEY);
+      if (v === 'cafe' || v === 'nekomata') return v;
+    } catch (_) {}
+    return 'cafe';
+  }
+
+  function ovSetStoredPresetLocation(loc) {
+    if (loc !== 'cafe' && loc !== 'nekomata') return;
+    try { localStorage.setItem(NYAGI_PRESET_LOC_KEY, loc); } catch (_) {}
+  }
+
+  function ovEffectivePresetLoc(c) {
+    if (c && (c.location_id === 'cafe' || c.location_id === 'nekomata')) return c.location_id;
+    return ovGetStoredPresetLocation();
+  }
+
+  function ovFeedingPresetsListUrl(sp, loc) {
+    var u = feedingApiBase() + '/presets?species=' + encodeURIComponent(sp || 'cat');
+    if (loc === 'cafe' || loc === 'nekomata') u += '&location_id=' + encodeURIComponent(loc);
+    return u;
+  }
+
+  function ovPresetLocShortLabel(loc) {
+    return loc === 'nekomata' ? '猫又療養所' : 'BAKENEKO CAFE';
+  }
+
+  function ovPresetLocationBadgeHtml(loc) {
+    var L = loc === 'nekomata' ? 'nekomata' : 'cafe';
+    var bg = L === 'nekomata' ? 'rgba(248,113,113,0.15)' : 'rgba(251,191,36,0.12)';
+    var c = L === 'nekomata' ? '#f87171' : '#fbbf24';
+    return '<span style="font-size:10px;padding:2px 6px;border-radius:4px;background:' + bg + ';color:' + c + ';font-weight:600;">' + esc(ovPresetLocShortLabel(L)) + '</span>';
+  }
+
+  function ovRenderPresetLocationSwitcher(activeLoc, context) {
+    var aCafe = activeLoc === 'cafe' ? 'background:rgba(251,191,36,0.25);border-color:rgba(251,191,36,0.55);color:#fbbf24;font-weight:700;' : 'background:var(--surface);border-color:rgba(255,255,255,0.12);color:var(--text-dim);';
+    var aNeko = activeLoc === 'nekomata' ? 'background:rgba(248,113,113,0.18);border-color:rgba(248,113,113,0.45);color:#f87171;font-weight:700;' : 'background:var(--surface);border-color:rgba(255,255,255,0.12);color:var(--text-dim);';
+    var h = '<div style="font-size:11px;color:var(--text-dim);margin:0 0 8px;font-weight:600;">🏷 表示拠点</div>';
+    h += '<div style="display:flex;gap:8px;margin-bottom:14px;">';
+    h += '<button type="button" class="btn" style="flex:1;padding:10px 6px;font-size:11px;border:2px solid;border-radius:8px;' + aCafe + '" data-ov-preset-loc="cafe" data-ov-preset-ctx="' + escAttr(context) + '">🐱 CAFE</button>';
+    h += '<button type="button" class="btn" style="flex:1;padding:10px 6px;font-size:11px;border:2px solid;border-radius:8px;' + aNeko + '" data-ov-preset-loc="nekomata" data-ov-preset-ctx="' + escAttr(context) + '">🏥 猫又</button>';
+    h += '</div>';
+    return h;
+  }
+
+  function ovRenderPresetItemsSummary(items, totalKcal) {
+    var morn = [];
+    var eve = [];
+    var other = [];
+    for (var i = 0; i < (items || []).length; i++) {
+      if (items[i].meal_slot === 'evening') eve.push(items[i]);
+      else if (items[i].meal_slot === 'morning' || items[i].meal_slot === 'afternoon') morn.push(items[i]);
+      else other.push(items[i]);
+    }
+    var h = '<div style="margin-top:4px;">';
+    function block(title, arr) {
+      if (arr.length === 0) return '';
+      var x = '<div style="font-size:10px;color:var(--accent,#fb923c);font-weight:600;margin-top:2px;">' + esc(title) + '</div>';
+      for (var m = 0; m < arr.length; m++) {
+        x += '<div style="font-size:11px;color:var(--text-dim);padding:1px 0 1px 10px;">' + esc(arr[m].food_name || '') + ' ' + arr[m].amount_g + 'g</div>';
+      }
+      return x;
+    }
+    h += block('☀ 朝/昼', morn);
+    h += block('🌙 夕', eve);
+    h += block('その他', other);
+    if (!items || items.length === 0) h += '<div style="font-size:11px;color:var(--text-dim);">未登録</div>';
+    if (totalKcal) h += '<div style="font-size:11px;color:var(--accent,#fb923c);margin-top:2px;">計 ' + totalKcal + ' kcal</div>';
+    h += '</div>';
+    return h;
+  }
+
+  function ovFindCat(catId) {
+    for (var i = 0; i < catsData.length; i++) {
+      if (String(catsData[i].id) === String(catId)) return catsData[i];
+    }
+    return null;
+  }
+
+  function ovClosePresetModal() {
+    var m = document.getElementById('ovPresetApplyModal');
+    if (m) m.classList.remove('open');
+  }
+
+  function ovCloseAddPlanModal() {
+    _ovEditingPlanId = null;
+    _ovPendingPresetItem = null;
+    var m = document.getElementById('ovAddPlanModal');
+    if (m) m.classList.remove('open');
+  }
+
+  function ovCloseFlModal() {
+    var m = document.getElementById('ovFeedingLogModal');
+    if (m) m.classList.remove('open');
+  }
+
+  function ovFillPresetApplyModal(loc) {
+    var modal = document.getElementById('ovPresetApplyModal');
+    if (!modal || !_ovFeedCtx) return;
+    var sp = _ovFeedCtx.species || 'cat';
+    ovSetStoredPresetLocation(loc);
+    fetch(ovFeedingPresetsListUrl(sp, loc), { headers: apiHeaders(), cache: 'no-store' })
+      .then(function (r) { return r.json(); })
+      .then(function (data) {
+        var presets = data.presets || [];
+        var innerHtml = '<div class="modal-box" style="max-height:80vh;overflow-y:auto;">';
+        innerHtml += '<div class="modal-title">📋 プリセット適用 <small class="dim">' + esc(_ovFeedCtx.name) + '</small></div>';
+        innerHtml += '<div style="margin:0 0 10px;text-align:center;"><button type="button" class="btn btn-outline" style="font-size:12px;width:100%;" data-ov-open-preset-manage="1">⚙️ プリセット管理</button></div>';
+        innerHtml += ovRenderPresetLocationSwitcher(loc, 'apply');
+        if (presets.length === 0) {
+          innerHtml += '<div class="empty-msg">この拠点のプリセットがありません。</div>';
+        } else {
+          for (var i = 0; i < presets.length; i++) {
+            var ps = presets[i];
+            innerHtml += '<div style="background:var(--surface);border-radius:8px;padding:10px 12px;margin-bottom:8px;">';
+            innerHtml += '<div style="display:flex;justify-content:space-between;align-items:flex-start;gap:8px;">';
+            innerHtml += '<div style="flex:1;min-width:0;"><div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;">' + ovPresetLocationBadgeHtml(ps.location_id) + '<b style="font-size:13px;">' + esc(ps.name) + '</b></div>';
+            if (ps.description) innerHtml += '<div style="font-size:11px;color:var(--text-dim);margin-top:2px;">' + esc(ps.description) + '</div>';
+            innerHtml += ovRenderPresetItemsSummary(ps.items || [], ps.total_kcal);
+            innerHtml += '</div>';
+            innerHtml += '<button type="button" class="btn btn-primary" style="font-size:11px;padding:4px 10px;flex-shrink:0;" data-ov-apply-preset="' + escAttr(String(ps.id)) + '">適用</button>';
+            innerHtml += '</div></div>';
+          }
+        }
+        innerHtml += '<div class="modal-actions"><button type="button" class="btn btn-outline" data-ov-close-preset="1">閉じる</button></div></div>';
+        modal.innerHTML = innerHtml;
+      }).catch(function () { alert('プリセットの読み込みに失敗しました'); ovClosePresetModal(); });
+  }
+
+  function ovFillPresetAssignModal(loc) {
+    var modal = document.getElementById('ovPresetApplyModal');
+    if (!modal || !_ovFeedCtx) return;
+    var sp = _ovFeedCtx.species || 'cat';
+    ovSetStoredPresetLocation(loc);
+    fetch(ovFeedingPresetsListUrl(sp, loc), { headers: apiHeaders(), cache: 'no-store' })
+      .then(function (r) { return r.json(); })
+      .then(function (data) {
+        var presets = data.presets || [];
+        var currentId = _ovFeedCtx.assignedPresetId;
+        var curNum = currentId != null ? Number(currentId) : null;
+        var innerHtml = '<div class="modal-box" style="max-height:85vh;overflow-y:auto;">';
+        innerHtml += '<div class="modal-title">🔗 プリセット紐づけ <small class="dim">' + esc(_ovFeedCtx.name) + '</small></div>';
+        innerHtml += '<p style="font-size:12px;color:var(--text-dim);margin:0 0 10px;">業務終了時の自動再適用に使われます。</p>';
+        innerHtml += ovRenderPresetLocationSwitcher(loc, 'assign');
+        innerHtml += '<div style="margin-bottom:8px;">';
+        innerHtml += '<div style="cursor:pointer;padding:10px 12px;border-radius:8px;margin-bottom:4px;background:' + (!curNum ? 'rgba(168,139,250,0.15)' : 'var(--surface)') + ';border:1px solid rgba(255,255,255,0.12);" data-ov-assign-preset="none">';
+        innerHtml += '<div style="font-size:13px;font-weight:600;">紐づけ解除（なし）</div></div>';
+        for (var i = 0; i < presets.length; i++) {
+          var ps = presets[i];
+          var isActive = curNum != null && !isNaN(curNum) && curNum === Number(ps.id);
+          innerHtml += '<div style="cursor:pointer;padding:10px 12px;border-radius:8px;margin-bottom:4px;background:' + (isActive ? 'rgba(168,139,250,0.15)' : 'var(--surface)') + ';border:1px solid rgba(255,255,255,0.12);" data-ov-assign-preset="' + escAttr(String(ps.id)) + '">';
+          innerHtml += '<div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:6px;">';
+          innerHtml += '<div style="display:flex;align-items:center;gap:6px;">' + ovPresetLocationBadgeHtml(ps.location_id) + '<b style="font-size:13px;">' + esc(ps.name) + '</b></div>';
+          if (isActive) innerHtml += '<span style="font-size:11px;color:var(--primary,#a78bfa);font-weight:600;">✔ 現在</span>';
+          innerHtml += '</div>';
+          innerHtml += ovRenderPresetItemsSummary(ps.items || [], ps.total_kcal);
+          innerHtml += '</div>';
+        }
+        innerHtml += '</div><div class="modal-actions"><button type="button" class="btn btn-outline" data-ov-close-preset="1">閉じる</button></div></div>';
+        modal.innerHTML = innerHtml;
+      }).catch(function () { alert('プリセットの読み込みに失敗しました'); ovClosePresetModal(); });
+  }
+
+  function ovFillPresetManageModal(loc) {
+    var modal = document.getElementById('ovPresetApplyModal');
+    if (!modal || !_ovFeedCtx) return;
+    var sp = _ovFeedCtx.species || 'cat';
+    ovSetStoredPresetLocation(loc);
+    modal.innerHTML = '<div class="modal-box" style="max-height:85vh;overflow-y:auto;"><div class="modal-title">⚙️ プリセット管理</div><div id="ovPresetManageContent" class="loading" style="padding:16px;">読み込み中...</div><div class="modal-actions"><button type="button" class="btn btn-outline" data-ov-close-preset="1">閉じる</button></div></div>';
+    var area = document.getElementById('ovPresetManageContent');
+    fetch(ovFeedingPresetsListUrl(sp, loc), { headers: apiHeaders(), cache: 'no-store' })
+      .then(function (r) { return r.json(); })
+      .then(function (data) {
+        var presets = data.presets || [];
+        var h = ovRenderPresetLocationSwitcher(loc, 'manage');
+        h += '<p style="font-size:11px;color:var(--text-dim);margin:0 0 10px;">拠点タブで切替後、<b>+ 新規</b>でその拠点用に作成します。</p>';
+        h += '<button type="button" class="btn btn-primary" style="font-size:12px;margin-bottom:12px;width:100%;" data-ov-create-preset="1">+ 新規プリセット（' + esc(ovPresetLocShortLabel(loc)) + '）</button>';
+        if (presets.length === 0) {
+          h += '<div class="empty-msg">プリセットがありません</div>';
+        }
+        for (var i = 0; i < presets.length; i++) {
+          var ps = presets[i];
+          var ploc = ps.location_id === 'nekomata' ? 'nekomata' : 'cafe';
+          h += '<div style="background:var(--surface);border-radius:8px;padding:10px 12px;margin-bottom:8px;">';
+          h += '<div style="display:flex;justify-content:space-between;align-items:flex-start;gap:8px;">';
+          h += '<div style="flex:1;min-width:0;"><div style="display:flex;align-items:center;gap:6px;">' + ovPresetLocationBadgeHtml(ps.location_id) + '<b>' + esc(ps.name) + '</b></div>';
+          h += '<div style="font-size:11px;color:var(--text-dim);">' + (ps.items || []).length + '品</div></div>';
+          h += '<div style="display:flex;flex-direction:column;align-items:flex-end;gap:4px;">';
+          h += '<button type="button" class="btn-edit-small" style="font-size:10px;" data-ov-cycle-preset-loc="' + escAttr(String(ps.id)) + '" data-ov-cycle-cur="' + escAttr(ploc) + '">🏷 拠点切替</button>';
+          h += '<div><button type="button" class="btn-edit-small" data-ov-rename-preset="' + escAttr(String(ps.id)) + '" data-ov-rename-name="' + escAttr(ps.name) + '">📝</button> ';
+          h += '<button type="button" class="btn-edit-small" data-ov-edit-preset-items="' + escAttr(String(ps.id)) + '">✏️</button> ';
+          h += '<button type="button" class="btn-edit-small" style="color:#f87171;" data-ov-delete-preset="' + escAttr(String(ps.id)) + '">🗑</button></div></div></div></div>';
+        }
+        if (area) { area.className = ''; area.innerHTML = h; }
+      }).catch(function () {
+        if (area) { area.className = ''; area.innerHTML = '<div class="empty-msg">読み込み失敗</div>'; }
+      });
+  }
+
+  function ovOpenPresetApply(catId) {
+    var c = ovFindCat(catId);
+    if (!c) return;
+    _ovFeedCtx = {
+      catId: c.id,
+      name: c.name,
+      species: c.species || 'cat',
+      locationId: c.location_id,
+      assignedPresetId: c.assigned_preset_id != null ? c.assigned_preset_id : null,
+    };
+    var modal = document.getElementById('ovPresetApplyModal');
+    if (!modal) return;
+    modal.innerHTML = '<div class="modal-box"><div class="loading" style="padding:16px;">読み込み中...</div></div>';
+    modal.classList.add('open');
+    ovFillPresetApplyModal(ovEffectivePresetLoc(c));
+  }
+
+  function ovOpenPresetAssign(catId) {
+    var c = ovFindCat(catId);
+    if (!c) return;
+    _ovFeedCtx = {
+      catId: c.id,
+      name: c.name,
+      species: c.species || 'cat',
+      locationId: c.location_id,
+      assignedPresetId: c.assigned_preset_id != null ? c.assigned_preset_id : null,
+    };
+    var modal = document.getElementById('ovPresetApplyModal');
+    if (!modal) return;
+    modal.innerHTML = '<div class="modal-box"><div class="loading" style="padding:16px;">読み込み中...</div></div>';
+    modal.classList.add('open');
+    ovFillPresetAssignModal(ovEffectivePresetLoc(c));
+  }
+
+  function ovOpenPresetManage(catId) {
+    var c = ovFindCat(catId);
+    if (!c) return;
+    _ovFeedCtx = {
+      catId: c.id,
+      name: c.name,
+      species: c.species || 'cat',
+      locationId: c.location_id,
+      assignedPresetId: c.assigned_preset_id != null ? c.assigned_preset_id : null,
+    };
+    var modal = document.getElementById('ovPresetApplyModal');
+    if (!modal) return;
+    modal.classList.add('open');
+    ovFillPresetManageModal(ovGetStoredPresetLocation());
+  }
+
+  function ovEnsureFoods(cb) {
+    var sp = (_ovFeedCtx && _ovFeedCtx.species) || 'cat';
+    if (_ovFoodsCache && _ovFoodsCache.length && _ovFoodsSpecies === sp) {
+      cb(_ovFoodsCache);
+      return;
+    }
+    fetch(feedingApiBase() + '/foods?species=' + encodeURIComponent(sp), { headers: apiHeaders(), cache: 'no-store' })
+      .then(function (r) { return r.json(); })
+      .then(function (d) {
+        _ovFoodsCache = d.foods || [];
+        _ovFoodsSpecies = sp;
+        cb(_ovFoodsCache);
+      }).catch(function () { alert('フード一覧の取得に失敗しました'); cb([]); });
+  }
+
+  function ovFillFoodSelect(selId, after) {
+    ovEnsureFoods(function (foods) {
+      var sel = document.getElementById(selId);
+      if (!sel) return;
+      var cur = sel.value;
+      sel.innerHTML = '<option value="">-- 選択 --</option>';
+      for (var i = 0; i < foods.length; i++) {
+        var f = foods[i];
+        var o = document.createElement('option');
+        o.value = f.id;
+        o.textContent = (f.brand ? f.brand + ' ' : '') + (f.name || f.id);
+        sel.appendChild(o);
+      }
+      if (cur) sel.value = cur;
+      if (typeof after === 'function') after(sel);
+    });
+  }
+
+  function ovOpenAddPlanModal(catId, defaultSlot, editPlanId, opts) {
+    opts = opts || {};
+    var c = ovFindCat(catId);
+    if (!c) return;
+    _ovFeedCtx = {
+      catId: c.id,
+      name: c.name,
+      species: c.species || 'cat',
+      locationId: c.location_id,
+      assignedPresetId: c.assigned_preset_id,
+    };
+    _ovEditingPlanId = editPlanId || null;
+    if (!opts.preservePendingPreset) _ovPendingPresetItem = null;
+    var title = document.querySelector('#ovAddPlanModal .modal-title');
+    if (title) title.innerHTML = (_ovEditingPlanId ? '🍽 プランを編集' : '🍽 プランを追加') + ' <span class="dim" style="font-size:12px;">' + esc(c.name) + '</span>';
+    var slotSel = document.getElementById('ovApSlot');
+    if (slotSel) slotSel.value = defaultSlot || 'morning';
+    if (document.getElementById('ovApAmount')) document.getElementById('ovApAmount').value = '';
+    if (document.getElementById('ovApNotes')) document.getElementById('ovApNotes').value = '';
+    var editP = null;
+    if (_ovEditingPlanId) {
+      for (var ii = 0; ii < (c.feeding_plan || []).length; ii++) {
+        if (String((c.feeding_plan[ii] || {}).plan_id) === String(_ovEditingPlanId)) {
+          editP = c.feeding_plan[ii];
+          break;
+        }
+      }
+    }
+    if (editP) {
+      if (slotSel) slotSel.value = editP.meal_slot || 'morning';
+      if (document.getElementById('ovApAmount')) document.getElementById('ovApAmount').value = editP.amount_g != null ? String(editP.amount_g) : '';
+      if (document.getElementById('ovApNotes')) document.getElementById('ovApNotes').value = editP.notes || '';
+    }
+    ovFillFoodSelect('ovApFoodId', function (sel) {
+      if (editP && editP.food_id && sel) sel.value = String(editP.food_id);
+    });
+    var m = document.getElementById('ovAddPlanModal');
+    if (m) m.classList.add('open');
+  }
+
+  function ovOpenFeedingLogModal(catId, presetSlot) {
+    var c = ovFindCat(catId);
+    if (!c) return;
+    _ovFeedCtx = {
+      catId: c.id,
+      name: c.name,
+      species: c.species || 'cat',
+      locationId: c.location_id,
+      assignedPresetId: c.assigned_preset_id,
+    };
+    var dt = document.getElementById('ovFlDate');
+    if (dt) dt.value = todayJstYmd();
+    var sl = document.getElementById('ovFlSlot');
+    if (sl) sl.value = presetSlot || 'morning';
+    if (document.getElementById('ovFlOfferedG')) document.getElementById('ovFlOfferedG').value = '';
+    if (document.getElementById('ovFlEatenPct')) document.getElementById('ovFlEatenPct').value = '100';
+    ovFillFoodSelect('ovFlFoodId');
+    var t = document.querySelector('#ovFeedingLogModal .modal-title');
+    if (t) t.innerHTML = '🍽 給餌ログ <span class="dim" style="font-size:12px;">' + esc(c.name) + '</span>';
+    var m = document.getElementById('ovFeedingLogModal');
+    if (m) m.classList.add('open');
+  }
+
+  function ovSubmitAddPlan() {
+    if (!_ovFeedCtx) return;
+    var foodId = document.getElementById('ovApFoodId') && document.getElementById('ovApFoodId').value;
+    var slot = document.getElementById('ovApSlot') && document.getElementById('ovApSlot').value;
+    var amountG = document.getElementById('ovApAmount') && parseFloat(document.getElementById('ovApAmount').value);
+    var notes = document.getElementById('ovApNotes') && document.getElementById('ovApNotes').value;
+    if (_ovPendingPresetItem) {
+      if (!foodId || !amountG) { alert('フードと量は必須です'); return; }
+      fetch(feedingApiBase() + '/presets/' + encodeURIComponent(_ovPendingPresetItem) + '/items', {
+        method: 'POST',
+        headers: apiHeaders(),
+        cache: 'no-store',
+        body: JSON.stringify({ food_id: foodId, meal_slot: slot || 'morning', amount_g: amountG, notes: notes || null }),
+      }).then(function (r) { return r.json(); })
+        .then(function (data) {
+          if (data.error) { alert('エラー: ' + (data.message || data.error)); return; }
+          var backPid = _ovPendingPresetItem;
+          ovCloseAddPlanModal();
+          if (backPid) ovShowPresetItemsEditor(backPid);
+          else ovFillPresetManageModal(ovGetStoredPresetLocation());
+        }).catch(function () { alert('追加に失敗しました'); });
+      return;
+    }
+    if (!foodId || !amountG) { alert('フードと量は必須です'); return; }
+    var payload = { cat_id: _ovFeedCtx.catId, food_id: foodId, meal_slot: slot, amount_g: amountG, notes: notes || null, scheduled_time: null };
+    var url = feedingApiBase() + '/plans';
+    var method = 'POST';
+    if (_ovEditingPlanId) {
+      url = feedingApiBase() + '/plans/' + encodeURIComponent(_ovEditingPlanId);
+      method = 'PUT';
+      payload = { food_id: foodId, meal_slot: slot, amount_g: amountG, notes: notes || null, scheduled_time: null };
+    }
+    fetch(url, { method: method, headers: apiHeaders(), cache: 'no-store', body: JSON.stringify(payload) })
+      .then(function (r) { return r.json(); })
+      .then(function (data) {
+        if (data.error) { alert('エラー: ' + (data.message || data.error)); return; }
+        ovCloseAddPlanModal();
+        fetchData(0);
+      }).catch(function () { alert('保存に失敗しました'); });
+  }
+
+  function ovSubmitFeedingLog() {
+    if (!_ovFeedCtx) return;
+    var logDate = document.getElementById('ovFlDate') && document.getElementById('ovFlDate').value;
+    var mealSlot = document.getElementById('ovFlSlot') && document.getElementById('ovFlSlot').value;
+    var foodId = document.getElementById('ovFlFoodId') && document.getElementById('ovFlFoodId').value;
+    var offeredG = document.getElementById('ovFlOfferedG') && document.getElementById('ovFlOfferedG').value;
+    var eatenPct = document.getElementById('ovFlEatenPct') && document.getElementById('ovFlEatenPct').value;
+    if (!logDate || !mealSlot) { alert('日付と食事区分は必須です'); return; }
+    if (!foodId || !offeredG) { alert('フードとあげた量は必須です'); return; }
+    fetch(feedingApiBase() + '/logs', {
+      method: 'POST',
+      headers: apiHeaders(),
+      cache: 'no-store',
+      body: JSON.stringify({
+        cat_id: _ovFeedCtx.catId,
+        log_date: logDate,
+        meal_slot: mealSlot,
+        food_id: foodId,
+        offered_g: parseFloat(offeredG),
+        eaten_pct: eatenPct !== '' && eatenPct != null ? parseFloat(eatenPct) : null,
+      }),
+    }).then(function (r) { return r.json(); })
+      .then(function (data) {
+        if (data.error) { alert('エラー: ' + (data.message || data.error)); return; }
+        ovCloseFlModal();
+        fetchData(0);
+      }).catch(function () { alert('保存に失敗しました'); });
+  }
+
+  function ovQuickFedPlan(planId) {
+    if (!planId) return;
+    fetch(feedingApiBase() + '/plans/' + encodeURIComponent(planId) + '/fed', {
+      method: 'POST',
+      headers: apiHeaders(),
+      cache: 'no-store',
+      body: JSON.stringify({ log_date: todayJstYmd() }),
+    }).then(function (r) { return r.json(); })
+      .then(function (data) {
+        if (data.error) { alert('エラー: ' + (data.message || data.error)); return; }
+        fetchData(0);
+      }).catch(function () { alert('記録に失敗しました'); });
+  }
+
+  function ovUndoFedLog(logId) {
+    if (!logId) return;
+    if (!confirm('この給餌記録を取り消しますか？')) return;
+    fetch(feedingApiBase() + '/logs/' + encodeURIComponent(logId), { method: 'DELETE', headers: apiHeaders(), cache: 'no-store' })
+      .then(function (r) { return r.json(); })
+      .then(function (data) {
+        if (data.error) { alert('エラー: ' + (data.message || data.error)); return; }
+        fetchData(0);
+      }).catch(function () { alert('取り消しに失敗しました'); });
+  }
+
+  function ovDeletePlan(planId, catName) {
+    if (!planId) return;
+    if (!confirm((catName ? '「' + catName + '」の' : '') + 'この献立行を削除しますか？')) return;
+    fetch(feedingApiBase() + '/plans/' + encodeURIComponent(planId), { method: 'DELETE', headers: apiHeaders(), cache: 'no-store' })
+      .then(function (r) { return r.json(); })
+      .then(function (data) {
+        if (data.error) { alert('エラー: ' + (data.message || data.error)); return; }
+        fetchData(0);
+      }).catch(function () { alert('削除に失敗しました'); });
+  }
+
+  function ovBindFeedingModalDom() {
+    var c1 = document.getElementById('ovCloseAddPlanBtn');
+    if (c1 && !c1._ovBound) { c1._ovBound = true; c1.addEventListener('click', ovCloseAddPlanModal); }
+    var s1 = document.getElementById('ovSubmitAddPlanBtn');
+    if (s1 && !s1._ovBound) { s1._ovBound = true; s1.addEventListener('click', ovSubmitAddPlan); }
+    var c2 = document.getElementById('ovCloseFlBtn');
+    if (c2 && !c2._ovBound) { c2._ovBound = true; c2.addEventListener('click', ovCloseFlModal); }
+    var s2 = document.getElementById('ovSubmitFlBtn');
+    if (s2 && !s2._ovBound) { s2._ovBound = true; s2.addEventListener('click', ovSubmitFeedingLog); }
+  }
+
+  function ovHandlePresetModalClick(ev) {
+    var t = ev.target;
+    if (!t || !t.closest) return;
+    var closeB = t.closest('[data-ov-close-preset]');
+    if (closeB) {
+      ev.preventDefault();
+      ovClosePresetModal();
+      return;
+    }
+    var locB = t.closest('[data-ov-preset-loc]');
+    if (locB && _ovFeedCtx) {
+      ev.preventDefault();
+      var loc = locB.getAttribute('data-ov-preset-loc');
+      var ctx = locB.getAttribute('data-ov-preset-ctx') || 'apply';
+      ovSetStoredPresetLocation(loc);
+      if (ctx === 'apply') ovFillPresetApplyModal(loc);
+      else if (ctx === 'assign') ovFillPresetAssignModal(loc);
+      else if (ctx === 'manage') ovFillPresetManageModal(loc);
+      return;
+    }
+    var openM = t.closest('[data-ov-open-preset-manage]');
+    if (openM && _ovFeedCtx) {
+      ev.preventDefault();
+      ovFillPresetManageModal(ovGetStoredPresetLocation());
+      return;
+    }
+    var ap = t.closest('[data-ov-apply-preset]');
+    if (ap && _ovFeedCtx) {
+      ev.preventDefault();
+      var pid = ap.getAttribute('data-ov-apply-preset');
+      fetch(feedingApiBase() + '/presets/' + encodeURIComponent(pid) + '/apply', {
+        method: 'POST',
+        headers: apiHeaders(),
+        cache: 'no-store',
+        body: JSON.stringify({ cat_id: _ovFeedCtx.catId }),
+      }).then(function (r) { return r.json(); })
+        .then(function (data) {
+          if (data.error) { alert('エラー: ' + (data.message || data.error)); return; }
+          alert('プリセット「' + (data.preset_name || '') + '」を適用しました（' + (data.applied || []).length + '品）');
+          ovClosePresetModal();
+          fetchData(0);
+        }).catch(function () { alert('適用に失敗しました'); });
+      return;
+    }
+    var as = t.closest('[data-ov-assign-preset]');
+    if (as && _ovFeedCtx) {
+      ev.preventDefault();
+      var raw = as.getAttribute('data-ov-assign-preset');
+      var presetId = raw === 'none' ? null : parseInt(raw, 10);
+      fetch(apiOpsBase() + '/cats/' + encodeURIComponent(_ovFeedCtx.catId), {
+        method: 'PUT',
+        headers: apiHeaders(),
+        cache: 'no-store',
+        body: JSON.stringify({ assigned_preset_id: presetId }),
+      }).then(function (r) { return r.json(); })
+        .then(function (data) {
+          if (data.error) { alert('エラー: ' + (data.message || data.error)); return; }
+          _ovFeedCtx.assignedPresetId = presetId;
+          for (var i = 0; i < catsData.length; i++) {
+            if (String(catsData[i].id) === String(_ovFeedCtx.catId)) {
+              catsData[i].assigned_preset_id = presetId;
+              break;
+            }
+          }
+          ovClosePresetModal();
+          fetchData(0);
+        }).catch(function () { alert('保存に失敗しました'); });
+      return;
+    }
+    var cr = t.closest('[data-ov-create-preset]');
+    if (cr && _ovFeedCtx) {
+      ev.preventDefault();
+      var loc = ovGetStoredPresetLocation();
+      if (!confirm('拠点「' + ovPresetLocShortLabel(loc) + '」用のプリセットを新規作成しますか？')) return;
+      var name = prompt('プリセット名', '');
+      if (!name) return;
+      var desc = prompt('説明（任意）', '');
+      fetch(feedingApiBase() + '/presets', {
+        method: 'POST',
+        headers: apiHeaders(),
+        cache: 'no-store',
+        body: JSON.stringify({ name: name, description: desc || null, location_id: loc, species: _ovFeedCtx.species || 'cat' }),
+      }).then(function (r) { return r.json(); })
+        .then(function (data) {
+          if (data.error) { alert('エラー: ' + (data.message || data.error)); return; }
+          if (data.preset && data.preset.id) {
+            _ovPendingPresetItem = String(data.preset.id);
+            ovOpenAddPlanModal(_ovFeedCtx.catId, 'morning', null, { preservePendingPreset: true });
+            var t0 = document.querySelector('#ovAddPlanModal .modal-title');
+            if (t0) t0.innerHTML = '📋 プリセットにフード追加 <span class="dim">' + esc(name) + '</span>';
+          } else {
+            ovFillPresetManageModal(loc);
+          }
+        }).catch(function () { alert('作成に失敗しました'); });
+      return;
+    }
+    var cy = t.closest('[data-ov-cycle-preset-loc]');
+    if (cy && _ovFeedCtx) {
+      ev.preventDefault();
+      var pid = cy.getAttribute('data-ov-cycle-preset-loc');
+      var cur = cy.getAttribute('data-ov-cycle-cur');
+      var next = cur === 'nekomata' ? 'cafe' : 'nekomata';
+      if (!confirm('拠点を「' + ovPresetLocShortLabel(next) + '」に変更しますか？')) return;
+      fetch(feedingApiBase() + '/presets/' + encodeURIComponent(pid), {
+        method: 'PUT',
+        headers: apiHeaders(),
+        cache: 'no-store',
+        body: JSON.stringify({ location_id: next }),
+      }).then(function (r) { return r.json(); })
+        .then(function (data) {
+          if (data.error) { alert('エラー: ' + (data.message || data.error)); return; }
+          ovFillPresetManageModal(ovGetStoredPresetLocation());
+        }).catch(function () { alert('更新に失敗しました'); });
+      return;
+    }
+    var rn = t.closest('[data-ov-rename-preset]');
+    if (rn && _ovFeedCtx) {
+      ev.preventDefault();
+      var rid = rn.getAttribute('data-ov-rename-preset');
+      var curN = rn.getAttribute('data-ov-rename-name') || '';
+      var nn = prompt('新しいプリセット名', curN);
+      if (!nn || nn === curN) return;
+      fetch(feedingApiBase() + '/presets/' + encodeURIComponent(rid), {
+        method: 'PUT',
+        headers: apiHeaders(),
+        cache: 'no-store',
+        body: JSON.stringify({ name: nn }),
+      }).then(function (r) { return r.json(); })
+        .then(function (data) {
+          if (data.error) { alert('エラー: ' + (data.message || data.error)); return; }
+          ovFillPresetManageModal(ovGetStoredPresetLocation());
+        }).catch(function () { alert('名前変更に失敗しました'); });
+      return;
+    }
+    var ed = t.closest('[data-ov-edit-preset-items]');
+    if (ed && _ovFeedCtx) {
+      ev.preventDefault();
+      var eid = ed.getAttribute('data-ov-edit-preset-items');
+      ovShowPresetItemsEditor(eid);
+      return;
+    }
+    var del = t.closest('[data-ov-delete-preset]');
+    if (del && _ovFeedCtx) {
+      ev.preventDefault();
+      var did = del.getAttribute('data-ov-delete-preset');
+      if (!confirm('このプリセットを削除しますか？')) return;
+      fetch(feedingApiBase() + '/presets/' + encodeURIComponent(did), { method: 'DELETE', headers: apiHeaders(), cache: 'no-store' })
+        .then(function (r) { return r.json(); })
+        .then(function (data) {
+          if (data.error) { alert('エラー: ' + (data.message || data.error)); return; }
+          ovFillPresetManageModal(ovGetStoredPresetLocation());
+        }).catch(function () { alert('削除に失敗しました'); });
+      return;
+    }
+    var delIt = t.closest('[data-ov-del-preset-item]');
+    if (delIt && _ovFeedCtx) {
+      ev.preventDefault();
+      var parts = (delIt.getAttribute('data-ov-del-preset-item') || '').split(':');
+      var presetId = parts[0];
+      var itemId = parts[1];
+      if (!presetId || !itemId) return;
+      fetch(feedingApiBase() + '/presets/' + encodeURIComponent(presetId) + '/items/' + encodeURIComponent(itemId), {
+        method: 'DELETE', headers: apiHeaders(), cache: 'no-store',
+      }).then(function (r) { return r.json(); })
+        .then(function () { ovShowPresetItemsEditor(presetId); })
+        .catch(function () { alert('削除に失敗しました'); });
+      return;
+    }
+    var addIt = t.closest('[data-ov-add-preset-item]');
+    if (addIt && _ovFeedCtx) {
+      ev.preventDefault();
+      var apid = addIt.getAttribute('data-ov-add-preset-item');
+      var slot = addIt.getAttribute('data-ov-preset-slot') || 'morning';
+      _ovPendingPresetItem = apid;
+      ovOpenAddPlanModal(_ovFeedCtx.catId, slot, null, { preservePendingPreset: true });
+      var title = document.querySelector('#ovAddPlanModal .modal-title');
+      if (title) title.innerHTML = '📋 プリセットに追加 <span class="dim">' + esc(slot) + '</span>';
+      return;
+    }
+    var backM = t.closest('[data-ov-preset-items-back]');
+    if (backM && _ovFeedCtx) {
+      ev.preventDefault();
+      ovFillPresetManageModal(ovGetStoredPresetLocation());
+      return;
+    }
+  }
+
+  function ovShowPresetItemsEditor(presetId) {
+    var modal = document.getElementById('ovPresetApplyModal');
+    if (!modal || !_ovFeedCtx) return;
+    modal.innerHTML = '<div class="modal-box" style="max-height:85vh;overflow-y:auto;"><div class="modal-title">📋 プリセットのフード</div><div id="ovPresetItemsBody" class="loading" style="padding:16px;">読み込み中...</div><div class="modal-actions"><button type="button" class="btn btn-outline" data-ov-preset-items-back="1">戻る</button></div></div>';
+    var body = document.getElementById('ovPresetItemsBody');
+    fetch(feedingApiBase() + '/presets/' + encodeURIComponent(presetId) + '/items', { headers: apiHeaders(), cache: 'no-store' })
+      .then(function (r) { return r.json(); })
+      .then(function (data) {
+        var items = data.items || [];
+        _ovPresetItemsCache = { presetId: presetId, items: items };
+        var h = '';
+        for (var i = 0; i < items.length; i++) {
+          var it = items[i];
+          h += '<div style="padding:8px;background:var(--surface);border-radius:6px;margin-bottom:6px;display:flex;justify-content:space-between;align-items:center;gap:8px;">';
+          h += '<div style="font-size:12px;flex:1;">' + esc(it.food_name || '') + ' <b>' + it.amount_g + 'g</b> <span class="dim">' + esc(it.meal_slot || '') + '</span></div>';
+          h += '<button type="button" class="btn-edit-small" style="color:#f87171;" data-ov-del-preset-item="' + escAttr(String(presetId)) + ':' + escAttr(String(it.id)) + '">🗑</button>';
+          h += '</div>';
+        }
+        if (items.length === 0) h += '<div class="empty-msg">未登録</div>';
+        h += '<div style="display:flex;gap:8px;margin-top:10px;flex-wrap:wrap;">';
+        h += '<button type="button" class="btn btn-outline" style="font-size:11px;" data-ov-add-preset-item="' + escAttr(String(presetId)) + '" data-ov-preset-slot="morning">+ 朝枠</button>';
+        h += '<button type="button" class="btn btn-outline" style="font-size:11px;" data-ov-add-preset-item="' + escAttr(String(presetId)) + '" data-ov-preset-slot="evening">+ 夕枠</button>';
+        h += '</div>';
+        if (body) { body.className = ''; body.innerHTML = h; }
+      }).catch(function () {
+        if (body) { body.className = ''; body.innerHTML = '<div class="empty-msg">読み込み失敗</div>'; }
+      });
+  }
+
   function postHealthRecord(body, btn) {
     var prevText = btn ? btn.textContent : '';
     if (btn) { btn.disabled = true; btn.textContent = '…'; }
@@ -64,14 +775,28 @@
       headers: apiHeaders(),
       cache: 'no-store',
       body: JSON.stringify(body),
-    }).then(function (r) { return r.json(); })
-      .then(function (data) {
+    }).then(function (r) {
+      return r.text().then(function (text) {
+        var data = {};
+        if (text) {
+          try { data = JSON.parse(text); } catch (e) {
+            data = { error: 'invalid_response', message: text.slice(0, 240) };
+          }
+        }
+        return { ok: r.ok, status: r.status, data: data };
+      });
+    })
+      .then(function (res) {
         if (btn) { btn.disabled = false; btn.textContent = prevText; }
-        if (data.error) { alert('エラー: ' + (data.message || data.error)); return; }
+        var data = res.data;
+        if (!res.ok || data.error) {
+          alert('エラー: ' + (data.message || data.error || ('HTTP ' + res.status)));
+          return;
+        }
         fetchData(0);
-      }).catch(function () {
+      }).catch(function (err) {
         if (btn) { btn.disabled = false; btn.textContent = prevText; }
-        alert('保存に失敗しました');
+        alert('保存に失敗しました' + (err && err.message ? '\n' + err.message : ''));
       });
   }
 
@@ -153,38 +878,6 @@
       });
   }
 
-  function medLogPost(btn, pathSuffix) {
-    var id = btn.getAttribute('data-log-id');
-    if (!id) return;
-    var prevText = btn.textContent;
-    btn.disabled = true;
-    btn.textContent = '…';
-    fetch(apiOpsBase() + '/health/medication-logs/' + encodeURIComponent(id) + '/' + pathSuffix, {
-      method: 'POST',
-      headers: apiHeaders(),
-      cache: 'no-store',
-      body: JSON.stringify({}),
-    }).then(function (r) { return r.json(); })
-      .then(function (data) {
-        btn.disabled = false;
-        btn.textContent = prevText;
-        if (data.error) { alert('エラー: ' + (data.message || data.error)); return; }
-        fetchData(0);
-      }).catch(function () {
-        btn.disabled = false;
-        btn.textContent = prevText;
-        alert('記録に失敗しました');
-      });
-  }
-
-  function saveMedDone(btn) {
-    medLogPost(btn, 'done');
-  }
-
-  function saveMedSkip(btn) {
-    medLogPost(btn, 'skip');
-  }
-
   function saveTaskAction(btn, action) {
     var id = btn.getAttribute('data-task-id');
     if (!id) return;
@@ -223,6 +916,7 @@
       cat_id: catId,
       record_type: 'stool',
       record_date: recordDate,
+      recorded_time: nowJstHm(),
       value: value,
       details: details,
     }, btn);
@@ -241,6 +935,7 @@
       cat_id: catId,
       record_type: 'urine',
       record_date: recordDate,
+      recorded_time: nowJstHm(),
       value: value,
       details: details,
     }, btn);
@@ -292,7 +987,87 @@
   function bindOverviewInlineHandlers() {
     if (_ovInlineHandlersBound) return;
     _ovInlineHandlersBound = true;
+    document.addEventListener('click', function (ev) {
+      var pm = document.getElementById('ovPresetApplyModal');
+      if (pm && pm.classList.contains('open') && ev.target && ev.target.closest && pm.contains(ev.target)) {
+        ovHandlePresetModalClick(ev);
+      }
+    });
     cardArea.addEventListener('click', function (ev) {
+      var fp = ev.target.closest && ev.target.closest('.btn-ov-feed-preset');
+      if (fp) {
+        ev.preventDefault();
+        ev.stopPropagation();
+        var cid = fp.getAttribute('data-cat-id');
+        if (cid) ovOpenPresetApply(cid);
+        return;
+      }
+      var fa = ev.target.closest && ev.target.closest('.btn-ov-feed-assign');
+      if (fa) {
+        ev.preventDefault();
+        ev.stopPropagation();
+        var cida = fa.getAttribute('data-cat-id');
+        if (cida) ovOpenPresetAssign(cida);
+        return;
+      }
+      var fm = ev.target.closest && ev.target.closest('.btn-ov-feed-manage');
+      if (fm) {
+        ev.preventDefault();
+        ev.stopPropagation();
+        var cidm = fm.getAttribute('data-cat-id');
+        if (cidm) ovOpenPresetManage(cidm);
+        return;
+      }
+      var fadd = ev.target.closest && ev.target.closest('.btn-ov-feed-addplan');
+      if (fadd) {
+        ev.preventDefault();
+        ev.stopPropagation();
+        var cidad = fadd.getAttribute('data-cat-id');
+        if (cidad) ovOpenAddPlanModal(cidad, 'morning', null);
+        return;
+      }
+      var flog = ev.target.closest && ev.target.closest('.btn-ov-feed-log');
+      if (flog) {
+        ev.preventDefault();
+        ev.stopPropagation();
+        var cidf = flog.getAttribute('data-cat-id');
+        if (cidf) ovOpenFeedingLogModal(cidf, null);
+        return;
+      }
+      var fmf = ev.target.closest && ev.target.closest('.btn-ov-feed-markfed');
+      if (fmf) {
+        ev.preventDefault();
+        ev.stopPropagation();
+        var pid = fmf.getAttribute('data-plan-id');
+        if (pid) ovQuickFedPlan(pid);
+        return;
+      }
+      var fund = ev.target.closest && ev.target.closest('.btn-ov-feed-undofed');
+      if (fund) {
+        ev.preventDefault();
+        ev.stopPropagation();
+        var lid = fund.getAttribute('data-log-id');
+        if (lid) ovUndoFedLog(lid);
+        return;
+      }
+      var fdel = ev.target.closest && ev.target.closest('.btn-ov-feed-delplan');
+      if (fdel) {
+        ev.preventDefault();
+        ev.stopPropagation();
+        var pd = fdel.getAttribute('data-plan-id');
+        var cn = fdel.getAttribute('data-cat-name') || '';
+        if (pd) ovDeletePlan(pd, cn);
+        return;
+      }
+      var fed = ev.target.closest && ev.target.closest('.btn-ov-feed-editplan');
+      if (fed) {
+        ev.preventDefault();
+        ev.stopPropagation();
+        var cide = fed.getAttribute('data-cat-id');
+        var pide = fed.getAttribute('data-plan-id');
+        if (cide && pide) ovOpenAddPlanModal(cide, null, pide);
+        return;
+      }
       var hrEdit = ev.target.closest && ev.target.closest('.btn-ov-hr-edit');
       if (hrEdit) {
         ev.preventDefault();
@@ -356,20 +1131,6 @@
         var voiceOnlyD = rowD.getAttribute('data-voice-input-id');
         if (recD) deleteHealthRecord(recD, hrDel);
         else if (voiceOnlyD) deleteVoiceExcretion(voiceOnlyD, hrDel);
-        return;
-      }
-      var medBtn = ev.target.closest && ev.target.closest('.btn-ov-med-done');
-      if (medBtn) {
-        ev.preventDefault();
-        ev.stopPropagation();
-        saveMedDone(medBtn);
-        return;
-      }
-      var medSkipBtn = ev.target.closest && ev.target.closest('.btn-ov-med-skip');
-      if (medSkipBtn) {
-        ev.preventDefault();
-        ev.stopPropagation();
-        saveMedSkip(medSkipBtn);
         return;
       }
       var taskDoneBtn = ev.target.closest && ev.target.closest('.btn-ov-task-done');
@@ -485,6 +1246,8 @@
     }
     if (mainContent) mainContent.style.display = 'block';
 
+    ovBindFeedingModalDom();
+
     var savedMode = localStorage.getItem(MODE_KEY);
     if (savedMode === 'perItem') currentMode = 'perItem';
     updateToggle();
@@ -587,6 +1350,7 @@
 
   function fetchData(retryCount) {
     retryCount = retryCount || 0;
+    if (window.NyagiBootOverlay && retryCount === 0) window.NyagiBootOverlay.show('猫一覧ユニット同期中…');
     cardArea.innerHTML = '<div class="loading">読み込み中...</div>';
     var ctrl = new AbortController();
     var timeoutId = setTimeout(function () { ctrl.abort(); }, 30000);
@@ -606,6 +1370,7 @@
       .then(function (data) {
         catsData = data.cats || [];
         render();
+        if (window.NyagiBootOverlay) window.NyagiBootOverlay.hideForce();
       })
       .catch(function (err) {
         clearTimeout(timeoutId);
@@ -615,6 +1380,7 @@
           setTimeout(function () { fetchData(retryCount + 1); }, 1200);
           return;
         }
+        if (window.NyagiBootOverlay) window.NyagiBootOverlay.hideForce();
         var msg = err.name === 'AbortError' ? 'タイムアウトしました' : (err && err.message ? err.message : 'データ取得に失敗しました');
         var hint = (location.port !== '8001' && location.hostname === 'localhost') ? '<br><span style="font-size:11px;color:var(--text-dim);">※ http://localhost:8001/nyagi-app/ で開くと安定します</span>' : (isNetworkErr ? ' run-dev.ps1 で起動してください' : '');
         cardArea.innerHTML = '<div class="empty-msg">' + esc(msg) + hint + '</div>' +
@@ -699,7 +1465,7 @@
 
       // 排便
       html += '<div>';
-      html += '<div class="pcc-metric-label">排便</div>';
+      html += '<div class="pcc-metric-label">排便 <small class="dim">直近3日</small></div>';
       var stoolCount = (c.stool_today || []).length;
       if (stoolCount > 0) {
         var stoolSummary = stoolCount + '回';
@@ -716,7 +1482,7 @@
 
       // 排尿
       html += '<div>';
-      html += '<div class="pcc-metric-label">排尿</div>';
+      html += '<div class="pcc-metric-label">排尿 <small class="dim">直近3日</small></div>';
       var urineArr = c.urine_today || [];
       if (urineArr.length > 0) {
         var urineSummary = urineArr.length + '回';
@@ -797,14 +1563,34 @@
   //  モード2: 項目ごと
   // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-  var FOLD_KEY = 'nyagi_items_folded';
+  /** 開いているカード index のみ true。未設定＝すべて折りたたみがデフォルト（カード構成変更時はキーを変えてインデックスずれを防ぐ） */
+  var EXPANDED_KEY = 'nyagi_items_expanded_v8';
+  var LEGACY_FOLD_KEY = 'nyagi_items_folded';
 
-  function loadFolded() {
-    try { return JSON.parse(localStorage.getItem(FOLD_KEY)) || {}; }
-    catch (e) { return {}; }
+  function loadExpandedMap() {
+    try {
+      var raw = localStorage.getItem(EXPANDED_KEY);
+      if (raw) {
+        var o = JSON.parse(raw);
+        if (o && typeof o === 'object') return o;
+      }
+    } catch (e) {}
+    try {
+      var oldRaw = localStorage.getItem(LEGACY_FOLD_KEY);
+      if (oldRaw) {
+        var old = JSON.parse(oldRaw);
+        try { localStorage.removeItem(LEGACY_FOLD_KEY); } catch (_) {}
+        if (old && typeof old === 'object' && Object.keys(old).length > 0) {
+          try { localStorage.setItem(EXPANDED_KEY, JSON.stringify(old)); } catch (_) {}
+          return old;
+        }
+      }
+    } catch (e2) {}
+    return null;
   }
-  function saveFolded(map) {
-    try { localStorage.setItem(FOLD_KEY, JSON.stringify(map)); } catch (e) {}
+
+  function saveExpandedMap(map) {
+    try { localStorage.setItem(EXPANDED_KEY, JSON.stringify(map || {})); } catch (e) {}
   }
 
   function renderPerItem() {
@@ -812,33 +1598,34 @@
     html += renderItemCard_Stool();
     html += renderItemCard_Urine();
     html += renderItemCard_Weight();
-    html += renderItemCard_Meds();
+    html += renderItemCard_FeedingCheck();
     html += renderItemCard_Care();
     html += renderItemCard_Tasks();
-    html += renderItemCard_Anomaly();
-    html += renderItemCard_Feeding();
-    html += renderItemCard_Medical();
     cardArea.innerHTML = html;
     bindOverviewInlineHandlers();
 
-    var opened = loadFolded();
-    var hasSavedState = opened && typeof opened === 'object' && Object.keys(opened).length > 0;
+    var expanded = loadExpandedMap();
     var titles = cardArea.querySelectorAll('.item-card-title');
     for (var i = 0; i < titles.length; i++) {
       (function (title, idx) {
         var body = title.nextElementSibling;
         if (!body) return;
-        var shouldCollapse = hasSavedState && !opened[idx];
-        if (shouldCollapse) {
+        var isOpen = expanded && expanded[idx];
+        if (!isOpen) {
           title.classList.add('collapsed');
           body.classList.add('hidden');
         }
         title.addEventListener('click', function () {
           var isHidden = body.classList.toggle('hidden');
           title.classList.toggle('collapsed', isHidden);
-          var map = loadFolded();
-          if (isHidden) { delete map[idx]; } else { map[idx] = true; }
-          saveFolded(map);
+          var map = loadExpandedMap();
+          if (!map || typeof map !== 'object') map = {};
+          if (isHidden) {
+            delete map[idx];
+          } else {
+            map[idx] = true;
+          }
+          saveExpandedMap(map);
         });
       })(titles[i], i);
     }
@@ -849,10 +1636,11 @@
     return '<a href="' + catLink(c.id) + '" class="item-row" style="display:flex;align-items:center;gap:8px;text-decoration:none;color:inherit;-webkit-tap-highlight-color:rgba(255,255,255,0.1);">' + content + '</a>';
   }
 
-  function itemRowEditable(c, valuesHtml, editHtml) {
+  function itemRowEditable(c, valuesHtml, editHtml, linkHash) {
     var editBlock = editHtml ? '<div class="item-inline-edit">' + editHtml + '</div>' : '';
+    var href = catLink(c.id, linkHash || '');
     return '<div class="item-row item-row-editable">' +
-      '<a href="' + catLink(c.id) + '" class="item-cat-name item-cat-link">' + alertDot(c.alert_level) + esc(c.name) + '</a>' +
+      '<a href="' + href + '" class="item-cat-name item-cat-link">' + alertDot(c.alert_level) + esc(c.name) + '</a>' +
       '<div class="item-values">' + valuesHtml + '</div>' +
       editBlock +
       '</div>';
@@ -887,14 +1675,14 @@
       if (e.record_id) {
         var badgeSt = e.voice_input_id ? ' <small class="dim source-badge">音声</small>' : '';
         html += '<div class="ov-ex-row" data-record-id="' + escAttr(String(e.record_id)) + '" data-hr-value="' + escAttr(e.value_raw == null ? '' : String(e.value_raw)) + '" data-hr-details="' + escAttr(e.details_slot == null ? '' : String(e.details_slot)) + '" data-hr-date="' + escAttr(e.record_date == null ? '' : String(e.record_date)) + '" data-hr-kind="stool">';
-        html += '<div class="ov-ex-display"><span class="ov-ex-text">' + esc(e.time) + ' ' + esc(e.status) + '</span>' + badgeSt;
+        html += '<div class="ov-ex-display"><span class="ov-ex-text">' + esc(ovExcretionLineText(e)) + '</span>' + badgeSt;
         html += '<button type="button" class="btn btn-ov-hr-edit">編集</button>';
         html += '<button type="button" class="btn btn-ov-hr-del">削除</button></div>';
         html += excretionEditBlockStool();
         html += '</div>';
       } else if (e.voice_input_id) {
         html += '<div class="ov-ex-row ov-ex-voice-only" data-voice-input-id="' + escAttr(String(e.voice_input_id)) + '" data-hr-value="' + escAttr(e.value_raw == null ? '' : String(e.value_raw)) + '" data-hr-details="' + escAttr(e.details_slot == null ? '' : String(e.details_slot)) + '" data-hr-date="' + escAttr(e.record_date == null ? '' : String(e.record_date)) + '" data-hr-kind="stool">';
-        html += '<div class="ov-ex-display"><span class="ov-ex-text">' + esc(e.time) + ' ' + esc(e.status) + '</span> <small class="dim source-badge">音声</small>';
+        html += '<div class="ov-ex-display"><span class="ov-ex-text">' + esc(ovExcretionLineText(e)) + '</span> <small class="dim source-badge">音声</small>';
         html += '<button type="button" class="btn btn-ov-hr-edit">編集</button>';
         html += '<button type="button" class="btn btn-ov-hr-del">削除</button></div>';
         html += excretionEditBlockStool();
@@ -913,14 +1701,14 @@
       if (e.record_id) {
         var badgeUr = e.voice_input_id ? ' <small class="dim source-badge">音声</small>' : '';
         html += '<div class="ov-ex-row" data-record-id="' + escAttr(String(e.record_id)) + '" data-hr-value="' + escAttr(e.value_raw == null ? '' : String(e.value_raw)) + '" data-hr-details="' + escAttr(e.details_slot == null ? '' : String(e.details_slot)) + '" data-hr-date="' + escAttr(e.record_date == null ? '' : String(e.record_date)) + '" data-hr-kind="urine">';
-        html += '<div class="ov-ex-display"><span class="ov-ex-text">' + esc(e.time) + ' ' + esc(e.status) + '</span>' + badgeUr;
+        html += '<div class="ov-ex-display"><span class="ov-ex-text">' + esc(ovExcretionLineText(e)) + '</span>' + badgeUr;
         html += '<button type="button" class="btn btn-ov-hr-edit">編集</button>';
         html += '<button type="button" class="btn btn-ov-hr-del">削除</button></div>';
         html += excretionEditBlockUrine();
         html += '</div>';
       } else if (e.voice_input_id) {
         html += '<div class="ov-ex-row ov-ex-voice-only" data-voice-input-id="' + escAttr(String(e.voice_input_id)) + '" data-hr-value="' + escAttr(e.value_raw == null ? '' : String(e.value_raw)) + '" data-hr-details="' + escAttr(e.details_slot == null ? '' : String(e.details_slot)) + '" data-hr-date="' + escAttr(e.record_date == null ? '' : String(e.record_date)) + '" data-hr-kind="urine">';
-        html += '<div class="ov-ex-display"><span class="ov-ex-text">' + esc(e.time) + ' ' + esc(e.status) + '</span> <small class="dim source-badge">音声</small>';
+        html += '<div class="ov-ex-display"><span class="ov-ex-text">' + esc(ovExcretionLineText(e)) + '</span> <small class="dim source-badge">音声</small>';
         html += '<button type="button" class="btn btn-ov-hr-edit">編集</button>';
         html += '<button type="button" class="btn btn-ov-hr-del">削除</button></div>';
         html += excretionEditBlockUrine();
@@ -932,7 +1720,7 @@
 
   function renderItemCard_Stool() {
     var html = '<div class="item-card">';
-    html += '<div class="item-card-title">💩 排便</div>';
+    html += '<div class="item-card-title">💩 排便 <small class="dim">直近3日</small></div>';
     html += '<div class="item-card-body">';
     for (var i = 0; i < catsData.length; i++) {
       var c = catsData[i];
@@ -945,7 +1733,7 @@
 
   function renderItemCard_Urine() {
     var html = '<div class="item-card">';
-    html += '<div class="item-card-title">🚽 排尿</div>';
+    html += '<div class="item-card-title">🚽 排尿 <small class="dim">直近3日</small></div>';
     html += '<div class="item-card-body">';
     for (var i = 0; i < catsData.length; i++) {
       var c = catsData[i];
@@ -970,36 +1758,59 @@
     return html;
   }
 
-  function renderItemCard_Meds() {
+  /** 献立の meal_slot（DB英語キー）→ 短いラベル */
+  function feedingMealSlotLabelJp(slot) {
+    var s = slot == null ? '' : String(slot);
+    var m = { morning: '☀朝', afternoon: '昼', evening: '夜', night: '夜', noon: '昼' };
+    return m[s] || esc(s);
+  }
+
+  function renderItemCard_FeedingCheck() {
     var html = '<div class="item-card">';
-    html += '<div class="item-card-title">💊 今日の投薬状況</div>';
+    html += '<div class="item-card-title">🍚 ごはん（献立） <small class="dim">一覧から操作</small></div>';
     html += '<div class="item-card-body">';
+    html += '<div class="ov-feed-hint" style="font-size:11px;color:var(--text-dim);margin-bottom:8px;">プリセット・献立・今日の記録をこの画面で行えます（猫詳細と同じAPI）</div>';
     for (var i = 0; i < catsData.length; i++) {
       var c = catsData[i];
-      var meds = c.meds_today || { done: 0, total: 0, items: [] };
-      var items = meds.items || [];
-
-      var medVals = '';
-      if (meds.total === 0) medVals = '<span class="dim">投薬予定なし</span>';
-      else {
-        var mc = meds.done >= meds.total ? 'score-color-green' : meds.done > 0 ? 'score-color-yellow' : 'score-color-red';
-        var allIcon = meds.done >= meds.total ? '✅' : '⏳';
-        medVals = '<span class="' + mc + '" style="font-weight:700;">' + allIcon + ' ' + meds.done + '/' + meds.total + ' 完了</span>';
-        for (var j = 0; j < items.length; j++) {
-          var it = items[j];
-          var isDone = it.status === 'done';
-          var isSkipped = it.status === 'skipped';
-          var itemIcon = isDone ? '✅' : isSkipped ? '⏭️' : '⬜';
-          var itemCls = isDone ? 'med-item-done' : isSkipped ? 'med-item-skip' : 'med-item-pending';
-          medVals += '<span class="' + itemCls + '" style="font-size:12px;display:inline-flex;align-items:center;flex-wrap:wrap;gap:4px;">' + itemIcon + ' ' + (it.slot ? '<b>' + esc(it.slot) + '</b> ' : '') + esc(it.name) + (it.dosage ? ' <small>' + esc(it.dosage) + '</small>' : '');
-          if (!isDone && !isSkipped && it.log_id != null && it.log_id !== undefined && String(it.log_id) !== '') {
-            medVals += '<button type="button" class="btn btn-ov-med-done" data-log-id="' + escAttr(String(it.log_id)) + '" style="font-size:10px;padding:2px 8px;">実施</button>';
-            medVals += '<button type="button" class="btn btn-ov-med-skip" data-log-id="' + escAttr(String(it.log_id)) + '" style="font-size:10px;padding:2px 8px;">スキップ</button>';
+      var plan = c.feeding_plan || [];
+      var inner = '';
+      var toolbar = '<div class="ov-feed-toolbar" style="display:flex;flex-wrap:wrap;gap:4px;margin-bottom:6px;width:100%;">' +
+        '<button type="button" class="btn btn-outline btn-ov-feed-preset" style="font-size:10px;padding:2px 6px;" data-cat-id="' + escAttr(String(c.id)) + '">📋適用</button>' +
+        '<button type="button" class="btn btn-outline btn-ov-feed-assign" style="font-size:10px;padding:2px 6px;" data-cat-id="' + escAttr(String(c.id)) + '">🔗紐づけ</button>' +
+        '<button type="button" class="btn btn-outline btn-ov-feed-manage" style="font-size:10px;padding:2px 6px;" data-cat-id="' + escAttr(String(c.id)) + '">⚙️管理</button>' +
+        '<button type="button" class="btn btn-outline btn-ov-feed-addplan" style="font-size:10px;padding:2px 6px;" data-cat-id="' + escAttr(String(c.id)) + '">＋献立</button>' +
+        '<button type="button" class="btn btn-outline btn-ov-feed-log" style="font-size:10px;padding:2px 6px;" data-cat-id="' + escAttr(String(c.id)) + '">📝記録</button>' +
+        '<a href="' + catLink(c.id, 'feedingArea') + '" class="btn btn-outline" style="font-size:10px;padding:2px 6px;text-decoration:none;">詳細</a>' +
+        '</div>';
+      if (plan.length === 0) {
+        inner = '<span class="dim">献立未設定</span>';
+      } else {
+        for (var j = 0; j < plan.length; j++) {
+          var p = plan[j];
+          var menu = esc(p.food_name || '—');
+          if (p.amount_g != null && p.amount_g !== '') menu += ' <strong>' + esc(String(p.amount_g)) + 'g</strong>';
+          if (p.notes) menu += ' <small class="dim">' + esc(p.notes) + '</small>';
+          var st = '';
+          var pidStr = p.plan_id != null ? String(p.plan_id) : '';
+          if (p.fed_today) {
+            st = '<span class="feed-done">✅</span>';
+            if (p.eaten_pct_today != null && p.eaten_pct_today !== '') st += '<span class="dim">' + esc(String(p.eaten_pct_today)) + '%</span> ';
+            if (p.log_id != null) {
+              st += '<button type="button" class="btn btn-outline btn-ov-feed-undofed" style="font-size:10px;padding:1px 6px;" data-log-id="' + escAttr(String(p.log_id)) + '">取消</button> ';
+            }
+          } else if (pidStr) {
+            st = '<button type="button" class="btn btn-primary btn-ov-feed-markfed" style="font-size:10px;padding:1px 8px;" data-plan-id="' + escAttr(pidStr) + '">あげた</button> ';
+          } else {
+            st = '<span class="feed-pending">⬜</span> ';
           }
-          medVals += '</span>';
+          if (pidStr) {
+            st += '<button type="button" class="btn btn-outline btn-ov-feed-editplan" style="font-size:10px;padding:1px 6px;" data-cat-id="' + escAttr(String(c.id)) + '" data-plan-id="' + escAttr(pidStr) + '">✏️</button> ';
+            st += '<button type="button" class="btn btn-outline btn-ov-feed-delplan" style="font-size:10px;padding:1px 6px;color:#f87171;" data-plan-id="' + escAttr(pidStr) + '" data-cat-name="' + escAttr(c.name) + '">🗑</button>';
+          }
+          inner += '<div class="ov-feed-line"><span class="ov-feed-slot">' + feedingMealSlotLabelJp(p.meal_slot) + '</span><span class="ov-feed-menu">' + menu + '</span><span class="ov-feed-status" style="text-align:right;">' + st + '</span></div>';
         }
       }
-      html += itemRowEditable(c, '<div class="item-values-medcol">' + medVals + '</div>', '');
+      html += itemRowEditable(c, '<div class="item-values-medcol ov-feed-block" style="width:100%;">' + toolbar + inner + '</div>', '', '');
     }
     html += '</div></div>';
     return html;
@@ -1054,79 +1865,14 @@
     return html;
   }
 
-  function renderItemCard_Anomaly() {
-    var html = '<div class="item-card">';
-    html += '<div class="item-card-title">⚠️ 健康異常</div>';
-    html += '<div class="item-card-body">';
-    for (var i = 0; i < catsData.length; i++) {
-      var c = catsData[i];
-      var anomalies = c.anomalies_7d || [];
-
-      var anomVals = '<span class="' + scoreColorClass(c.score_color) + '" style="font-weight:700;">' + (c.health_score !== null ? c.health_score : '--') + '</span>';
-      if (anomalies.length === 0) anomVals += '<span class="score-color-green" style="font-size:11px;">異常なし</span>';
-      else { for (var j = 0; j < anomalies.length; j++) { var a = anomalies[j]; anomVals += '<span class="badge ' + (a.count >= 3 ? 'badge-red' : a.count >= 2 ? 'badge-orange' : 'badge-yellow') + '">' + esc(a.type) + ' x' + a.count + '</span>'; } }
-      html += itemRowReadonly(c, '<div class="item-cat-name">' + alertDot(c.alert_level) + esc(c.name) + '</div><div class="item-values">' + anomVals + '</div>');
-    }
-    html += '</div></div>';
-    return html;
-  }
-
-  function feedingSlotLabel(slot) {
-    var m = { morning: '☀️朝', afternoon: '昼', evening: '🌙夕', night: '🌙夕' };
-    return m[slot] || slot || '';
-  }
-
-  function renderItemCard_Feeding() {
-    var html = '<div class="item-card">';
-    html += '<div class="item-card-title">🍚 ごはん献立</div>';
-    html += '<div class="item-card-body">';
-    for (var i = 0; i < catsData.length; i++) {
-      var c = catsData[i];
-      var plan = c.feeding_plan || [];
-
-      var planVals = '';
-      if (plan.length === 0) planVals = '<span class="dim">献立未設定</span>';
-      else {
-        for (var j = 0; j < plan.length; j++) {
-          var pj = plan[j];
-          planVals += '<div style="font-size:12px;">' + esc(feedingSlotLabel(pj.meal_slot)) + ': ' + esc(pj.food_name) + ' ' + pj.amount_g + 'g';
-          if (pj.notes && String(pj.notes).trim()) {
-            planVals += '<div style="font-size:10px;color:var(--text-dim);margin-top:2px;padding-left:6px;line-height:1.35;">📝 ' + esc(String(pj.notes).trim()) + '</div>';
-          }
-          planVals += '</div>';
-        }
-      }
-      html += itemRowReadonly(c, '<div class="item-cat-name">' + alertDot(c.alert_level) + esc(c.name) + '</div><div class="item-values" style="flex-direction:column;gap:4px;">' + planVals + '</div>');
-    }
-    html += '</div></div>';
-    return html;
-  }
-
-  function renderItemCard_Medical() {
-    var html = '<div class="item-card">';
-    html += '<div class="item-card-title">🏥 医療（中長期）</div>';
-    html += '<div class="item-card-body">';
-    var today = new Date().toLocaleDateString('sv-SE', { timeZone: 'Asia/Tokyo' });
-    for (var i = 0; i < catsData.length; i++) {
-      var c = catsData[i];
-
-      var medLongVals = '';
-      if (c.vaccine_next_due) medLongVals += '<span class="badge ' + (c.vaccine_next_due <= today ? 'badge-red' : daysUntil(c.vaccine_next_due) <= 30 ? 'badge-orange' : 'badge-gray') + '">ワクチン ' + shortDate(c.vaccine_next_due) + '</span>';
-      if (c.checkup_next_due) medLongVals += '<span class="badge ' + (c.checkup_next_due <= today ? 'badge-red' : daysUntil(c.checkup_next_due) <= 30 ? 'badge-orange' : 'badge-gray') + '">健診 ' + shortDate(c.checkup_next_due) + '</span>';
-      medLongVals += '<span class="badge ' + (c.microchip === 'registered' ? 'badge-green' : 'badge-gray') + '">' + (c.microchip === 'registered' ? 'MC済' : 'MC未') + '</span>';
-      if (!c.vaccine_next_due && !c.checkup_next_due) medLongVals += '<span class="dim" style="font-size:11px;">予定なし</span>';
-      html += itemRowReadonly(c, '<div class="item-cat-name">' + alertDot(c.alert_level) + esc(c.name) + '</div><div class="item-values">' + medLongVals + '</div>');
-    }
-    html += '</div></div>';
-    return html;
-  }
-
   // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━
   //  ユーティリティ
   // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-  function catLink(catId) {
-    return 'cat.html?id=' + encodeURIComponent(catId || '');
+  function catLink(catId, hash) {
+    var url = 'cat.html?id=' + encodeURIComponent(catId || '');
+    if (hash) url += '#' + hash;
+    return url;
   }
 
   function statusLabel(status) {
@@ -1153,17 +1899,4 @@
     return d.innerHTML;
   }
 
-  function shortDate(dateStr) {
-    if (!dateStr) return '';
-    var parts = dateStr.split('-');
-    if (parts.length < 3) return dateStr;
-    return parseInt(parts[1], 10) + '/' + parseInt(parts[2], 10);
-  }
-
-  function daysUntil(dateStr) {
-    var target = new Date(dateStr + 'T00:00:00');
-    var now = new Date();
-    now.setHours(0, 0, 0, 0);
-    return Math.ceil((target - now) / (24 * 60 * 60 * 1000));
-  }
 })();

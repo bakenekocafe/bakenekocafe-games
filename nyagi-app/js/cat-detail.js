@@ -252,6 +252,18 @@ function toggleFold(id, btn) {
     init();
   }
 
+  (function bindCatBackButton() {
+    var catBackBtn = document.getElementById('catBackBtn');
+    if (!catBackBtn) return;
+    catBackBtn.addEventListener('click', function () {
+      if (window.history.length > 1) {
+        window.history.back();
+      } else {
+        window.location.href = 'cats.html';
+      }
+    });
+  })();
+
   function loadCatDetail() {
     if (!catHeaderArea) return;
     catHeaderArea.innerHTML = '<div class="loading"><span class="spinner"></span> 読み込み中...</div>';

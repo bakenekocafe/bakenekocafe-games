@@ -10,12 +10,12 @@
   <meta http-equiv="Expires" content="0">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
   <title>NYAGI タスク</title>
-  <link rel="manifest" href="manifest.json?v=202">
+  <link rel="manifest" href="manifest.json?v=203">
   <meta name="theme-color" content="#1a1a2e">
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-  <link rel="stylesheet" href="style.css?v=202">
-  <link rel="stylesheet" href="voice-console.css?v=202">
+  <link rel="stylesheet" href="style.css?v=203">
+  <link rel="stylesheet" href="voice-console.css?v=203">
   <style>
     /* ── タブ ─────────────────────────────────── */
     .tab-bar {
@@ -936,10 +936,11 @@
     caches.keys().then(function(n){n.forEach(function(k){caches.delete(k)})});
     navigator.serviceWorker.getRegistrations().then(function(r){r.forEach(function(s){s.unregister()})});
   </script>
-  <script src="config.js?v=202"></script>
-  <script src="js/login-gate.js?v=202"></script>
-  <script src="js/app.js?v=202"></script>
-  <script src="js/tasks.js?v=202"></script>
-  <script src="js/voice-console.js?v=202"></script>
+  <script src="config.js?v=203"></script>
+  <script src="js/nyagi-boot-overlay.js?v=203"></script>
+  <script src="js/login-gate.js?v=203"></script>
+  <script src="js/app.js?v=203"></script>
+  <script src="js/tasks.js?v=203"></script>
+  <script src="js/voice-console.js?v=203"></script>
 </body>
 </html>

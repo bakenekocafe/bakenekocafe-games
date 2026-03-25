@@ -431,3 +431,102 @@ textarea.transcript-edit:focus {
   color: var(--text-dim);
   padding: 24px 0;
 }
+
+/* ── NYAGI 起動・遷移スプラッシュ（img/nyagi-boot-splash.png） ── */
+
+.nyagi-boot-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 2147483000;
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+  padding: max(16px, env(safe-area-inset-bottom, 0px)) 16px max(28px, env(safe-area-inset-bottom, 0px));
+  pointer-events: none;
+  opacity: 0;
+  visibility: hidden;
+  transition: opacity 0.35s ease, visibility 0.35s ease;
+}
+
+.nyagi-boot-overlay.nyagi-boot-visible {
+  opacity: 1;
+  visibility: visible;
+  pointer-events: auto;
+}
+
+.nyagi-boot-bg {
+  position: absolute;
+  inset: 0;
+  background-size: cover;
+  background-position: center top;
+  background-repeat: no-repeat;
+  filter: saturate(1.05) contrast(1.02);
+}
+
+.nyagi-boot-veil {
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(
+    180deg,
+    rgba(10, 12, 22, 0.25) 0%,
+    rgba(10, 12, 22, 0.55) 45%,
+    rgba(10, 12, 22, 0.92) 100%
+  );
+  pointer-events: none;
+}
+
+.nyagi-boot-panel {
+  position: relative;
+  z-index: 2;
+  width: 100%;
+  max-width: 420px;
+  text-align: center;
+  text-shadow: 0 0 12px rgba(0, 240, 255, 0.35);
+}
+
+.nyagi-boot-caution {
+  font-size: 9px;
+  letter-spacing: 0.12em;
+  color: rgba(255, 140, 60, 0.95);
+  margin-bottom: 10px;
+  font-weight: 600;
+}
+
+.nyagi-boot-title {
+  font-size: 15px;
+  font-weight: 700;
+  color: #e8faff;
+  letter-spacing: 0.06em;
+  margin-bottom: 6px;
+}
+
+.nyagi-boot-sub {
+  font-size: 11px;
+  color: rgba(0, 230, 255, 0.88);
+  font-family: ui-monospace, 'Cascadia Mono', 'Consolas', monospace;
+  min-height: 1.4em;
+  margin-bottom: 14px;
+}
+
+.nyagi-boot-bar {
+  height: 4px;
+  border-radius: 4px;
+  background: rgba(0, 200, 255, 0.15);
+  overflow: hidden;
+  border: 1px solid rgba(255, 120, 40, 0.35);
+}
+
+.nyagi-boot-bar-fill {
+  display: block;
+  height: 100%;
+  width: 40%;
+  border-radius: 4px;
+  background: linear-gradient(90deg, #ff7a2e, #00e8ff, #ff7a2e);
+  background-size: 200% 100%;
+  animation: nyagi-boot-scan 1.1s ease-in-out infinite;
+}
+
+@keyframes nyagi-boot-scan {
+  0% { transform: translateX(-100%); background-position: 0% 50%; }
+  100% { transform: translateX(250%); background-position: 100% 50%; }
+}

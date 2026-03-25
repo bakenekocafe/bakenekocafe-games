@@ -121,6 +121,10 @@
   var creds = _syncRestore();
   if (creds) return;
 
+  if (window.NyagiBootOverlay) {
+    window.NyagiBootOverlay.show('認証リンク建立中…');
+  }
+
   // 同期ストレージになかった → IndexedDB を非同期チェック
   _idbLoad(function (idbJson) {
     if (idbJson) {
@@ -129,12 +133,14 @@
         if (obj && obj.staffId) {
           try { localStorage.setItem('nyagi_creds', idbJson); } catch (_) {}
           _setCookie(idbJson);
+          if (window.NyagiBootOverlay) window.NyagiBootOverlay.hideForce();
           location.reload();
           return;
         }
       } catch (_) {}
     }
     // IndexedDB にもなかった → ログインフォーム表示
+    if (window.NyagiBootOverlay) window.NyagiBootOverlay.hideForce();
     _showLoginForm(gate);
   });
 
@@ -163,17 +169,25 @@
       if (!v) { msg.textContent = 'パスワードを入力してください'; msg.style.display = 'block'; return; }
       btn.disabled = true;
       msg.style.display = 'none';
+      if (window.NyagiBootOverlay) window.NyagiBootOverlay.show('MAGI 認証中…');
       fetch(origin + '/api/ops/auth/login', {
         method: 'POST',
         cache: 'no-store',
         headers: { 'Content-Type': 'application/json', 'X-Admin-Key': adminKey },
         body: JSON.stringify({ password: v })
       }).then(function (r) { return r.json(); }).then(function (data) {
-        if (!data || !data.staffId) { msg.textContent = 'パスワードが違います'; msg.style.display = 'block'; btn.disabled = false; return; }
+        if (!data || !data.staffId) {
+          if (window.NyagiBootOverlay) window.NyagiBootOverlay.hide();
+          msg.textContent = 'パスワードが違います'; msg.style.display = 'block'; btn.disabled = false; return;
+        }
         var json = JSON.stringify({ adminKey: adminKey, staffId: data.staffId });
         window._nyagiSaveCreds(json);
+        if (window.NyagiBootOverlay) window.NyagiBootOverlay.hideForce();
         location.reload();
-      }).catch(function () { msg.textContent = '通信エラー'; msg.style.display = 'block'; btn.disabled = false; });
+      }).catch(function () {
+        if (window.NyagiBootOverlay) window.NyagiBootOverlay.hide();
+        msg.textContent = '通信エラー'; msg.style.display = 'block'; btn.disabled = false;
+      });
     }
 
     btn.addEventListener('click', doLogin);

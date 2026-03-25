@@ -147,6 +147,7 @@
 
   function loadDashboard(retryCount) {
     retryCount = retryCount || 0;
+    if (window.NyagiBootOverlay && retryCount === 0) window.NyagiBootOverlay.show('MAGI ダッシュボード同期中…');
     dashView.innerHTML = '<div class="loading"><span class="spinner"></span> 読み込み中...</div>';
 
     var q = locationQuery();
@@ -161,10 +162,12 @@
         var mData = results[0] || {};
         var eData = results[1] || {};
         if (mData.error && eData.error) {
+          if (window.NyagiBootOverlay) window.NyagiBootOverlay.hideForce();
           dashView.innerHTML = '<div class="empty-msg">エラー: ' + escapeHtml(mData.message || mData.error) + '</div>';
           return;
         }
         renderUnified(mData, eData);
+        if (window.NyagiBootOverlay) window.NyagiBootOverlay.hideForce();
       })
       .catch(function (err) {
         clearTimeout(timeoutId);
@@ -174,6 +177,7 @@
           setTimeout(function () { loadDashboard(retryCount + 1); }, 1200);
           return;
         }
+        if (window.NyagiBootOverlay) window.NyagiBootOverlay.hideForce();
         var msg = err && err.name === 'AbortError' ? 'タイムアウトしました' : '読み込みに失敗しました';
         var hint = (location.port !== '8001' && location.hostname === 'localhost') ? '<br><span style="font-size:11px;color:var(--text-dim);">※ http://localhost:8001/nyagi-app/ で開くと安定します</span>' : '';
         dashView.innerHTML = '<div class="empty-msg">' + msg + hint + '</div><button class="btn btn-primary" style="margin-top:12px;" onclick="location.reload()">再試行</button>';
@@ -545,12 +549,41 @@
       .catch(function () { alert('投薬ログの取得に失敗しました'); });
   }
 
-  var DASH_FOLD_KEY = 'nyagi_dash_folds';
-  function loadDashFolds() {
-    try { return JSON.parse(localStorage.getItem(DASH_FOLD_KEY)) || {}; } catch (_) { return {}; }
+  var DASH_FOLD_KEY = 'nyagi_dash_folds_v2';
+  var DASH_FOLD_LEGACY_KEY = 'nyagi_dash_folds';
+
+  /** 未保存時に「開いたまま」にするセクション（それ以外はデフォルトで折りたたみ） */
+  function dashFoldDefaultExpanded(key) {
+    return key === 'healthScore';
   }
+
+  function loadDashFolds() {
+    try {
+      var raw = localStorage.getItem(DASH_FOLD_KEY);
+      if (raw != null && raw !== '') return JSON.parse(raw) || {};
+    } catch (_) {}
+    try {
+      var leg = localStorage.getItem(DASH_FOLD_LEGACY_KEY);
+      if (leg != null && leg !== '') {
+        var o = JSON.parse(leg) || {};
+        try { localStorage.removeItem(DASH_FOLD_LEGACY_KEY); } catch (_) {}
+        try { localStorage.setItem(DASH_FOLD_KEY, JSON.stringify(o)); } catch (_) {}
+        return o;
+      }
+    } catch (_) {}
+    return {};
+  }
+
   function saveDashFolds(map) {
     try { localStorage.setItem(DASH_FOLD_KEY, JSON.stringify(map)); } catch (_) {}
+  }
+
+  /** true: 折りたたみ表示。キー未設定時は healthScore のみ開く */
+  function isDashFoldCollapsed(key, folds) {
+    if (Object.prototype.hasOwnProperty.call(folds, key)) {
+      return !!folds[key];
+    }
+    return !dashFoldDefaultExpanded(key);
   }
 
   function bindDashFolds() {
@@ -561,16 +594,25 @@
         var key = title.getAttribute('data-fold');
         var body = dashView.querySelector('[data-fold-target="' + key + '"]');
         if (!body) return;
-        if (folds[key]) {
+        if (isDashFoldCollapsed(key, folds)) {
           body.style.display = 'none';
           title.classList.add('folded');
+        } else {
+          body.style.display = '';
+          title.classList.remove('folded');
         }
         title.addEventListener('click', function () {
           var isHidden = body.style.display === 'none';
           body.style.display = isHidden ? '' : 'none';
           title.classList.toggle('folded', !isHidden);
           var map = loadDashFolds();
-          if (!isHidden) { map[key] = true; } else { delete map[key]; }
+          if (!isHidden) {
+            map[key] = true;
+          } else if (dashFoldDefaultExpanded(key)) {
+            delete map[key];
+          } else {
+            map[key] = false;
+          }
           saveDashFolds(map);
         });
       })(titles[i]);

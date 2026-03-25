@@ -627,29 +627,169 @@
       }).catch(function () { alert('削除に失敗しました'); });
   }
 
-  // ── 残しモーダル ─────────────────────────────────────────────────────────
+  // ── 残しモーダル（猫詳細 cat-detail.js の renderLeftoverInput / saveLeftover と同じデータ・API） ──
 
   var _ovLoCatId = null;
-  var _ovLoEntries = [];
 
+  /** JST の「昨日」— 猫詳細の yesterdayJstYmd と同じ計算 */
   function yesterdayJstYmd() {
-    var d = new Date(Date.now() + 9 * 3600000);
-    d.setDate(d.getDate() - 1);
-    return d.toISOString().slice(0, 10);
+    var t = todayJstYmd();
+    var d = new Date(t + 'T12:00:00+09:00');
+    d.setTime(d.getTime() - 86400000);
+    return d.toLocaleDateString('sv-SE', { timeZone: 'Asia/Tokyo' });
   }
 
-  function isNightSlot(slot) {
-    var s = (slot || '').toLowerCase();
-    return s === 'evening' || s === 'night' || s === '夕' || s === '晩' || s === '夜';
+  function ovIsEveningMealSlot(slot) {
+    var s = String(slot || '').toLowerCase();
+    return s === 'evening' || s === 'night' || s === 'dinner';
   }
-  function isLunchSlot(slot) {
-    var s = (slot || '').toLowerCase();
-    return s === 'afternoon' || s === 'lunch' || s === '昼';
+  function ovIsAfternoonMealSlot(slot) {
+    var s = String(slot || '').toLowerCase();
+    return s === 'afternoon' || s === 'lunch';
+  }
+
+  function ovFilterPlansBySlot(plans, pred) {
+    var out = [];
+    for (var i = 0; i < plans.length; i++) {
+      if (pred(plans[i].meal_slot)) out.push(plans[i]);
+    }
+    return out;
+  }
+  function ovFilterLogsBySlot(logs, pred) {
+    var out = [];
+    for (var i = 0; i < logs.length; i++) {
+      if (pred(logs[i].meal_slot)) out.push(logs[i]);
+    }
+    return out;
+  }
+
+  /** cat-detail buildLeftoverItems と同じ（plan_id でログと献立を対応） */
+  function ovBuildLeftoverItems(plans, logs) {
+    var logByPlanId = {};
+    for (var li = 0; li < logs.length; li++) {
+      if (logs[li].plan_id != null && logs[li].plan_id !== '') {
+        logByPlanId[String(logs[li].plan_id)] = logs[li];
+      }
+    }
+    var items = [];
+    for (var pi = 0; pi < plans.length; pi++) {
+      var plan = plans[pi];
+      var pid = plan.plan_id;
+      if (pid == null) continue;
+      items.push({ plan: plan, log: logByPlanId[String(pid)] || null });
+    }
+    for (var lli = 0; lli < logs.length; lli++) {
+      if (!logs[lli].plan_id) {
+        items.push({ plan: null, log: logs[lli] });
+      }
+    }
+    return items;
+  }
+
+  function ovRenderLeftoverItemRow(item, logDateStr, secKey, rowIdx) {
+    var log = item.log;
+    var plan = item.plan;
+    var foodName = (log && log.food_name) || (plan && plan.food_name) || '不明';
+    var offG = (log && log.offered_g != null && log.offered_g !== '') ? Number(log.offered_g) : (plan && plan.amount_g != null ? Number(plan.amount_g) : 0);
+    var planId = plan && plan.plan_id != null ? String(plan.plan_id) : '';
+    var logId = log && log.id != null ? String(log.id) : '';
+    var inputId = 'ov-lo-inp-' + secKey + '-' + rowIdx;
+
+    var prefillLeft = '';
+    if (log && log.offered_g && log.eaten_pct != null && log.eaten_pct !== undefined) {
+      prefillLeft = String(Math.round(log.offered_g * (100 - log.eaten_pct) / 100 * 10) / 10);
+    }
+
+    var html = '<div style="background:rgba(0,0,0,.04);border-radius:8px;padding:8px 10px;margin-bottom:6px;">';
+    html += '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px;">';
+    html += '<span style="font-weight:600;font-size:13px;">' + esc(foodName) + '</span>';
+    if (offG) html += '<span class="dim" style="font-size:11px;">提供 ' + esc(String(offG)) + 'g</span>';
+    html += '</div>';
+
+    if (log && log.eaten_pct !== null && log.eaten_pct !== undefined && log.eaten_pct < 100) {
+      var leftG = Math.round(offG * (100 - log.eaten_pct) / 100 * 10) / 10;
+      var ateG = Math.round(offG * log.eaten_pct / 100 * 10) / 10;
+      html += '<div style="font-size:11px;color:#4ade80;margin-bottom:4px;">✅ ' + log.eaten_pct + '% 食べた（' + ateG + 'g） / 残り ' + leftG + 'g</div>';
+    } else if (log && log.eaten_pct === 100) {
+      html += '<div style="font-size:11px;color:#4ade80;margin-bottom:4px;">✅ 完食</div>';
+    }
+
+    html += '<div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;margin-top:4px;">';
+    html += '<label class="dim" style="font-size:11px;">残り</label>';
+    html += '<input type="number" id="' + escAttr(inputId) + '" class="form-input" style="width:64px;font-size:12px;padding:2px 4px;" min="0" step="0.1" placeholder="g"';
+    if (offG) html += ' max="' + escAttr(String(offG)) + '"';
+    html += ' value="' + escAttr(prefillLeft) + '">';
+
+    if (logId) {
+      html += '<button type="button" class="btn btn-outline ov-lo-save-log" style="font-size:10px;padding:2px 8px;" data-log-id="' + escAttr(logId) + '" data-offered-g="' + escAttr(String(offG)) + '" data-input-id="' + escAttr(inputId) + '">保存</button>';
+      html += '<button type="button" class="btn btn-outline ov-lo-complete-log" style="font-size:10px;padding:2px 8px;" data-log-id="' + escAttr(logId) + '">完食</button>';
+    } else if (planId) {
+      html += '<button type="button" class="btn btn-outline ov-lo-save-plan" style="font-size:10px;padding:2px 8px;" data-plan-id="' + escAttr(planId) + '" data-offered-g="' + escAttr(String(offG)) + '" data-log-date="' + escAttr(logDateStr) + '" data-input-id="' + escAttr(inputId) + '">保存</button>';
+      html += '<button type="button" class="btn btn-outline ov-lo-complete-plan" style="font-size:10px;padding:2px 8px;" data-plan-id="' + escAttr(planId) + '" data-log-date="' + escAttr(logDateStr) + '">完食</button>';
+    }
+    html += '</div></div>';
+    return html;
+  }
+
+  function ovRenderLeftoverSection(label, items, logDateStr, secKey) {
+    var html = '<div style="margin-bottom:14px;">';
+    html += '<div style="font-weight:700;font-size:13px;margin-bottom:6px;border-bottom:1px solid rgba(0,0,0,.08);padding-bottom:4px;">' + esc(label) + '</div>';
+    if (items.length === 0) {
+      html += '<div class="dim" style="font-size:12px;padding:4px 0;">献立・ログともにありません</div>';
+    } else {
+      for (var ri = 0; ri < items.length; ri++) {
+        html += ovRenderLeftoverItemRow(items[ri], logDateStr, secKey, ri);
+      }
+    }
+    html += '</div>';
+    return html;
+  }
+
+  function ovFillLeftoverModalBody(catId) {
+    var c = ovFindCat(catId);
+    var body = document.getElementById('ovLoBody');
+    if (!body) return;
+    if (!c) {
+      body.innerHTML = '<p style="text-align:center;color:#c44;padding:16px;">猫データがありません</p>';
+      return;
+    }
+
+    var todayStr = todayJstYmd();
+    var yesterdayStr = yesterdayJstYmd();
+    var base = feedingApiBase() + '/logs?cat_id=' + encodeURIComponent(catId);
+    var allPlans = c.feeding_plan || [];
+
+    Promise.all([
+      fetch(base + '&date=' + yesterdayStr, { headers: apiHeaders(), cache: 'no-store' }).then(function (r) { return r.json(); }),
+      fetch(base + '&date=' + todayStr, { headers: apiHeaders(), cache: 'no-store' }).then(function (r) { return r.json(); })
+    ]).then(function (results) {
+      var yLogsAll = results[0].logs || [];
+      var tLogsAll = results[1].logs || [];
+
+      var prevNightPlans = ovFilterPlansBySlot(allPlans, ovIsEveningMealSlot);
+      var prevNightLogs = ovFilterLogsBySlot(yLogsAll, ovIsEveningMealSlot);
+      var itemsPrev = ovBuildLeftoverItems(prevNightPlans, prevNightLogs);
+
+      var lunchPlans = ovFilterPlansBySlot(allPlans, ovIsAfternoonMealSlot);
+      var lunchLogs = ovFilterLogsBySlot(tLogsAll, ovIsAfternoonMealSlot);
+      var itemsLunch = ovBuildLeftoverItems(lunchPlans, lunchLogs);
+
+      var evePlans = ovFilterPlansBySlot(allPlans, ovIsEveningMealSlot);
+      var eveLogs = ovFilterLogsBySlot(tLogsAll, ovIsEveningMealSlot);
+      var itemsEve = ovBuildLeftoverItems(evePlans, eveLogs);
+
+      var html = '';
+      html += ovRenderLeftoverSection('🌙 前日夜（昨夜の夜ごはんと同じ）', itemsPrev, yesterdayStr, 'prev');
+      html += ovRenderLeftoverSection('☀️ 当日昼', itemsLunch, todayStr, 'lunch');
+      html += ovRenderLeftoverSection('🌙 当日夜', itemsEve, todayStr, 'eve');
+      body.innerHTML = html;
+    }).catch(function () {
+      body.innerHTML = '<p style="text-align:center;color:#c44;padding:16px;">読込失敗</p>';
+    });
   }
 
   function ovOpenLeftoverModal(catId) {
     _ovLoCatId = catId;
-    _ovLoEntries = [];
     var c = ovFindCat(catId);
     var catName = c ? c.name : '';
     var t = document.getElementById('ovLoTitle');
@@ -658,109 +798,117 @@
     if (body) body.innerHTML = '<p style="text-align:center;color:#aaa;padding:16px;">読込中…</p>';
     var m = document.getElementById('ovLeftoverModal');
     if (m) m.classList.add('open');
-
-    var todayStr = todayJstYmd();
-    var yesterdayStr = yesterdayJstYmd();
-    var base = feedingApiBase() + '/logs?cat_id=' + encodeURIComponent(catId);
-
-    Promise.all([
-      fetch(base + '&date=' + yesterdayStr, { headers: apiHeaders(), cache: 'no-store' }).then(function (r) { return r.json(); }),
-      fetch(base + '&date=' + todayStr, { headers: apiHeaders(), cache: 'no-store' }).then(function (r) { return r.json(); })
-    ]).then(function (results) {
-      var yesterdayLogs = (results[0].logs || []).filter(function (l) { return isNightSlot(l.meal_slot); });
-      var todayLogs = results[1].logs || [];
-      var todayLunch = todayLogs.filter(function (l) { return isLunchSlot(l.meal_slot); });
-      var todayNight = todayLogs.filter(function (l) { return isNightSlot(l.meal_slot); });
-
-      _ovLoEntries = [];
-      var html = '';
-
-      var sections = [
-        { label: '前日夜', logs: yesterdayLogs },
-        { label: '当日昼', logs: todayLunch },
-        { label: '当日夜', logs: todayNight }
-      ];
-
-      for (var si = 0; si < sections.length; si++) {
-        var sec = sections[si];
-        html += '<div style="margin-bottom:12px;"><div style="font-weight:700;font-size:13px;margin-bottom:4px;border-bottom:1px solid #eee;padding-bottom:2px;">' + esc(sec.label) + '</div>';
-        if (sec.logs.length === 0) {
-          html += '<div style="color:#aaa;font-size:12px;padding:4px 0;">記録なし</div>';
-        } else {
-          for (var li = 0; li < sec.logs.length; li++) {
-            var lg = sec.logs[li];
-            var idx = _ovLoEntries.length;
-            _ovLoEntries.push({ log_id: lg.id, offered_g: lg.offered_g, current_eaten_pct: lg.eaten_pct });
-            var offG = lg.offered_g != null ? lg.offered_g : '—';
-            var fname = lg.food_name || '不明';
-            var curLeftover = '';
-            if (lg.offered_g && lg.eaten_pct != null && lg.eaten_pct < 100) {
-              curLeftover = ' (現在: 残し' + Math.round(lg.offered_g * (100 - lg.eaten_pct) / 100 * 10) / 10 + 'g)';
-            }
-            html += '<div style="display:flex;align-items:center;gap:6px;padding:3px 0;font-size:12px;">';
-            html += '<span style="flex:1;">' + esc(fname) + ' <strong>' + esc(String(offG)) + 'g</strong><span class="dim">' + esc(curLeftover) + '</span></span>';
-            html += '<label style="white-space:nowrap;">残し</label>';
-            html += '<input type="number" class="form-input ov-lo-input" data-lo-idx="' + idx + '" style="width:70px;font-size:12px;padding:2px 4px;" step="0.1" min="0" placeholder="g">';
-            html += '</div>';
-          }
-        }
-        html += '</div>';
-      }
-
-      if (body) body.innerHTML = html;
-    }).catch(function () {
-      if (body) body.innerHTML = '<p style="text-align:center;color:#c44;padding:16px;">読込失敗</p>';
-    });
+    ovFillLeftoverModalBody(catId);
   }
 
   function ovCloseLeftoverModal() {
     _ovLoCatId = null;
-    _ovLoEntries = [];
     var m = document.getElementById('ovLeftoverModal');
     if (m) m.classList.remove('open');
   }
 
-  function ovSubmitLeftover() {
-    var inputs = document.querySelectorAll('.ov-lo-input');
-    var updates = [];
-    for (var i = 0; i < inputs.length; i++) {
-      var inp = inputs[i];
-      var val = inp.value;
-      if (val === '' || val == null) continue;
-      var leftoverG = parseFloat(val);
-      if (isNaN(leftoverG) || leftoverG < 0) continue;
-      var idx = parseInt(inp.getAttribute('data-lo-idx'), 10);
-      var entry = _ovLoEntries[idx];
-      if (!entry || !entry.log_id) continue;
-      var offG = entry.offered_g;
-      if (!offG || offG <= 0) continue;
-      var newPct = Math.max(0, Math.min(100, Math.round((offG - leftoverG) / offG * 100)));
-      updates.push({ log_id: entry.log_id, eaten_pct: newPct });
-    }
-    if (updates.length === 0) { alert('残し量を入力してください'); return; }
+  function fetchCatsDataSilent() {
+    fetch(getApiUrl() + locationQuery(), { headers: apiHeaders(), cache: 'no-store' })
+      .then(function (r) { return r.json().then(function (data) { return { ok: r.ok, data: data }; }); })
+      .then(function (res) {
+        if (res.data && res.data.cats) {
+          catsData = res.data.cats;
+          render();
+        }
+      }).catch(function () { /* ignore */ });
+  }
 
-    var pending = updates.length;
-    var errors = [];
-    for (var u = 0; u < updates.length; u++) {
-      (function (upd) {
-        fetch(feedingApiBase() + '/logs/' + encodeURIComponent(upd.log_id), {
-          method: 'PUT',
-          headers: apiHeaders(),
-          cache: 'no-store',
-          body: JSON.stringify({ eaten_pct: upd.eaten_pct }),
-        }).then(function (r) { return r.json(); })
-          .then(function (data) {
-            if (data.error) errors.push(data.message || data.error);
-          }).catch(function () { errors.push('通信エラー'); })
-          .then(function () {
-            pending--;
-            if (pending <= 0) {
-              if (errors.length > 0) alert('一部エラー: ' + errors.join(', '));
-              ovCloseLeftoverModal();
-              fetchData(0);
-            }
-          });
-      })(updates[u]);
+  function ovLeftoverModalClick(ev) {
+    var t = ev.target;
+    if (!t || !t.closest) return;
+    var savePlan = t.closest('.ov-lo-save-plan');
+    if (savePlan) {
+      ev.preventDefault();
+      var pid = savePlan.getAttribute('data-plan-id');
+      var offG = parseFloat(savePlan.getAttribute('data-offered-g'));
+      var logDate = savePlan.getAttribute('data-log-date') || todayJstYmd();
+      var inpId = savePlan.getAttribute('data-input-id');
+      var inp = inpId ? document.getElementById(inpId) : null;
+      if (!inp || !pid) return;
+      var leftG = parseFloat(inp.value);
+      if (isNaN(leftG) || leftG < 0) { alert('残り量を入力してください'); return; }
+      if (offG > 0 && leftG > offG) { alert('提供量(' + offG + 'g)を超えています'); return; }
+      var eatenPct = offG > 0 ? Math.round((offG - leftG) / offG * 100) : 0;
+      fetch(feedingApiBase() + '/plans/' + encodeURIComponent(pid) + '/fed', {
+        method: 'POST',
+        headers: apiHeaders(),
+        cache: 'no-store',
+        body: JSON.stringify({ eaten_pct: eatenPct, log_date: logDate }),
+      }).then(function (r) { return r.json(); })
+        .then(function (data) {
+          if (data.error) { alert('エラー: ' + (data.message || data.error)); return; }
+          if (_ovLoCatId) ovFillLeftoverModalBody(_ovLoCatId);
+          fetchCatsDataSilent();
+        }).catch(function () { alert('保存に失敗しました'); });
+      return;
+    }
+    var completePlan = t.closest('.ov-lo-complete-plan');
+    if (completePlan) {
+      ev.preventDefault();
+      var pid2 = completePlan.getAttribute('data-plan-id');
+      var logDate2 = completePlan.getAttribute('data-log-date') || todayJstYmd();
+      if (!pid2) return;
+      fetch(feedingApiBase() + '/plans/' + encodeURIComponent(pid2) + '/fed', {
+        method: 'POST',
+        headers: apiHeaders(),
+        cache: 'no-store',
+        body: JSON.stringify({ eaten_pct: 100, log_date: logDate2 }),
+      }).then(function (r) { return r.json(); })
+        .then(function (data) {
+          if (data.error) { alert('エラー: ' + (data.message || data.error)); return; }
+          if (_ovLoCatId) ovFillLeftoverModalBody(_ovLoCatId);
+          fetchCatsDataSilent();
+        }).catch(function () { alert('保存に失敗しました'); });
+      return;
+    }
+    var saveLog = t.closest('.ov-lo-save-log');
+    if (saveLog) {
+      ev.preventDefault();
+      var lid = saveLog.getAttribute('data-log-id');
+      var offG2 = parseFloat(saveLog.getAttribute('data-offered-g'));
+      var inpId2 = saveLog.getAttribute('data-input-id');
+      var inp2 = inpId2 ? document.getElementById(inpId2) : null;
+      if (!inp2 || !lid) return;
+      var leftG2 = parseFloat(inp2.value);
+      if (isNaN(leftG2) || leftG2 < 0) { alert('残り量を入力してください'); return; }
+      if (offG2 > 0 && leftG2 > offG2) { alert('提供量(' + offG2 + 'g)を超えています'); return; }
+      var eatenPct2 = offG2 > 0 ? Math.round((offG2 - leftG2) / offG2 * 100) : 0;
+      if (eatenPct2 < 0) eatenPct2 = 0;
+      if (eatenPct2 > 100) eatenPct2 = 100;
+      fetch(feedingApiBase() + '/logs/' + encodeURIComponent(lid), {
+        method: 'PUT',
+        headers: apiHeaders(),
+        cache: 'no-store',
+        body: JSON.stringify({ eaten_pct: eatenPct2 }),
+      }).then(function (r) { return r.json(); })
+        .then(function (data) {
+          if (data.error) { alert('エラー: ' + (data.message || data.error)); return; }
+          if (_ovLoCatId) ovFillLeftoverModalBody(_ovLoCatId);
+          fetchCatsDataSilent();
+        }).catch(function () { alert('保存に失敗しました'); });
+      return;
+    }
+    var completeLog = t.closest('.ov-lo-complete-log');
+    if (completeLog) {
+      ev.preventDefault();
+      var lid3 = completeLog.getAttribute('data-log-id');
+      if (!lid3) return;
+      fetch(feedingApiBase() + '/logs/' + encodeURIComponent(lid3), {
+        method: 'PUT',
+        headers: apiHeaders(),
+        cache: 'no-store',
+        body: JSON.stringify({ eaten_pct: 100 }),
+      }).then(function (r) { return r.json(); })
+        .then(function (data) {
+          if (data.error) { alert('エラー: ' + (data.message || data.error)); return; }
+          if (_ovLoCatId) ovFillLeftoverModalBody(_ovLoCatId);
+          fetchCatsDataSilent();
+        }).catch(function () { alert('保存に失敗しました'); });
     }
   }
 
@@ -783,8 +931,8 @@
     if (sel && !sel._ovBound) { sel._ovBound = true; sel.addEventListener('click', ovSubmitEditLog); }
     var clo = document.getElementById('ovCloseLoBtn');
     if (clo && !clo._ovBound) { clo._ovBound = true; clo.addEventListener('click', ovCloseLeftoverModal); }
-    var slo = document.getElementById('ovSubmitLoBtn');
-    if (slo && !slo._ovBound) { slo._ovBound = true; slo.addEventListener('click', ovSubmitLeftover); }
+    var loM = document.getElementById('ovLeftoverModal');
+    if (loM && !loM._ovBound) { loM._ovBound = true; loM.addEventListener('click', ovLeftoverModalClick); }
   }
 
   function ovHandlePresetModalClick(ev) {

@@ -675,14 +675,14 @@
     </div>
   </div>
 
-  <!-- 残し記録モーダル -->
+  <!-- 残し記録モーダル（猫詳細の給餌ログと同一データ・同一API） -->
   <div id="ovLeftoverModal" class="modal-overlay">
     <div class="modal-box" style="max-width:400px;">
       <div class="modal-title" id="ovLoTitle">🥄 残し記録</div>
+      <p id="ovLoHint" class="dim" style="font-size:11px;margin:-4px 12px 8px;line-height:1.45;">猫詳細の「昨夜の夜ごはん」と同じ feeding_logs に保存され、献立・手動記録と連動します。</p>
       <div id="ovLoBody" style="max-height:60vh;overflow-y:auto;"></div>
       <div class="modal-actions">
-        <button type="button" class="btn btn-outline" id="ovCloseLoBtn">キャンセル</button>
-        <button type="button" class="btn btn-primary" id="ovSubmitLoBtn">記録する</button>
+        <button type="button" class="btn btn-outline" id="ovCloseLoBtn">閉じる</button>
       </div>
     </div>
   </div>
@@ -691,7 +691,7 @@
   <script src="js/nyagi-boot-overlay.js?v=203"></script>
   <script src="js/login-gate.js?v=203"></script>
   <script src="js/app.js?v=203"></script>
-  <script src="js/cats-overview.js?v=219"></script>
+  <script src="js/cats-overview.js?v=220"></script>
   <script src="js/voice-console.js?v=203"></script>
 </body>
 </html>

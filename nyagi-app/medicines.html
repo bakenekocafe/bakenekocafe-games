@@ -220,6 +220,114 @@
 
     .loading { text-align: center; padding: 30px; color: var(--text-dim); font-size: 13px; }
     .empty-msg { text-align: center; padding: 30px; color: var(--text-dim); font-size: 13px; }
+
+    .search-btn {
+      background: var(--primary);
+      color: #fff;
+      border: none;
+      border-radius: 8px;
+      padding: 10px 14px;
+      font-size: 13px;
+      font-weight: 700;
+      cursor: pointer;
+      white-space: nowrap;
+    }
+    .search-btn:disabled { opacity: 0.5; cursor: default; }
+    .search-hint {
+      font-size: 10px;
+      color: var(--text-dim);
+      margin-bottom: 12px;
+      padding-left: 4px;
+    }
+    .search-hint span { color: var(--primary); }
+
+    .candidates {
+      background: var(--surface);
+      border-radius: 10px;
+      padding: 10px 12px;
+      margin-bottom: 12px;
+      display: none;
+    }
+    .candidates.visible { display: block; }
+    .candidates-title {
+      font-size: 11px;
+      color: var(--text-dim);
+      margin-bottom: 6px;
+    }
+    .candidate-item {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 6px 8px;
+      border-radius: 6px;
+      cursor: pointer;
+      font-size: 12px;
+      color: var(--text);
+      transition: background 0.1s;
+    }
+    .candidate-item:hover, .candidate-item:active { background: var(--surface-alt); }
+    .candidate-item .idx { color: var(--text-dim); font-size: 10px; min-width: 16px; }
+    .candidate-item .ctitle { flex: 1; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .candidate-item .cdomain { font-size: 10px; color: var(--primary); white-space: nowrap; }
+
+    .preview-card {
+      background: var(--surface);
+      border-radius: 12px;
+      padding: 16px;
+      margin-bottom: 14px;
+      border: 2px dashed var(--surface-alt);
+      display: none;
+    }
+    .preview-card.visible { display: block; }
+    .preview-card.has-data { border-color: var(--primary); }
+    .preview-title { font-size: 14px; font-weight: 700; margin-bottom: 12px; color: var(--primary); }
+    .preview-row { display: flex; gap: 8px; margin-bottom: 8px; }
+    .preview-field { flex: 1; }
+    .preview-field.full { flex-basis: 100%; }
+    .preview-label { font-size: 10px; color: var(--text-dim); margin-bottom: 2px; }
+    .preview-input {
+      width: 100%;
+      box-sizing: border-box;
+      background: var(--bg);
+      border: 1px solid var(--surface-alt);
+      border-radius: 6px;
+      padding: 7px 8px;
+      color: var(--text);
+      font-size: 12px;
+    }
+    .preview-input.auto-filled { border-color: var(--success); }
+    .preview-select {
+      width: 100%;
+      box-sizing: border-box;
+      background: var(--bg);
+      border: 1px solid var(--surface-alt);
+      border-radius: 6px;
+      padding: 7px 8px;
+      color: var(--text);
+      font-size: 12px;
+    }
+    .preview-actions { display: flex; gap: 8px; margin-top: 14px; }
+    .btn-register {
+      flex: 1;
+      background: var(--success);
+      color: #fff;
+      border: none;
+      border-radius: 8px;
+      padding: 10px;
+      font-size: 13px;
+      font-weight: 700;
+      cursor: pointer;
+    }
+    .btn-register:disabled { opacity: 0.5; }
+    .btn-cancel {
+      background: var(--surface-alt);
+      color: var(--text-dim);
+      border: none;
+      border-radius: 8px;
+      padding: 10px 16px;
+      font-size: 13px;
+      cursor: pointer;
+    }
   </style>
 </head>
 <body>
@@ -240,8 +348,101 @@
   <div id="loginGate" style="display:none;"></div>
 
   <div id="medContent" style="display:none;">
+
+    <!-- スマート検索バー（名称 or URL） -->
     <div class="search-bar">
-      <input type="text" id="searchInput" class="search-input" placeholder="薬名を検索..."
+      <input type="text" id="smartSearchInput" class="search-input" placeholder="薬名 or URL を入力..."
+             onkeydown="if(event.key==='Enter')handleSmartSearch()">
+      <button id="smartSearchBtn" class="search-btn" onclick="handleSmartSearch()">検索</button>
+    </div>
+    <div class="search-hint">薬名（例: <span>アモキシシリン</span>）、または製品ページURL を入力して自動取得</div>
+
+    <!-- 検索候補 -->
+    <div class="candidates" id="candidateList">
+      <div class="candidates-title">検索結果 — 別の候補を選択:</div>
+      <div id="candidateItems"></div>
+    </div>
+
+    <!-- プレビューカード -->
+    <div id="previewCard" class="preview-card">
+      <div class="preview-title" id="previewTitle">取得データプレビュー</div>
+      <div class="preview-row">
+        <div class="preview-field">
+          <div class="preview-label">薬名 *</div>
+          <input type="text" id="pName" class="preview-input" placeholder="薬名">
+        </div>
+        <div class="preview-field">
+          <div class="preview-label">一般名</div>
+          <input type="text" id="pGenericName" class="preview-input" placeholder="一般名/有効成分">
+        </div>
+      </div>
+      <div class="preview-row">
+        <div class="preview-field">
+          <div class="preview-label">カテゴリ</div>
+          <select id="pCategory" class="preview-select">
+            <option value="antibiotic">抗生物質</option>
+            <option value="anti_inflammatory">抗炎症薬</option>
+            <option value="painkiller">鎮痛剤</option>
+            <option value="antifungal">抗真菌薬</option>
+            <option value="antiparasitic">駆虫薬</option>
+            <option value="heart">心臓薬</option>
+            <option value="kidney">腎臓薬</option>
+            <option value="thyroid">甲状腺薬</option>
+            <option value="steroid">ステロイド</option>
+            <option value="supplement">サプリメント</option>
+            <option value="eye">点眼薬</option>
+            <option value="ear">点耳薬</option>
+            <option value="skin">皮膚薬</option>
+            <option value="gastrointestinal">消化器薬</option>
+            <option value="other">その他</option>
+          </select>
+        </div>
+        <div class="preview-field">
+          <div class="preview-label">対象</div>
+          <select id="pSpecies" class="preview-select">
+            <option value="cat">🐱 猫用</option>
+            <option value="dog">🐶 犬用</option>
+            <option value="both">🐾 共通</option>
+          </select>
+        </div>
+      </div>
+      <div class="preview-row">
+        <div class="preview-field">
+          <div class="preview-label">剤型</div>
+          <select id="pForm" class="preview-select">
+            <option value="">--</option>
+            <option value="tablet">錠剤</option>
+            <option value="capsule">カプセル</option>
+            <option value="powder">粉末</option>
+            <option value="liquid">液剤</option>
+            <option value="injection">注射</option>
+            <option value="ointment">軟膏</option>
+            <option value="eye_drop">点眼薬</option>
+            <option value="ear_drop">点耳薬</option>
+            <option value="patch">パッチ</option>
+            <option value="other">その他</option>
+          </select>
+        </div>
+        <div class="preview-field">
+          <div class="preview-label">単位</div>
+          <input type="text" id="pUnit" class="preview-input" placeholder="mg, ml, 錠">
+        </div>
+      </div>
+      <div class="preview-row">
+        <div class="preview-field full">
+          <div class="preview-label">備考</div>
+          <input type="text" id="pNotes" class="preview-input" placeholder="用途・注意点など">
+        </div>
+      </div>
+      <div class="preview-actions">
+        <button class="btn-cancel" onclick="hidePreview()">キャンセル</button>
+        <button class="btn-register" id="registerBtn" onclick="handleRegister()">登録</button>
+      </div>
+    </div>
+
+    <!-- 一覧フィルタ（テキスト絞り込み） -->
+    <div class="search-bar" style="margin-top:6px;">
+      <input type="text" id="searchInput" class="search-input" placeholder="一覧を絞り込み..."
              oninput="filterByText()">
     </div>
 
@@ -281,6 +482,10 @@
       <div class="form-group">
         <label class="form-label">薬名 *</label>
         <input type="text" id="fName" class="form-input" placeholder="アモキシシリン">
+      </div>
+      <div class="form-group">
+        <label class="form-label">資料・販売ページのURL（任意）</label>
+        <input type="url" id="fReferenceUrl" class="form-input" placeholder="https://..." inputmode="url" autocomplete="off">
       </div>
       <div class="form-group">
         <label class="form-label">一般名</label>
@@ -363,6 +568,6 @@
   <script src="js/nyagi-boot-overlay.js?v=203"></script>
   <script src="js/login-gate.js?v=203"></script>
   <script src="js/app.js?v=203"></script>
-  <script src="js/medicines.js?v=203"></script>
+  <script src="js/medicines.js?v=205"></script>
 </body>
 </html>

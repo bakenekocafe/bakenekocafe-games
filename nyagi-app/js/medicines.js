@@ -9,6 +9,7 @@ var allMedicines = [];
 var currentSpeciesFilter = 'all';
 var currentTextFilter = '';
 var _detailMedId = null;
+var currentPreviewUrl = '';
 
 function loadCredentials() {
   try {
@@ -161,13 +162,15 @@ function showDetail(medId) {
 
   document.getElementById('detailTitle').textContent = med.name;
 
+  var refU = extractReferenceUrlFromNotes(med.notes || '');
   var rows = [
+    ['参考URL', refU ? '<a href="' + escAttr(refU) + '" target="_blank" rel="noopener" style="color:var(--primary);word-break:break-all;">' + esc(refU) + '</a>' : null],
     ['一般名', med.generic_name],
     ['カテゴリ', categoryLabel(med.category)],
     ['剤型', formLabel(med.form)],
     ['単位', med.unit],
     ['対象動物', speciesLabel(med.species)],
-    ['備考', med.notes],
+    ['備考', notesWithoutReferenceUrl(med.notes || '')],
     ['状態', med.active !== 0 ? '有効' : '無効'],
     ['登録日', med.created_at ? med.created_at.slice(0, 10) : null]
   ];
@@ -175,7 +178,8 @@ function showDetail(medId) {
   var html = '';
   for (var j = 0; j < rows.length; j++) {
     if (rows[j][1] != null && rows[j][1] !== '') {
-      html += '<div class="detail-row"><span class="detail-label">' + rows[j][0] + '</span><span class="detail-value">' + esc(String(rows[j][1])) + '</span></div>';
+      var valHtml = rows[j][0] === '参考URL' ? rows[j][1] : esc(String(rows[j][1]));
+      html += '<div class="detail-row"><span class="detail-label">' + rows[j][0] + '</span><span class="detail-value">' + valHtml + '</span></div>';
     }
   }
 
@@ -209,14 +213,18 @@ function openEditModal(medId) {
     }
     if (!med) return;
     document.getElementById('fName').value = med.name || '';
+    var refEl = document.getElementById('fReferenceUrl');
+    if (refEl) refEl.value = extractReferenceUrlFromNotes(med.notes || '');
     document.getElementById('fGenericName').value = med.generic_name || '';
     document.getElementById('fCategory').value = med.category || 'other';
     document.getElementById('fSpecies').value = med.species || 'cat';
     document.getElementById('fForm').value = med.form || 'tablet';
     document.getElementById('fUnit').value = med.unit || '';
-    document.getElementById('fNotes').value = med.notes || '';
+    document.getElementById('fNotes').value = notesWithoutReferenceUrl(med.notes || '');
   } else {
     document.getElementById('fName').value = '';
+    var refElNew = document.getElementById('fReferenceUrl');
+    if (refElNew) refElNew.value = '';
     document.getElementById('fGenericName').value = '';
     document.getElementById('fCategory').value = 'other';
     document.getElementById('fSpecies').value = 'cat';
@@ -248,6 +256,8 @@ function saveMedicine() {
     unit: document.getElementById('fUnit').value.trim() || null,
     notes: document.getElementById('fNotes').value.trim() || null
   };
+  var refInp = document.getElementById('fReferenceUrl');
+  if (refInp) body.reference_url = refInp.value.trim();
 
   var btn = document.getElementById('saveBtn');
   btn.disabled = true;
@@ -281,6 +291,258 @@ function saveMedicine() {
   });
 }
 
+// ── スマート検索（薬名 or URL 自動判定） ──────────────────────────────────────
+
+function handleSmartSearch() {
+  var input = document.getElementById('smartSearchInput').value.trim();
+  if (!input) { showToast('薬名またはURLを入力してください', 'warning'); return; }
+  if (input.indexOf('http') === 0) {
+    handleUrlScrape(input);
+  } else {
+    handleTextSearch(input);
+  }
+}
+
+function handleUrlScrape(url) {
+  var btn = document.getElementById('smartSearchBtn');
+  btn.disabled = true;
+  btn.textContent = '取得中...';
+  currentPreviewUrl = url;
+  hideCandidates();
+
+  fetch(API_BASE + '/medicines/scrape', {
+    method: 'POST',
+    headers: apiHeaders(), cache: 'no-store',
+    body: JSON.stringify({ url: url })
+  })
+  .then(function (r) { return r.json(); })
+  .then(function (data) {
+    btn.disabled = false;
+    btn.textContent = '検索';
+    if (data.status === 'ok' && data.extracted) {
+      showPreview(data.extracted, url);
+      showToast('取得成功: ' + (data.extracted.name || '') + ' — 確認して登録', 'success');
+    } else {
+      showPreview({}, url);
+      showToast('自動取得失敗 — 下のフォームに手動入力してください', 'warning');
+    }
+  })
+  .catch(function (err) {
+    btn.disabled = false;
+    btn.textContent = '検索';
+    showPreview({}, url);
+    showToast('通信エラー: ' + err.message, 'error');
+  });
+}
+
+function handleTextSearch(query) {
+  var btn = document.getElementById('smartSearchBtn');
+  btn.disabled = true;
+  btn.textContent = '検索中...';
+  hideCandidates();
+
+  fetch(API_BASE + '/medicines/search', {
+    method: 'POST',
+    headers: apiHeaders(), cache: 'no-store',
+    body: JSON.stringify({ query: query })
+  })
+  .then(function (r) { return r.json(); })
+  .then(function (data) {
+    btn.disabled = false;
+    btn.textContent = '検索';
+
+    if (data.status === 'ok' && data.extracted) {
+      currentPreviewUrl = data.url || '';
+      showPreview(data.extracted, data.url);
+      showCandidates(data.candidates || []);
+      showToast('取得成功: ' + (data.extracted.name || '') + ' — 確認して登録', 'success');
+    } else if (data.status === 'partial') {
+      currentPreviewUrl = data.url || '';
+      showPreview({}, data.url);
+      showCandidates(data.candidates || []);
+      showToast('候補あり — 候補を選択するか手動入力してください', 'warning');
+    } else if (data.status === 'no_results') {
+      showToast('検索結果なし — URLを直接貼り付けてください', 'warning');
+    } else {
+      showToast('検索失敗: ' + (data.message || '') + ' — URLを直接貼り付けてください', 'error');
+    }
+  })
+  .catch(function (err) {
+    btn.disabled = false;
+    btn.textContent = '検索';
+    showToast('通信エラー: ' + err.message, 'error');
+  });
+}
+
+// ── 候補リスト ──────────────────────────────────────────────────────────────
+
+function showCandidates(candidates) {
+  if (!candidates || candidates.length <= 1) return;
+  var container = document.getElementById('candidateItems');
+  var html = '';
+  for (var i = 0; i < candidates.length; i++) {
+    var c = candidates[i];
+    var domain = '';
+    try { domain = new URL(c.url).hostname.replace('www.', ''); } catch (_) {}
+    html += '<div class="candidate-item" onclick="selectCandidate(\'' + escAttr(c.url) + '\')">';
+    html += '<span class="idx">' + (i + 1) + '</span>';
+    html += '<span class="ctitle">' + esc(c.title || c.url) + '</span>';
+    html += '<span class="cdomain">' + esc(domain) + '</span>';
+    html += '</div>';
+  }
+  container.innerHTML = html;
+  document.getElementById('candidateList').classList.add('visible');
+}
+
+function hideCandidates() {
+  var el = document.getElementById('candidateList');
+  if (el) el.classList.remove('visible');
+}
+
+function selectCandidate(url) {
+  hideCandidates();
+  document.getElementById('smartSearchInput').value = url;
+  handleUrlScrape(url);
+}
+
+// ── プレビュー ──────────────────────────────────────────────────────────────
+
+var FORM_TO_SELECT = {
+  '錠剤': 'tablet', 'カプセル': 'capsule', '粉末': 'powder', '液剤': 'liquid',
+  '注射': 'injection', '軟膏': 'ointment', '点眼': 'eye_drop', '点耳': 'ear_drop',
+  'パッチ': 'patch', 'その他': 'other',
+  'tablet': 'tablet', 'capsule': 'capsule', 'powder': 'powder', 'liquid': 'liquid',
+  'injection': 'injection', 'ointment': 'ointment', 'eye_drop': 'eye_drop', 'ear_drop': 'ear_drop',
+  'patch': 'patch', 'other': 'other',
+};
+
+function showPreview(data, url) {
+  var card = document.getElementById('previewCard');
+  card.classList.add('visible');
+
+  var fields = [
+    { id: 'pName', key: 'name' },
+    { id: 'pGenericName', key: 'generic_name' },
+    { id: 'pUnit', key: 'unit' },
+    { id: 'pNotes', key: 'notes' },
+  ];
+
+  var filledCount = 0;
+  for (var i = 0; i < fields.length; i++) {
+    var el = document.getElementById(fields[i].id);
+    var val = data[fields[i].key];
+    if (val != null && val !== '') {
+      el.value = val;
+      el.classList.add('auto-filled');
+      filledCount++;
+    } else {
+      el.value = '';
+      el.classList.remove('auto-filled');
+    }
+  }
+
+  if (data.category) {
+    document.getElementById('pCategory').value = data.category;
+    filledCount++;
+  }
+  if (data.form) {
+    var fv = FORM_TO_SELECT[data.form] || data.form;
+    document.getElementById('pForm').value = fv;
+    filledCount++;
+  }
+  if (data.species) {
+    document.getElementById('pSpecies').value = data.species;
+  }
+
+  card.classList.toggle('has-data', filledCount > 1);
+
+  if (filledCount > 1) {
+    document.getElementById('previewTitle').textContent = '取得データ (' + filledCount + '項目 自動入力)';
+  } else if (filledCount > 0) {
+    document.getElementById('previewTitle').textContent = '部分取得 — 残りを手動入力';
+  } else {
+    document.getElementById('previewTitle').textContent = '手動入力モード';
+  }
+
+  if (url) currentPreviewUrl = url;
+  card.scrollIntoView({ behavior: 'smooth', block: 'start' });
+}
+
+function hidePreview() {
+  var card = document.getElementById('previewCard');
+  card.classList.remove('visible', 'has-data');
+  currentPreviewUrl = '';
+  clearPreviewFields();
+  hideCandidates();
+}
+
+function clearPreviewFields() {
+  var ids = ['pName', 'pGenericName', 'pUnit', 'pNotes'];
+  for (var i = 0; i < ids.length; i++) {
+    var el = document.getElementById(ids[i]);
+    if (el) { el.value = ''; el.classList.remove('auto-filled'); }
+  }
+  var pSp = document.getElementById('pSpecies');
+  if (pSp) pSp.value = 'cat';
+  var pCat = document.getElementById('pCategory');
+  if (pCat) pCat.value = 'other';
+  var pForm = document.getElementById('pForm');
+  if (pForm) pForm.value = '';
+}
+
+// ── プレビューから登録 ──────────────────────────────────────────────────────
+
+function handleRegister() {
+  var name = document.getElementById('pName').value.trim();
+  if (!name) { showToast('薬名は必須です', 'warning'); return; }
+
+  var body = {
+    name: name,
+    generic_name: document.getElementById('pGenericName').value.trim() || null,
+    category: document.getElementById('pCategory').value || 'other',
+    species: document.getElementById('pSpecies').value || 'cat',
+    form: document.getElementById('pForm').value || null,
+    unit: document.getElementById('pUnit').value.trim() || null,
+    notes: document.getElementById('pNotes').value.trim() || null,
+  };
+  if (currentPreviewUrl) body.reference_url = currentPreviewUrl;
+
+  var btn = document.getElementById('registerBtn');
+  btn.disabled = true;
+  btn.textContent = '登録中...';
+
+  fetch(API_BASE + '/medicines', {
+    method: 'POST',
+    headers: apiHeaders(), cache: 'no-store',
+    body: JSON.stringify(body),
+  })
+  .then(function (r) { return r.json(); })
+  .then(function (data) {
+    btn.disabled = false;
+    btn.textContent = '登録';
+
+    if (data.medicine) {
+      var msg = '登録成功: ' + data.medicine.name;
+      if (data.ai_enriched) msg += ' (AI自動補完あり)';
+      showToast(msg, 'success');
+      hidePreview();
+      document.getElementById('smartSearchInput').value = '';
+      loadMedicineList();
+    } else if (data.error) {
+      showToast('エラー: ' + (data.message || data.error), 'error');
+    } else {
+      showToast('登録エラー: ' + JSON.stringify(data), 'error');
+    }
+  })
+  .catch(function (err) {
+    btn.disabled = false;
+    btn.textContent = '登録';
+    showToast('通信エラー: ' + err.message, 'error');
+  });
+}
+
+// ── トースト ────────────────────────────────────────────────────────────────
+
 function showToast(msg, type) {
   var toast = document.getElementById('toast');
   toast.textContent = msg;
@@ -299,4 +561,18 @@ function esc(s) {
 
 function escAttr(s) {
   return esc(s).replace(/"/g, '&quot;');
+}
+
+function extractReferenceUrlFromNotes(notes) {
+  if (!notes) return '';
+  var m = String(notes).match(/^\s*参考URL:\s*(\S+)/);
+  return m ? m[1] : '';
+}
+
+function notesWithoutReferenceUrl(notes) {
+  if (!notes) return '';
+  var lines = String(notes).split('\n').filter(function (l) {
+    return !/^\s*参考URL:\s*/.test(l);
+  });
+  return lines.join('\n').trim();
 }

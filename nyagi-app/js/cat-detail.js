@@ -101,6 +101,15 @@ function toggleFold(id, btn) {
     return '<span style="font-size:10px;padding:2px 6px;border-radius:4px;background:' + bg + ';color:' + c + ';font-weight:600;">' + escapeHtml(presetLocShortLabel(L)) + '</span>';
   }
 
+  /** 化け猫カフェタブ: API の alpha_bucket_label で A–Z／その他の見出し */
+  function feedingPresetAlphaSectionHtml(tabLoc, ps, lastLabelRef) {
+    if (tabLoc !== 'cafe' || !ps || !ps.alpha_bucket_label) return '';
+    var lab = ps.alpha_bucket_label;
+    if (lastLabelRef.v === lab) return '';
+    lastLabelRef.v = lab;
+    return '<div style="font-size:11px;font-weight:700;color:var(--text-dim);margin:12px 0 6px;padding:4px 0;border-bottom:1px solid rgba(255,255,255,0.08);">' + escapeHtml(lab) + '</div>';
+  }
+
   function renderPresetLocationSwitcher(activeLoc, context) {
     var aCafe = activeLoc === 'cafe' ? 'background:rgba(251,191,36,0.25);border-color:rgba(251,191,36,0.55);color:#fbbf24;font-weight:700;' : 'background:var(--surface);border-color:rgba(255,255,255,0.12);color:var(--text-dim);';
     var aNeko = activeLoc === 'nekomata' ? 'background:rgba(248,113,113,0.18);border-color:rgba(248,113,113,0.45);color:#f87171;font-weight:700;' : 'background:var(--surface);border-color:rgba(255,255,255,0.12);color:var(--text-dim);';
@@ -776,6 +785,22 @@ function toggleFold(id, btn) {
       minute: '2-digit',
       hour12: false,
     });
+  }
+
+  /** feeding_logs.served_time を表示用・input[type=time] 用 HH:mm に */
+  function cdFmtFedServedTime(raw) {
+    if (raw == null || raw === '') return '';
+    var s = String(raw).trim();
+    if (s.length >= 16 && s.indexOf('T') !== -1) return s.slice(11, 16);
+    var p = s.split(':');
+    if (p.length >= 2) {
+      var h = parseInt(p[0], 10);
+      var mi = parseInt(p[1], 10);
+      if (!isNaN(h) && !isNaN(mi) && h >= 0 && h <= 23 && mi >= 0 && mi <= 59) {
+        return (h < 10 ? '0' : '') + h + ':' + (mi < 10 ? '0' : '') + mi;
+      }
+    }
+    return '';
   }
 
   /** JST の「昨日」YYYY-MM-DD（給餌ログ取得を calc と揃える） */
@@ -1826,11 +1851,16 @@ function toggleFold(id, btn) {
       .then(function (data) {
         _medicinesList = data.medicines || [];
         return _medicinesList;
+      })
+      .catch(function () {
+        _medicinesList = null;
+        return [];
       });
   }
 
   function populateMedicineSelect(medicines, selectedId) {
     var sel = document.getElementById('msMedicineId');
+    if (!sel) return;
     sel.innerHTML = '<option value="">選択してください</option>';
     for (var i = 0; i < medicines.length; i++) {
       var m = medicines[i];
@@ -1846,7 +1876,8 @@ function toggleFold(id, btn) {
     sel.appendChild(newOpt);
 
     sel.onchange = function () {
-      document.getElementById('msNewMedicineGroup').style.display = sel.value === '__new__' ? '' : 'none';
+      var ng = document.getElementById('msNewMedicineGroup');
+      if (ng) ng.style.display = sel.value === '__new__' ? 'block' : 'none';
     };
   }
 
@@ -1901,8 +1932,11 @@ function toggleFold(id, btn) {
         document.getElementById('msEndDate').disabled = true;
         document.getElementById('msPurpose').value = '';
         document.getElementById('msNotes').value = '';
-        document.getElementById('msNewMedicineGroup').style.display = 'none';
+        var nmg = document.getElementById('msNewMedicineGroup');
+        if (nmg) nmg.style.display = 'none';
         document.getElementById('msNewMedicineName').value = '';
+        var nmu = document.getElementById('msNewMedicineUrl');
+        if (nmu) nmu.value = '';
 
         var checks = document.querySelectorAll('.ms-slot-checks input');
         for (var j = 0; j < checks.length; j++) {
@@ -1994,7 +2028,10 @@ function toggleFold(id, btn) {
 
     if (medicineId === '__new__') {
       if (!newName) { alert('新しい薬の名前を入力してください'); return; }
+      var newUrlEl = document.getElementById('msNewMedicineUrl');
+      var newRefUrl = newUrlEl && newUrlEl.value ? String(newUrlEl.value).trim() : '';
       var medBody = { id: 'med_' + newName.replace(/\s+/g, '_').toLowerCase() + '_' + Date.now(), name: newName };
+      if (newRefUrl) medBody.reference_url = newRefUrl;
       fetch(API_BASE + '/health/medicines', {
         method: 'POST',
         headers: apiHeaders(), cache: 'no-store',
@@ -2002,6 +2039,7 @@ function toggleFold(id, btn) {
       }).then(function (r) { return r.json(); })
       .then(function (data) {
         if (data.error) { alert('薬の登録に失敗: ' + (data.message || data.error)); return; }
+        _medicinesList = null;
         doCreate(data.medicine ? data.medicine.id : medBody.id);
       }).catch(function () { alert('薬の登録に失敗しました'); });
     } else if (medicineId) {
@@ -2606,9 +2644,16 @@ function toggleFold(id, btn) {
     html += '<button class="btn-outline" style="font-size:11px;padding:3px 8px;" onclick="openAssignPresetModal()">変更</button>';
     html += '</div>';
     var presetDesc = currentCatData && currentCatData.assigned_preset_description;
-    if (presetDesc && String(presetDesc).trim()) {
+    var presetMemoHasName = presetName && String(presetName).trim();
+    var presetMemoHasDesc = presetDesc && String(presetDesc).trim();
+    if (presetMemoHasDesc || presetMemoHasName) {
       html += '<div style="font-size:11px;color:var(--text-dim);line-height:1.4;margin:-4px 0 10px;padding:8px 10px;background:rgba(168,139,250,0.08);border-radius:8px;border-left:3px solid rgba(168,139,250,0.45);">';
-      html += '<span style="font-weight:600;color:var(--primary,#a78bfa);">📝 プリセットメモ</span><br><span style="color:var(--text-main);">' + escapeHtml(String(presetDesc).trim()) + '</span>';
+      html += '<span style="font-weight:600;color:var(--primary,#a78bfa);">📝 プリセットメモ</span>';
+      if (presetMemoHasDesc) {
+        html += '<br><span style="color:var(--text-main);white-space:pre-wrap;">' + escapeHtml(String(presetDesc).trim()) + '</span>';
+      } else {
+        html += '<br><span style="font-size:10px;color:var(--text-dim);">プリセット全体の説明・各フードのメモは未登録です</span>';
+      }
       html += '</div>';
     }
 
@@ -2722,7 +2767,7 @@ function toggleFold(id, btn) {
                 : '取り消し (' + escapeHtml(fedLog.served_time || '') + ')';
               html += '<button type="button" onclick="undoFedMany(\'' + undoIdCsv + '\')" style="font-size:18px;background:none;border:none;cursor:pointer;padding:0;" title="' + escapeHtml(undoTitle) + '">✅' + (fedList.length > 1 ? '<span style="font-size:10px;vertical-align:super;">' + fedList.length + '</span>' : '') + '</button>';
             } else {
-              html += '<button type="button" onclick="quickFed(' + p.id + ')" style="font-size:18px;background:none;border:none;cursor:pointer;padding:0;" title="あげた！">⬜</button>';
+              html += '<button type="button" onclick=\'openQuickFedModal(' + p.id + ',' + JSON.stringify(String(p.food_name || '')) + ',' + (p.amount_g != null && !isNaN(Number(p.amount_g)) ? Number(p.amount_g) : 'null') + ')\' style="font-size:18px;background:none;border:none;cursor:pointer;padding:0;" title="あげた！">⬜</button>';
             }
 
             html += '<div style="flex:1;min-width:0;">';
@@ -2730,6 +2775,10 @@ function toggleFold(id, btn) {
             html += '<div style="font-size:11px;color:var(--text-dim);">' + p.amount_g + 'g (' + Math.round(p.kcal_calc || 0) + 'kcal)';
             if (p.scheduled_time) html += ' ⏰' + escapeHtml(p.scheduled_time);
             html += '</div>';
+            if (isFed) {
+              var fedStDisp = cdFmtFedServedTime(fedLog.served_time);
+              html += '<div style="font-size:11px;color:#93c5fd;margin-top:2px;">🕐 ' + (fedStDisp ? escapeHtml(fedStDisp) : '—') + '</div>';
+            }
             if (p.notes && String(p.notes).trim()) {
               html += '<div style="font-size:10px;color:var(--text-dim);margin-top:3px;line-height:1.35;padding:4px 6px;background:rgba(255,255,255,0.04);border-radius:4px;">📝 ' + escapeHtml(String(p.notes).trim()) + '</div>';
             }
@@ -2774,7 +2823,8 @@ function toggleFold(id, btn) {
         html += '<span style="font-size:13px;">' + escapeHtml(slotLabel(l.meal_slot)) + ': ';
         if (l.food_name) html += escapeHtml(l.food_name) + ' ';
         if (l.offered_g) html += l.offered_g + 'g';
-        if (l.served_time) html += ' ' + escapeHtml(l.served_time);
+        var manSt = cdFmtFedServedTime(l.served_time);
+        if (manSt) html += ' <span style="color:#93c5fd;">🕐 ' + escapeHtml(manSt) + '</span>';
         html += '</span>';
         html += '<span style="display:flex;align-items:center;gap:8px;">';
         if (l.eaten_pct !== null && l.eaten_pct !== undefined) {
@@ -2808,7 +2858,7 @@ function toggleFold(id, btn) {
     var yesterday = yesterdayJstYmd();
     fetch(API_BASE + '/feeding/plans/' + planId + '/fed', {
       method: 'POST', headers: apiHeaders(), cache: 'no-store',
-      body: JSON.stringify({ eaten_pct: eatenPct, log_date: yesterday }),
+      body: JSON.stringify({ eaten_pct: eatenPct, log_date: yesterday, served_time: nowJstHm() }),
     }).then(function (r) { return r.json(); })
     .then(function (data) {
       if (data.error) { alert('エラー: ' + (data.message || data.error)); return; }
@@ -2820,7 +2870,7 @@ function toggleFold(id, btn) {
     var yesterday = yesterdayJstYmd();
     fetch(API_BASE + '/feeding/plans/' + planId + '/fed', {
       method: 'POST', headers: apiHeaders(), cache: 'no-store',
-      body: JSON.stringify({ eaten_pct: 100, log_date: yesterday }),
+      body: JSON.stringify({ eaten_pct: 100, log_date: yesterday, served_time: nowJstHm() }),
     }).then(function (r) { return r.json(); })
     .then(function (data) {
       if (data.error) { alert('エラー: ' + (data.message || data.error)); return; }
@@ -2873,16 +2923,47 @@ function toggleFold(id, btn) {
     }).catch(function () { alert('保存に失敗しました'); });
   };
 
-  window.quickFed = function (planId) {
-    fetch(API_BASE + '/feeding/plans/' + planId + '/fed', {
+  var _cdQfPlanId = null;
+
+  window.openQuickFedModal = function (planId, foodName, amountG) {
+    _cdQfPlanId = planId;
+    var t = document.getElementById('cdQfTitle');
+    if (t) t.textContent = '🍚 あげた記録';
+    var fn = document.getElementById('cdQfFoodName');
+    if (fn) fn.textContent = foodName || '—';
+    var og = document.getElementById('cdQfOfferedG');
+    if (og) og.value = amountG != null && !isNaN(Number(amountG)) ? String(amountG) : '';
+    var qfst = document.getElementById('cdQfServedTime');
+    if (qfst) qfst.value = nowJstHm();
+    var m = document.getElementById('cdQuickFedModal');
+    if (m) m.classList.add('open');
+  };
+
+  window.closeCdQuickFedModal = function () {
+    _cdQfPlanId = null;
+    var modal = document.getElementById('cdQuickFedModal');
+    if (modal) modal.classList.remove('open');
+  };
+
+  window.submitCdQuickFed = function () {
+    if (!_cdQfPlanId) return;
+    var og = document.getElementById('cdQfOfferedG');
+    var offeredG = og && og.value ? parseFloat(og.value) : null;
+    var qfst = document.getElementById('cdQfServedTime');
+    var st = qfst && qfst.value ? qfst.value.trim() : '';
+    if (!st) st = nowJstHm();
+    var payload = { log_date: todayJstYmd(), served_time: st };
+    if (offeredG != null && !isNaN(offeredG) && offeredG > 0) payload.offered_g = offeredG;
+    fetch(API_BASE + '/feeding/plans/' + encodeURIComponent(_cdQfPlanId) + '/fed', {
       method: 'POST',
       headers: apiHeaders(), cache: 'no-store',
-      body: JSON.stringify({ log_date: todayJstYmd() }),
+      body: JSON.stringify(payload),
     }).then(function (r) { return r.json(); })
-    .then(function (data) {
-      if (data.error) { alert('エラー: ' + (data.message || data.error)); return; }
-      loadFeedingSection();
-    }).catch(function () { alert('記録に失敗しました'); });
+      .then(function (data) {
+        if (data.error) { alert('エラー: ' + (data.message || data.error)); return; }
+        closeCdQuickFedModal();
+        loadFeedingSection();
+      }).catch(function () { alert('記録に失敗しました'); });
   };
 
   /** カンマ区切りのログIDを順に削除（同日・同一プランの重複「あげた」対策） */
@@ -3067,8 +3148,10 @@ function toggleFold(id, btn) {
         if (presets.length === 0) {
           innerHtml += '<div class="empty-msg">この拠点のプリセットがありません。タブを切り替えるか、「プリセット管理」で作成してください。</div>';
         } else {
+          var lastAlphaApply = { v: null };
           for (var i = 0; i < presets.length; i++) {
             var ps = presets[i];
+            innerHtml += feedingPresetAlphaSectionHtml(loc, ps, lastAlphaApply);
             innerHtml += '<div style="background:var(--surface);border-radius:8px;padding:10px 12px;margin-bottom:8px;">';
             innerHtml += '<div style="display:flex;justify-content:space-between;align-items:flex-start;gap:8px;">';
             innerHtml += '<div style="flex:1;min-width:0;"><div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;margin-bottom:2px;">' + presetLocationBadgeHtml(ps.location_id) + '<b style="font-size:13px;">' + escapeHtml(ps.name) + '</b></div>';
@@ -3128,8 +3211,10 @@ function toggleFold(id, btn) {
         innerHtml += '<div style="font-size:13px;font-weight:600;color:var(--text-main);">紐づけ解除（なし）</div>';
         innerHtml += '</div>';
 
+        var lastAlphaAssign = { v: null };
         for (var i = 0; i < presets.length; i++) {
           var ps = presets[i];
+          innerHtml += feedingPresetAlphaSectionHtml(loc, ps, lastAlphaAssign);
           var isActive = currentId === ps.id;
           innerHtml += '<div class="preset-assign-item' + (isActive ? ' active' : '') + '" onclick="assignPreset(' + ps.id + ')" style="cursor:pointer;padding:10px 12px;border-radius:8px;margin-bottom:4px;background:' + (isActive ? 'rgba(168,139,250,0.15)' : 'var(--surface)') + ';border:1px solid ' + (isActive ? 'var(--primary,#a78bfa)' : 'var(--border,rgba(255,255,255,0.08))') + ';">';
           innerHtml += '<div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:6px;">';
@@ -3191,7 +3276,17 @@ function toggleFold(id, btn) {
       if (data.error) { alert('エラー: ' + (data.message || data.error)); return; }
       alert('プリセット「' + (data.preset_name || '') + '」を適用しました（' + (data.applied || []).length + '品追加）');
       closePresetApplyModal();
-      loadFeedingSection();
+      fetch(API_BASE + '/cats/' + encodeURIComponent(catId), { headers: apiHeaders(), cache: 'no-store' })
+        .then(function (r) { return r.json(); })
+        .then(function (d) {
+          if (d.cat && currentCatData) {
+            currentCatData.assigned_preset_id = d.cat.assigned_preset_id;
+            currentCatData.assigned_preset_name = d.cat.assigned_preset_name;
+            currentCatData.assigned_preset_description = d.cat.assigned_preset_description;
+          }
+          loadFeedingSection();
+        })
+        .catch(function () { loadFeedingSection(); });
     }).catch(function () { alert('適用に失敗しました'); });
   };
 
@@ -3216,8 +3311,10 @@ function toggleFold(id, btn) {
         if (presets.length === 0) {
           h += '<div class="empty-msg">この拠点のプリセットはまだありません。タブを切り替えると他拠点の一覧が表示されます。</div>';
         }
+        var lastAlphaManage = { v: null };
         for (var i = 0; i < presets.length; i++) {
           var ps = presets[i];
+          h += feedingPresetAlphaSectionHtml(loc, ps, lastAlphaManage);
           var ploc = ps.location_id === 'nekomata' ? 'nekomata' : 'cafe';
           h += '<div style="background:var(--surface);border-radius:8px;padding:10px 12px;margin-bottom:8px;">';
           h += '<div style="display:flex;justify-content:space-between;align-items:flex-start;gap:8px;">';
@@ -3542,6 +3639,11 @@ function toggleFold(id, btn) {
     if (document.getElementById('flOfferedG')) document.getElementById('flOfferedG').value = log.offered_g != null ? log.offered_g : '';
     if (document.getElementById('flEatenPct')) document.getElementById('flEatenPct').value = log.eaten_pct != null ? log.eaten_pct : '';
     if (document.getElementById('flNote')) document.getElementById('flNote').value = log.note || '';
+    var flSt = document.getElementById('flServedTime');
+    if (flSt) {
+      var stEd = cdFmtFedServedTime(log.served_time);
+      flSt.value = stEd || nowJstHm();
+    }
     document.getElementById('flKcalPreview').style.display = 'none';
     document.getElementById('flFoodInfo').textContent = log.food_name ? log.food_name : '';
     var sel = document.getElementById('flFoodId');
@@ -3635,6 +3737,7 @@ function toggleFold(id, btn) {
     document.getElementById('flOfferedG').value = '';
     document.getElementById('flEatenPct').value = '';
     document.getElementById('flNote').value = '';
+    if (document.getElementById('flServedTime')) document.getElementById('flServedTime').value = nowJstHm();
 
     setFoodSearchValue('flFoodId', '');
     var sel = document.getElementById('flFoodId');
@@ -4080,6 +4183,10 @@ function toggleFold(id, btn) {
       }
     }
 
+    var flStEl = document.getElementById('flServedTime');
+    var servedTime = flStEl && flStEl.value ? String(flStEl.value).trim() : '';
+    if (!servedTime) servedTime = nowJstHm();
+
     var body = {
       meal_slot: mealSlot,
       food_id: foodId || null,
@@ -4087,6 +4194,7 @@ function toggleFold(id, btn) {
       eaten_pct: eatenPct !== '' ? parseInt(eatenPct, 10) : null,
       kcal: kcalCalc,
       note: note || null,
+      served_time: servedTime,
     };
 
     var url = API_BASE + '/feeding/logs';
@@ -5226,13 +5334,19 @@ function toggleFold(id, btn) {
         _medicinesList = data.medicines || [];
         populateMedPresetMedicineSelect(sel);
         _initMedSearch();
+      })
+      .catch(function () {
+        _medicinesList = null;
+        populateMedPresetMedicineSelect(sel);
+        alert('薬マスターの読み込みに失敗しました。通信を確認してください。');
       });
   }
 
   function populateMedPresetMedicineSelect(sel) {
     sel.innerHTML = '<option value="">選択してください</option>';
-    for (var i = 0; i < _medicinesList.length; i++) {
-      var m = _medicinesList[i];
+    var list = Array.isArray(_medicinesList) ? _medicinesList : [];
+    for (var i = 0; i < list.length; i++) {
+      var m = list[i];
       var opt = document.createElement('option');
       opt.value = m.id;
       opt.textContent = m.name + (m.form ? ' (' + m.form + ')' : '');
@@ -5271,9 +5385,10 @@ function toggleFold(id, btn) {
     if (!input || !dropdown) return;
     var q = input.value.trim().toLowerCase();
 
-    var filtered = _medicinesList;
+    var list = Array.isArray(_medicinesList) ? _medicinesList : [];
+    var filtered = list;
     if (q) {
-      filtered = _medicinesList.filter(function (m) {
+      filtered = list.filter(function (m) {
         var label = (m.name || '') + ' ' + (m.form || '') + ' ' + (m.category || '');
         return label.toLowerCase().indexOf(q) !== -1;
       });
@@ -5319,17 +5434,24 @@ function toggleFold(id, btn) {
     var name = nameEl ? nameEl.value.trim() : '';
     if (!name) { alert('薬名を入力してください'); return; }
 
+    var urlEl = document.getElementById('mpNewMedUrl');
+    var refUrl = urlEl && urlEl.value ? String(urlEl.value).trim() : '';
+
     var btn = document.querySelector('#mpNewMedForm .btn-primary');
     if (btn) { btn.disabled = true; btn.textContent = '🔍 情報取得中...'; }
 
+    var postBody = { name: name };
+    if (refUrl) postBody.reference_url = refUrl;
+
     fetch(API_BASE + '/health/medicines', {
       method: 'POST', headers: apiHeaders(), cache: 'no-store',
-      body: JSON.stringify({ name: name }),
+      body: JSON.stringify(postBody),
     }).then(function (r) { return r.json(); })
     .then(function (data) {
       if (btn) { btn.disabled = false; btn.textContent = '登録して選択'; }
       if (data.error) { alert('エラー: ' + (data.message || data.error)); return; }
       var med = data.medicine;
+      if (!Array.isArray(_medicinesList)) _medicinesList = [];
       _medicinesList.push(med);
       var sel = document.getElementById('mpMedicineId');
       if (sel) {
@@ -5342,6 +5464,7 @@ function toggleFold(id, btn) {
       var inp = document.getElementById('mpMedSearchInput');
       if (inp) inp.value = med.name + (med.form ? ' (' + med.form + ')' : '');
       if (nameEl) nameEl.value = '';
+      if (urlEl) urlEl.value = '';
       var form = document.getElementById('mpNewMedForm');
       if (form) form.style.display = 'none';
 

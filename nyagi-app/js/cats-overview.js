@@ -33,6 +33,22 @@
     });
   }
 
+  /** feeding_logs.served_time を表示用 HH:mm に */
+  function ovFmtFedServedTime(raw) {
+    if (raw == null || raw === '') return '';
+    var s = String(raw).trim();
+    if (s.length >= 16 && s.indexOf('T') !== -1) return s.slice(11, 16);
+    var p = s.split(':');
+    if (p.length >= 2) {
+      var h = parseInt(p[0], 10);
+      var mi = parseInt(p[1], 10);
+      if (!isNaN(h) && !isNaN(mi) && h >= 0 && h <= 23 && mi >= 0 && mi <= 59) {
+        return (h < 10 ? '0' : '') + h + ':' + (mi < 10 ? '0' : '') + mi;
+      }
+    }
+    return '';
+  }
+
   function escAttr(s) {
     return String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;');
   }
@@ -123,6 +139,14 @@
     return '<span style="font-size:10px;padding:2px 6px;border-radius:4px;background:' + bg + ';color:' + c + ';font-weight:600;">' + esc(ovPresetLocShortLabel(L)) + '</span>';
   }
 
+  function ovFeedingPresetAlphaSectionHtml(tabLoc, ps, lastLabelRef) {
+    if (tabLoc !== 'cafe' || !ps || !ps.alpha_bucket_label) return '';
+    var lab = ps.alpha_bucket_label;
+    if (lastLabelRef.v === lab) return '';
+    lastLabelRef.v = lab;
+    return '<div style="font-size:11px;font-weight:700;color:var(--text-dim);margin:12px 0 6px;padding:4px 0;border-bottom:1px solid rgba(255,255,255,0.08);">' + esc(lab) + '</div>';
+  }
+
   function ovRenderPresetLocationSwitcher(activeLoc, context) {
     var aCafe = activeLoc === 'cafe' ? 'background:rgba(251,191,36,0.25);border-color:rgba(251,191,36,0.55);color:#fbbf24;font-weight:700;' : 'background:var(--surface);border-color:rgba(255,255,255,0.12);color:var(--text-dim);';
     var aNeko = activeLoc === 'nekomata' ? 'background:rgba(248,113,113,0.18);border-color:rgba(248,113,113,0.45);color:#f87171;font-weight:700;' : 'background:var(--surface);border-color:rgba(255,255,255,0.12);color:var(--text-dim);';
@@ -201,8 +225,10 @@
         if (presets.length === 0) {
           innerHtml += '<div class="empty-msg">この拠点のプリセットがありません。</div>';
         } else {
+          var lastAlphaOvApply = { v: null };
           for (var i = 0; i < presets.length; i++) {
             var ps = presets[i];
+            innerHtml += ovFeedingPresetAlphaSectionHtml(loc, ps, lastAlphaOvApply);
             innerHtml += '<div style="background:var(--surface);border-radius:8px;padding:10px 12px;margin-bottom:8px;">';
             innerHtml += '<div style="display:flex;justify-content:space-between;align-items:flex-start;gap:8px;">';
             innerHtml += '<div style="flex:1;min-width:0;"><div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;">' + ovPresetLocationBadgeHtml(ps.location_id) + '<b style="font-size:13px;">' + esc(ps.name) + '</b></div>';
@@ -236,8 +262,10 @@
         innerHtml += '<div style="margin-bottom:8px;">';
         innerHtml += '<div style="cursor:pointer;padding:10px 12px;border-radius:8px;margin-bottom:4px;background:' + (!curNum ? 'rgba(168,139,250,0.15)' : 'var(--surface)') + ';border:1px solid rgba(255,255,255,0.12);" data-ov-assign-preset="none">';
         innerHtml += '<div style="font-size:13px;font-weight:600;">紐づけ解除（なし）</div></div>';
+        var lastAlphaOvAssign = { v: null };
         for (var i = 0; i < presets.length; i++) {
           var ps = presets[i];
+          innerHtml += ovFeedingPresetAlphaSectionHtml(loc, ps, lastAlphaOvAssign);
           var isActive = curNum != null && !isNaN(curNum) && curNum === Number(ps.id);
           innerHtml += '<div style="cursor:pointer;padding:10px 12px;border-radius:8px;margin-bottom:4px;background:' + (isActive ? 'rgba(168,139,250,0.15)' : 'var(--surface)') + ';border:1px solid rgba(255,255,255,0.12);" data-ov-assign-preset="' + escAttr(String(ps.id)) + '">';
           innerHtml += '<div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:6px;">';
@@ -269,8 +297,10 @@
         if (presets.length === 0) {
           h += '<div class="empty-msg">プリセットがありません</div>';
         }
+        var lastAlphaOvManage = { v: null };
         for (var i = 0; i < presets.length; i++) {
           var ps = presets[i];
+          h += ovFeedingPresetAlphaSectionHtml(loc, ps, lastAlphaOvManage);
           var ploc = ps.location_id === 'nekomata' ? 'nekomata' : 'cafe';
           h += '<div style="background:var(--surface);border-radius:8px;padding:10px 12px;margin-bottom:8px;">';
           h += '<div style="display:flex;justify-content:space-between;align-items:flex-start;gap:8px;">';
@@ -445,6 +475,8 @@
     if (sl) sl.value = presetSlot || 'morning';
     if (document.getElementById('ovFlOfferedG')) document.getElementById('ovFlOfferedG').value = '';
     if (document.getElementById('ovFlEatenPct')) document.getElementById('ovFlEatenPct').value = '100';
+    var flst = document.getElementById('ovFlServedTime');
+    if (flst) flst.value = nowJstHm();
     ovFillFoodSelect('ovFlFoodId');
     var t = document.querySelector('#ovFeedingLogModal .modal-title');
     if (t) t.innerHTML = '🍽 給餌ログ <span class="dim" style="font-size:12px;">' + esc(c.name) + '</span>';
@@ -502,6 +534,8 @@
     var eatenPct = document.getElementById('ovFlEatenPct') && document.getElementById('ovFlEatenPct').value;
     if (!logDate || !mealSlot) { alert('日付と食事区分は必須です'); return; }
     if (!foodId || !offeredG) { alert('フードとあげた量は必須です'); return; }
+    var flst2 = document.getElementById('ovFlServedTime');
+    var stFl = flst2 && flst2.value ? flst2.value : nowJstHm();
     fetch(feedingApiBase() + '/logs', {
       method: 'POST',
       headers: apiHeaders(),
@@ -513,6 +547,7 @@
         food_id: foodId,
         offered_g: parseFloat(offeredG),
         eaten_pct: eatenPct !== '' && eatenPct != null ? parseFloat(eatenPct) : null,
+        served_time: stFl,
       }),
     }).then(function (r) { return r.json(); })
       .then(function (data) {
@@ -532,6 +567,8 @@
     if (fn) fn.textContent = foodName || '—';
     var og = document.getElementById('ovQfOfferedG');
     if (og) og.value = amountG || '';
+    var qfst = document.getElementById('ovQfServedTime');
+    if (qfst) qfst.value = nowJstHm();
     var m = document.getElementById('ovQuickFedModal');
     if (m) m.classList.add('open');
   }
@@ -546,7 +583,9 @@
     if (!_ovQfPlanId) return;
     var og = document.getElementById('ovQfOfferedG');
     var offeredG = og && og.value ? parseFloat(og.value) : null;
-    var payload = { log_date: todayJstYmd() };
+    var qfst2 = document.getElementById('ovQfServedTime');
+    var stQf = qfst2 && qfst2.value ? qfst2.value : nowJstHm();
+    var payload = { log_date: todayJstYmd(), served_time: stQf };
     if (offeredG != null && offeredG > 0) payload.offered_g = offeredG;
     fetch(feedingApiBase() + '/plans/' + encodeURIComponent(_ovQfPlanId) + '/fed', {
       method: 'POST',
@@ -563,7 +602,7 @@
 
   var _ovElLogId = null;
 
-  function ovOpenEditLogModal(logId, foodName, offeredG, eatenPct) {
+  function ovOpenEditLogModal(logId, foodName, offeredG, eatenPct, servedTimeRaw) {
     _ovElLogId = logId;
     var t = document.getElementById('ovElTitle');
     if (t) t.textContent = '✏️ 給餌ログ編集';
@@ -573,6 +612,8 @@
     if (og) og.value = offeredG || '';
     var ep = document.getElementById('ovElEatenPct');
     if (ep) ep.value = eatenPct || '100';
+    var elst = document.getElementById('ovElServedTime');
+    if (elst) elst.value = ovFmtFedServedTime(servedTimeRaw) || nowJstHm();
     var m = document.getElementById('ovEditLogModal');
     if (m) m.classList.add('open');
   }
@@ -589,7 +630,9 @@
     var ep = document.getElementById('ovElEatenPct');
     var offeredG = og && og.value ? parseFloat(og.value) : null;
     var eatenPct = ep && ep.value !== '' ? parseFloat(ep.value) : null;
-    var payload = {};
+    var elst2 = document.getElementById('ovElServedTime');
+    var stEl = elst2 && elst2.value ? elst2.value : nowJstHm();
+    var payload = { served_time: stEl };
     if (offeredG != null) payload.offered_g = offeredG;
     if (eatenPct != null) payload.eaten_pct = eatenPct;
     fetch(feedingApiBase() + '/logs/' + encodeURIComponent(_ovElLogId), {
@@ -1445,7 +1488,8 @@
         var elfn = felg.getAttribute('data-food-name') || '';
         var elog = felg.getAttribute('data-offered-g') || '';
         var elep = felg.getAttribute('data-eaten-pct') || '100';
-        if (elid) ovOpenEditLogModal(elid, elfn, elog, elep);
+        var elst = felg.getAttribute('data-served-time') || '';
+        if (elid) ovOpenEditLogModal(elid, elfn, elog, elep, elst);
         return;
       }
       var fund = ev.target.closest && ev.target.closest('.btn-ov-feed-undofed');
@@ -2182,6 +2226,36 @@
     return m[s] || esc(s);
   }
 
+  /** 猫詳細の給餌ブロックと同じデータ源（overview API）: プリセット名＋説明（献立の preset_id からも解決）＋食事カテゴリ注意メモ */
+  function ovHtmlFeedingSyncedMemos(c) {
+    var h = '';
+    var pn = c.assigned_preset_name;
+    var pd = c.assigned_preset_description;
+    var hasName = pn != null && String(pn).trim();
+    var hasDesc = pd != null && String(pd).trim();
+    if (hasName || hasDesc) {
+      h += '<div style="font-size:11px;color:var(--text-dim);line-height:1.35;margin:0 0 8px;padding:8px 10px;background:rgba(168,139,250,0.08);border-radius:8px;border-left:3px solid rgba(168,139,250,0.45);">';
+      h += '<span style="font-weight:600;color:var(--primary,#a78bfa);">📝 プリセットメモ</span>';
+      if (hasName) {
+        h += '<br><span style="color:var(--text-main);font-weight:700;">' + esc(String(pn).trim()) + '</span>';
+      }
+      if (hasDesc) {
+        h += '<br><span style="color:var(--text-main);white-space:pre-wrap;">' + esc(String(pd).trim()) + '</span>';
+      } else if (hasName) {
+        h += '<br><span class="dim" style="font-size:10px;">プリセット全体の説明・各フードのメモは未登録です</span>';
+      }
+      h += '</div>';
+    }
+    var fc = c.feeding_cat_notes || [];
+    for (var fi = 0; fi < fc.length; fi++) {
+      var fn = String(fc[fi] || '').trim();
+      if (!fn) continue;
+      h += '<div style="font-size:10px;color:var(--text-dim);line-height:1.35;margin:0 0 6px;padding:6px 8px;background:rgba(251,146,60,0.08);border-radius:6px;border-left:3px solid rgba(251,146,60,0.35);">';
+      h += '<span style="font-weight:600;color:#fb923c;">🍽 食事メモ</span><br><span style="color:var(--text-main);">' + esc(fn) + '</span></div>';
+    }
+    return h;
+  }
+
   function renderItemCard_FeedingCheck() {
     var html = '<div class="item-card">';
     html += '<div class="item-card-title">🍚 ごはん <small class="dim">あげた・残し</small></div>';
@@ -2195,23 +2269,26 @@
         '<button type="button" class="btn btn-outline btn-ov-feed-leftover" style="font-size:10px;padding:2px 6px;" data-cat-id="' + escAttr(String(c.id)) + '">🥄残し</button>' +
         '<a href="' + catLink(c.id, 'feedingArea') + '" class="btn btn-outline" style="font-size:10px;padding:2px 6px;text-decoration:none;">詳細</a>' +
         '</div>';
+      var memoBlock = ovHtmlFeedingSyncedMemos(c);
       if (plan.length === 0) {
-        inner = '<span class="dim">献立なし（詳細で設定）</span>';
+        inner = memoBlock + '<span class="dim">献立なし（詳細で設定）</span>';
       } else {
+        inner = memoBlock;
         for (var j = 0; j < plan.length; j++) {
           var p = plan[j];
           var menu = esc(p.food_name || '—');
           if (p.amount_g != null && p.amount_g !== '') menu += ' <strong>' + esc(String(p.amount_g)) + 'g</strong>';
-          if (p.notes) menu += ' <small class="dim">' + esc(p.notes) + '</small>';
           var st = '';
           var pidStr = p.plan_id != null ? String(p.plan_id) : '';
           var logIdStr = p.log_id != null ? String(p.log_id) : '';
           var offeredGLogStr = p.offered_g_log != null ? String(p.offered_g_log) : '';
+          var fedTm = p.fed_served_time ? ovFmtFedServedTime(p.fed_served_time) : '';
           if (p.fed_today) {
             st = '<span class="feed-done">✅</span>';
+            if (fedTm) st += '<span class="dim" style="margin-left:3px;">🕐' + esc(fedTm) + '</span> ';
             if (p.eaten_pct_today != null && p.eaten_pct_today !== '') st += '<span class="dim">' + esc(String(p.eaten_pct_today)) + '%</span> ';
             if (logIdStr) {
-              st += '<button type="button" class="btn btn-outline btn-ov-feed-editlog" style="font-size:10px;padding:1px 6px;" data-log-id="' + escAttr(logIdStr) + '" data-food-name="' + escAttr(p.food_name || '') + '" data-offered-g="' + escAttr(offeredGLogStr || String(p.amount_g || '')) + '" data-eaten-pct="' + escAttr(String(p.eaten_pct_today != null ? p.eaten_pct_today : 100)) + '">✏️</button> ';
+              st += '<button type="button" class="btn btn-outline btn-ov-feed-editlog" style="font-size:10px;padding:1px 6px;" data-log-id="' + escAttr(logIdStr) + '" data-food-name="' + escAttr(p.food_name || '') + '" data-offered-g="' + escAttr(offeredGLogStr || String(p.amount_g || '')) + '" data-eaten-pct="' + escAttr(String(p.eaten_pct_today != null ? p.eaten_pct_today : 100)) + '" data-served-time="' + escAttr(fedTm || '') + '">✏️</button> ';
               st += '<button type="button" class="btn btn-outline btn-ov-feed-undofed" style="font-size:10px;padding:1px 6px;" data-log-id="' + escAttr(logIdStr) + '">取消</button> ';
             }
           } else if (pidStr) {
@@ -2220,6 +2297,9 @@
             st = '<span class="feed-pending">⬜</span> ';
           }
           inner += '<div class="ov-feed-line"><span class="ov-feed-slot">' + feedingMealSlotLabelJp(p.meal_slot) + '</span><span class="ov-feed-menu">' + menu + '</span><span class="ov-feed-status" style="text-align:right;">' + st + '</span></div>';
+          if (p.notes && String(p.notes).trim()) {
+            inner += '<div style="font-size:10px;color:var(--text-dim);margin:-2px 0 6px 0;padding:4px 8px 4px 28px;background:rgba(255,255,255,0.04);border-radius:4px;line-height:1.35;">📝 ' + esc(String(p.notes).trim()) + '</div>';
+          }
         }
       }
       html += itemRowEditable(c, '<div class="item-values-medcol ov-feed-block" style="width:100%;">' + toolbar + inner + '</div>', '', '');

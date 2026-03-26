@@ -1420,6 +1420,73 @@
     postHealthRecord(body, btn);
   }
 
+  /** 投薬ログ done/undo。本文 POST { action } を優先し、405 のとき従来の /done|/undo にフォールバック */
+  function postMedicationLogChange(cb, logId, wantDone) {
+    function revert() { cb.checked = !wantDone; }
+    var pathAction = wantDone ? 'done' : 'undo';
+    cb.disabled = true;
+    function finishSuccess() {
+      cb.disabled = false;
+      fetchCatsDataSilent();
+    }
+    function finishError(msg) {
+      cb.disabled = false;
+      revert();
+      alert('エラー: ' + msg);
+    }
+    var base = apiOpsBase() + '/health/medication-logs/' + encodeURIComponent(logId);
+    var headers = apiHeaders();
+    fetch(base, {
+      method: 'POST',
+      headers: headers,
+      cache: 'no-store',
+      body: JSON.stringify({ action: pathAction }),
+    })
+      .then(function (r) {
+        return r.json().then(
+          function (data) {
+            return { ok: r.ok, status: r.status, data: data };
+          },
+          function () {
+            return { ok: r.ok, status: r.status, data: null };
+          }
+        );
+      })
+      .then(function (res) {
+        if (res.ok && !(res.data && res.data.error)) {
+          finishSuccess();
+          return null;
+        }
+        if (res.status === 405 || (res.data && res.data.error === 'method_not_allowed')) {
+          return fetch(base + '/' + pathAction, {
+            method: 'POST',
+            headers: headers,
+            cache: 'no-store',
+            body: JSON.stringify({}),
+          }).then(function (r2) {
+            return r2.json().then(function (d2) {
+              return { ok: r2.ok, status: r2.status, data: d2 };
+            });
+          });
+        }
+        finishError((res.data && (res.data.message || res.data.error)) || 'HTTPエラー');
+        return null;
+      })
+      .then(function (res2) {
+        if (!res2) return;
+        if (res2.ok && !(res2.data && res2.data.error)) {
+          finishSuccess();
+          return;
+        }
+        finishError((res2.data && (res2.data.message || res2.data.error)) || 'HTTPエラー');
+      })
+      .catch(function () {
+        cb.disabled = false;
+        revert();
+        alert('投薬の更新に失敗しました');
+      });
+  }
+
   function bindOverviewInlineHandlers() {
     if (_ovInlineHandlersBound) return;
     _ovInlineHandlersBound = true;
@@ -1651,36 +1718,7 @@
       if (cb.closest && cb.closest('.pcc-med-block')) return;
       var logId = cb.getAttribute('data-log-id');
       if (!logId) return;
-      var wantDone = cb.checked;
-      function revert() { cb.checked = !wantDone; }
-      cb.disabled = true;
-      var action = wantDone ? 'done' : 'undo';
-      fetch(apiOpsBase() + '/health/medication-logs/' + encodeURIComponent(logId) + '/' + action, {
-        method: 'POST',
-        headers: apiHeaders(),
-        cache: 'no-store',
-        body: JSON.stringify({}),
-      })
-        .then(function (r) {
-          return r.json().then(function (data) {
-            return { ok: r.ok, data: data };
-          });
-        })
-        .then(function (res) {
-          cb.disabled = false;
-          if (!res.ok || (res.data && res.data.error)) {
-            revert();
-            var msg = (res.data && (res.data.message || res.data.error)) || 'HTTPエラー';
-            alert('エラー: ' + msg);
-            return;
-          }
-          fetchCatsDataSilent();
-        })
-        .catch(function () {
-          cb.disabled = false;
-          revert();
-          alert('投薬の更新に失敗しました');
-        });
+      postMedicationLogChange(cb, logId, cb.checked);
     });
   }
 
@@ -2113,22 +2151,10 @@
     cardArea.addEventListener('change', function (ev) {
       var cb = ev.target;
       if (!cb || cb.type !== 'checkbox' || !cb.classList.contains('ov-med-log-cb')) return;
+      if (!cb.closest || !cb.closest('.pcc-med-block')) return;
       var logId = cb.getAttribute('data-log-id');
       if (!logId) return;
-      var wantDone = cb.checked;
-      function revert() { cb.checked = !wantDone; }
-      cb.disabled = true;
-      var action = wantDone ? 'done' : 'undo';
-      fetch(apiOpsBase() + '/health/medication-logs/' + encodeURIComponent(logId) + '/' + action, {
-        method: 'POST', headers: apiHeaders(), cache: 'no-store', body: JSON.stringify({})
-      })
-        .then(function (r) { return r.json().then(function (d) { return { ok: r.ok, data: d }; }); })
-        .then(function (res) {
-          cb.disabled = false;
-          if (!res.ok || (res.data && res.data.error)) { revert(); alert('エラー: ' + ((res.data && (res.data.message || res.data.error)) || 'HTTPエラー')); return; }
-          fetchCatsDataSilent();
-        })
-        .catch(function () { cb.disabled = false; revert(); alert('投薬の更新に失敗しました'); });
+      postMedicationLogChange(cb, logId, cb.checked);
     });
   }
 

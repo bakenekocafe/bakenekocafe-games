@@ -1526,6 +1526,32 @@
         if (clo) ovOpenLeftoverModal(clo);
         return;
       }
+      var fdelmemo = ev.target.closest && ev.target.closest('.btn-ov-feed-delmemo');
+      if (fdelmemo) {
+        ev.preventDefault();
+        ev.stopPropagation();
+        var memoNid = fdelmemo.getAttribute('data-note-id');
+        if (!memoNid) return;
+        if (!confirm('この食事メモを削除しますか？')) return;
+        fetch(apiOpsBase() + '/cat-notes/' + encodeURIComponent(memoNid), {
+          method: 'DELETE',
+          headers: apiHeaders(),
+          cache: 'no-store',
+        }).then(function (r) {
+          return r.text().then(function (text) {
+            var data = {};
+            try { data = text ? JSON.parse(text) : {}; } catch (_) {}
+            return { ok: r.ok, data: data };
+          });
+        }).then(function (res) {
+          if (!res.ok || (res.data && res.data.error)) {
+            alert('エラー: ' + ((res.data && (res.data.message || res.data.error)) || '削除に失敗'));
+            return;
+          }
+          fetchCatsDataSilent();
+        }).catch(function () { alert('削除に失敗しました'); });
+        return;
+      }
       var hrEdit = ev.target.closest && ev.target.closest('.btn-ov-hr-edit');
       if (hrEdit) {
         ev.preventDefault();
@@ -2248,10 +2274,23 @@
     }
     var fc = c.feeding_cat_notes || [];
     for (var fi = 0; fi < fc.length; fi++) {
-      var fn = String(fc[fi] || '').trim();
+      var rawEnt = fc[fi];
+      var noteId = null;
+      var fn = '';
+      if (rawEnt && typeof rawEnt === 'object' && rawEnt.note != null) {
+        fn = String(rawEnt.note || '').trim();
+        if (rawEnt.id != null && rawEnt.id !== '') noteId = String(rawEnt.id);
+      } else {
+        fn = String(rawEnt || '').trim();
+      }
       if (!fn) continue;
-      h += '<div style="font-size:10px;color:var(--text-dim);line-height:1.35;margin:0 0 6px;padding:6px 8px;background:rgba(251,146,60,0.08);border-radius:6px;border-left:3px solid rgba(251,146,60,0.35);">';
-      h += '<span style="font-weight:600;color:#fb923c;">🍽 食事メモ</span><br><span style="color:var(--text-main);">' + esc(fn) + '</span></div>';
+      h += '<div style="font-size:10px;color:var(--text-dim);line-height:1.35;margin:0 0 6px;padding:6px 8px;background:rgba(251,146,60,0.08);border-radius:6px;border-left:3px solid rgba(251,146,60,0.35);position:relative;">';
+      h += '<div style="display:flex;align-items:flex-start;justify-content:space-between;gap:6px;margin-bottom:2px;">';
+      h += '<span style="font-weight:600;color:#fb923c;">🍽 食事メモ</span>';
+      if (noteId) {
+        h += '<button type="button" class="btn btn-outline btn-ov-feed-delmemo" style="font-size:9px;padding:1px 6px;line-height:1.2;flex-shrink:0;color:#f87171;border-color:rgba(248,113,113,0.5);" data-note-id="' + escAttr(noteId) + '" title="このメモを削除">削除</button>';
+      }
+      h += '</div><span style="color:var(--text-main);white-space:pre-wrap;">' + esc(fn) + '</span></div>';
     }
     return h;
   }

@@ -107,6 +107,24 @@
       font-weight: 600;
     }
 
+    .pcc-med-block {
+      grid-column: 1 / -1;
+      border-top: 1px solid rgba(255,255,255,0.06);
+      padding-top: 6px;
+      margin-top: 2px;
+    }
+    .pcc-med-block .pcc-metric-value { margin-bottom: 4px; }
+    .pcc-med-block .ov-med-item-row {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 5px 0;
+      font-size: 13px;
+      cursor: pointer;
+    }
+    .pcc-med-block .ov-med-item-row .ov-med-item-text {
+      flex: 1; min-width: 0; word-break: break-word; line-height: 1.35;
+    }
     .pcc-anomalies {
       margin-top: 8px;
     }
@@ -631,7 +649,13 @@
       overflow-wrap: anywhere;
       line-height: 1.35;
     }
-    .ov-med-item-row .ov-med-log-cb { flex-shrink: 0; margin-top: 2px; }
+    .ov-med-log-cb {
+      flex-shrink: 0;
+      width: 20px; height: 20px;
+      margin: 0;
+      accent-color: #4ade80;
+      cursor: pointer;
+    }
     .ov-med-item-row.med-item-skip { text-decoration: none; opacity: 1; }
     .ov-med-item-row.med-item-skip .ov-med-item-text { text-decoration: line-through; opacity: 0.7; }
 
@@ -925,7 +949,7 @@
   <script src="js/nyagi-boot-overlay.js?v=203"></script>
   <script src="js/login-gate.js?v=203"></script>
   <script src="js/app.js?v=203"></script>
-  <script src="js/cats-overview.js?v=232"></script>
+  <script src="js/cats-overview.js?v=233"></script>
   <script src="js/voice-console.js?v=203"></script>
 </body>
 </html>

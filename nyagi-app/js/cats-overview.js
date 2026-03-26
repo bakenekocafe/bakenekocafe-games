@@ -1648,6 +1648,7 @@
     cardArea.addEventListener('change', function (ev) {
       var cb = ev.target;
       if (!cb || cb.type !== 'checkbox' || !cb.classList || !cb.classList.contains('ov-med-log-cb')) return;
+      if (cb.closest && cb.closest('.pcc-med-block')) return;
       var logId = cb.getAttribute('data-log-id');
       if (!logId) return;
       var wantDone = cb.checked;
@@ -2017,14 +2018,32 @@
       }
       html += '</div>';
 
-      // 投薬
-      html += '<div>';
-      html += '<div class="pcc-metric-label">投薬</div>';
+      // 投薬（チェックボックス付き）
+      html += '<div class="pcc-med-block">';
+      html += '<div class="pcc-metric-label">💊 投薬</div>';
       var meds = c.meds_today || { done: 0, total: 0, items: [] };
       if (meds.total > 0) {
         var medColor = meds.done >= meds.total ? 'score-color-green' : meds.done > 0 ? 'score-color-yellow' : 'score-color-red';
         var medIcon = meds.done >= meds.total ? '✅' : '⏳';
         html += '<div class="pcc-metric-value ' + medColor + '">' + medIcon + ' ' + meds.done + '/' + meds.total + '</div>';
+        var medItems = meds.items || [];
+        for (var mi = 0; mi < medItems.length; mi++) {
+          var mit = medItems[mi];
+          var miDone = mit.status === 'done';
+          var miSkip = mit.status === 'skipped';
+          var miCls = miDone ? 'med-item-done' : miSkip ? 'med-item-skip' : 'med-item-pending';
+          var miLid = mit.log_id != null && mit.log_id !== '' ? String(mit.log_id) : '';
+          if (miLid) {
+            html += '<label class="ov-med-item-row ' + miCls + '">' +
+              '<input type="checkbox" class="ov-med-log-cb" data-log-id="' + escAttr(miLid) + '" ' + (miDone ? 'checked' : '') + '>' +
+              '<span class="ov-med-item-text">' + (mit.slot ? '<b>' + esc(mit.slot) + '</b> ' : '') + esc(mit.name) + (mit.dosage ? ' <small>' + esc(mit.dosage) + '</small>' : '') + '</span>' +
+              '</label>';
+          } else {
+            html += '<div class="ov-med-item-row ' + miCls + '" style="font-size:12px;">' +
+              (miDone ? '✅' : miSkip ? '⏭️' : '🔴') + ' ' + (mit.slot ? '<b>' + esc(mit.slot) + '</b> ' : '') + esc(mit.name) + (mit.dosage ? ' <small>' + esc(mit.dosage) + '</small>' : '') +
+              '</div>';
+          }
+        }
       } else {
         html += '<div class="pcc-metric-value dim">--</div>';
       }
@@ -2077,6 +2096,40 @@
     }
     html += '</div>';
     cardArea.innerHTML = html;
+    bindPerCatMedCheckboxes();
+  }
+
+  var _perCatMedBound = false;
+  function bindPerCatMedCheckboxes() {
+    if (_perCatMedBound) return;
+    _perCatMedBound = true;
+    cardArea.addEventListener('click', function (ev) {
+      if (!ev.target.closest) return;
+      var inMedBlock = ev.target.closest('.pcc-med-block');
+      if (!inMedBlock) return;
+      var anchor = ev.target.closest('a.per-cat-card');
+      if (anchor) { ev.preventDefault(); }
+    });
+    cardArea.addEventListener('change', function (ev) {
+      var cb = ev.target;
+      if (!cb || cb.type !== 'checkbox' || !cb.classList.contains('ov-med-log-cb')) return;
+      var logId = cb.getAttribute('data-log-id');
+      if (!logId) return;
+      var wantDone = cb.checked;
+      function revert() { cb.checked = !wantDone; }
+      cb.disabled = true;
+      var action = wantDone ? 'done' : 'undo';
+      fetch(apiOpsBase() + '/health/medication-logs/' + encodeURIComponent(logId) + '/' + action, {
+        method: 'POST', headers: apiHeaders(), cache: 'no-store', body: JSON.stringify({})
+      })
+        .then(function (r) { return r.json().then(function (d) { return { ok: r.ok, data: d }; }); })
+        .then(function (res) {
+          cb.disabled = false;
+          if (!res.ok || (res.data && res.data.error)) { revert(); alert('エラー: ' + ((res.data && (res.data.message || res.data.error)) || 'HTTPエラー')); return; }
+          fetchCatsDataSilent();
+        })
+        .catch(function () { cb.disabled = false; revert(); alert('投薬の更新に失敗しました'); });
+    });
   }
 
   // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━

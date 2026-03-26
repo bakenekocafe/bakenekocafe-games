@@ -1640,7 +1640,8 @@ function toggleFold(id, btn) {
         try { slots = JSON.parse(med.time_slots || '[]'); } catch (_) {}
         if (slots.length) html += '[' + slots.map(escapeHtml).join('/') + '] ';
         if (med.route) html += '(' + escapeHtml(med.route) + ')&nbsp;';
-        html += '開始: ' + escapeHtml(med.start_date || '');
+        var isCycleFreq = med.frequency === '隔日' || med.frequency === '隔日(A)' || med.frequency === '隔日(B)' || med.frequency === '2日に1回' || med.frequency === '3日に1回' || med.frequency === '週1回';
+        html += (isCycleFreq ? '起算日: ' : '開始: ') + escapeHtml(med.start_date || '');
         if (med.end_date) {
           html += ' 〜 <span style="color:#f87171;">' + escapeHtml(med.end_date) + '</span>';
           var endDt = new Date(med.end_date + 'T00:00:00Z');
@@ -1955,7 +1956,10 @@ function toggleFold(id, btn) {
   window.onFrequencyChange = function () {
     var freq = document.getElementById('msFrequency').value;
     var hint = document.getElementById('msAlternateHint');
+    var cycleHint = document.getElementById('msCycleHint');
     if (hint) hint.style.display = (freq === '隔日(A)' || freq === '隔日(B)') ? '' : 'none';
+    var isCycle = freq === '隔日(A)' || freq === '隔日(B)' || freq === '3日に1回' || freq === '週1回';
+    if (cycleHint) cycleHint.style.display = isCycle ? '' : 'none';
   };
 
   window.toggleEndDate = function (cb) {
@@ -4863,9 +4867,13 @@ function toggleFold(id, btn) {
   var _DOW_MAP = { '日': 0, '月': 1, '火': 2, '水': 3, '木': 4, '金': 5, '土': 6 };
 
   function _shouldDose(freq, dateStr, startDate) {
-    if (!freq || freq === '毎日') return true;
+    if (!freq || freq === '毎日' || freq === '1日1回' || freq === '1日2回' || freq === '1日3回') return true;
     if (freq === '必要時') return false;
     var d = new Date(dateStr + 'T00:00:00Z');
+    if (freq === '月末のみ') {
+      var lastDay = new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth() + 1, 0)).getUTCDate();
+      return d.getUTCDate() === lastDay;
+    }
     if (freq.indexOf('週:') === 0) {
       var days = freq.slice(2).split(',');
       var dow = d.getUTCDay();
@@ -4876,10 +4884,17 @@ function toggleFold(id, btn) {
       var dayOfMonth = parseInt(freq.slice(3), 10);
       return d.getUTCDate() === dayOfMonth;
     }
-    var daysBetween = Math.round((d - new Date(startDate + 'T00:00:00Z')) / 86400000);
+    var daysBetween = Math.round((d - new Date((startDate || dateStr) + 'T00:00:00Z')) / 86400000);
     if (daysBetween < 0) return false;
     if (freq === '隔日' || freq === '隔日(A)') return daysBetween % 2 === 0;
     if (freq === '隔日(B)') return daysBetween % 2 === 1;
+    if (freq === '2日に1回') return daysBetween % 2 === 0;
+    if (freq === '3日に1回') return daysBetween % 3 === 0;
+    if (freq === '週1回') return daysBetween % 7 === 0;
+    if (freq === '週3回') {
+      var dow2 = d.getUTCDay();
+      return dow2 === 1 || dow2 === 3 || dow2 === 5;
+    }
     return true;
   }
 
@@ -4895,7 +4910,6 @@ function toggleFold(id, btn) {
 
   function formatFreqLabel(freq) {
     if (!freq) return '毎日';
-    if (freq === '週3回') return '週3回（月水金）';
     if (freq.indexOf('週:') === 0) return '毎週 ' + freq.slice(2);
     if (freq.indexOf('月1:') === 0) return '毎月' + freq.slice(3) + '日';
     return freq;
@@ -5490,8 +5504,13 @@ function toggleFold(id, btn) {
     var val = document.getElementById('mpFrequency') ? document.getElementById('mpFrequency').value : '';
     var wk = document.getElementById('mpFreqWeekly');
     var mo = document.getElementById('mpFreqMonthly');
+    var altHint = document.getElementById('mpAlternateHint');
+    var cycleHint = document.getElementById('mpCycleHint');
     if (wk) wk.style.display = val === 'weekly' ? 'block' : 'none';
     if (mo) mo.style.display = val === 'monthly' ? 'block' : 'none';
+    if (altHint) altHint.style.display = (val === '隔日(A)' || val === '隔日(B)') ? '' : 'none';
+    var isCycle = val === '隔日(A)' || val === '隔日(B)' || val === '3日に1回' || val === '週1回';
+    if (cycleHint) cycleHint.style.display = isCycle ? '' : 'none';
   };
 
   function loadMedPresetItems(presetId) {

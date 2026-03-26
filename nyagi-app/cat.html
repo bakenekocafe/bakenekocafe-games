@@ -1377,6 +1377,9 @@
         <div id="msAlternateHint" class="form-hint" style="display:none;margin-top:4px;font-size:11px;color:#ff9800;">
           ⚠ 交互投薬: 同じ猫に A日 と B日 で別の薬を登録してください
         </div>
+        <div id="msCycleHint" class="form-hint" style="display:none;margin-top:4px;font-size:11px;color:#2196f3;">
+          📅 起算日 = 開始日（開始日→投与、以降N日間隔で投与）
+        </div>
       </div>
 
       <div class="form-group">
@@ -1486,11 +1489,18 @@
           <label class="form-label">頻度</label>
           <select id="mpFrequency" class="form-select" onchange="onMpFreqChange()">
             <option value="毎日">毎日</option>
-            <option value="隔日">隔日</option>
+            <option value="隔日(A)">隔日 — A日</option>
+            <option value="隔日(B)">隔日 — B日</option>
+            <option value="3日に1回">3日に1回</option>
+            <option value="週3回">週3回（月・水・金）</option>
+            <option value="週1回">週1回</option>
             <option value="weekly">毎週（曜日指定）</option>
             <option value="monthly">月1回（日付指定）</option>
+            <option value="月末のみ">月末のみ</option>
             <option value="必要時">必要時</option>
           </select>
+          <div id="mpAlternateHint" class="form-hint" style="display:none;margin-top:4px;font-size:11px;color:#ff9800;">⚠ 交互投薬: 同じプリセット内に A日 と B日 で別の薬を登録してください</div>
+          <div id="mpCycleHint" class="form-hint" style="display:none;margin-top:4px;font-size:11px;color:#2196f3;">📅 起算日 = プリセット適用日（適用日→投与、以降N日間隔）</div>
           <div id="mpFreqWeekly" style="display:none;margin-top:6px;">
             <div class="ms-slot-checks">
               <label class="ms-check"><input type="checkbox" name="mpDow" value="月"> 月</label>

@@ -950,11 +950,17 @@
         <input type="number" id="ovQfOfferedG" class="form-input" step="0.1" min="0">
       </div>
       <div class="form-group">
+        <label class="form-label">皿に残った量 (g)</label>
+        <input type="number" id="ovQfLeftG" class="form-input" step="0.1" min="0" placeholder="空欄 or 未入力＝0%未確認">
+        <div class="form-hint" style="font-size:11px;color:var(--text-dim);margin-top:4px;line-height:1.4;">空欄のまま「記録する」＝摂取0%（未確認）。残りgを入れるとその分から摂取率を計算します。完食は残り <b>0</b>。「とりあえずあげた」も同じく未確認として記録します。</div>
+      </div>
+      <div class="form-group">
         <label class="form-label">あげた時刻（JST）</label>
         <input type="time" id="ovQfServedTime" class="form-input" step="60">
       </div>
-      <div class="modal-actions">
+      <div class="modal-actions" style="flex-wrap:wrap;gap:8px;">
         <button type="button" class="btn btn-outline" id="ovCloseQfBtn">キャンセル</button>
+        <button type="button" class="btn btn-outline" id="ovSubmitQfDeferBtn" title="摂取率はあとから🥄残しやログ編集で入力">とりあえずあげた</button>
         <button type="button" class="btn btn-primary" id="ovSubmitQfBtn">記録する</button>
       </div>
     </div>

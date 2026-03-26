@@ -820,6 +820,24 @@ function toggleFold(id, btn) {
     return (recordType || '') + '|' + String(detailLabel || '');
   }
 
+  /** ブラシ・アゴ・耳・お尻・目ヤニ拭き（爪切り・肉球は除外）— ワンタップまとめ記録用 */
+  var CARE_GROOMING_BUNDLE_SPECS = [
+    { record_type: 'care', label: 'ブラシ' },
+    { record_type: 'care', label: 'アゴ' },
+    { record_type: 'care', label: '耳' },
+    { record_type: 'care', label: 'お尻' },
+    { record_type: 'eye_discharge', label: '目ヤニ拭き' },
+  ];
+
+  function careGroomingBundleRank(recordType, label) {
+    var k = careQuickMapKey(recordType, label);
+    for (var i = 0; i < CARE_GROOMING_BUNDLE_SPECS.length; i++) {
+      var s = CARE_GROOMING_BUNDLE_SPECS[i];
+      if (careQuickMapKey(s.record_type, s.label) === k) return i;
+    }
+    return 999;
+  }
+
   function htmlAttr(s) {
     return String(s == null ? '' : s)
       .replace(/&/g, '&amp;')
@@ -1001,6 +1019,24 @@ function toggleFold(id, btn) {
       else if (doneCt === 0) sumCls += ' care-today-summary--none';
       else sumCls += ' care-today-summary--partial';
 
+      var groomKeys = {};
+      for (var gki = 0; gki < CARE_GROOMING_BUNDLE_SPECS.length; gki++) {
+        var gks = CARE_GROOMING_BUNDLE_SPECS[gki];
+        groomKeys[careQuickMapKey(gks.record_type, gks.label)] = true;
+      }
+      var groomTypes = [];
+      var otherTypes = [];
+      for (var tix = 0; tix < types.length; tix++) {
+        var tx = types[tix];
+        var txk = careQuickMapKey(tx.record_type || 'care', tx.label || '');
+        if (groomKeys[txk]) groomTypes.push(tx);
+        else otherTypes.push(tx);
+      }
+      groomTypes.sort(function (a, b) {
+        return careGroomingBundleRank(a.record_type || 'care', a.label || '') -
+          careGroomingBundleRank(b.record_type || 'care', b.label || '');
+      });
+
       html += '<div class="care-today-panel">';
       html += '<div class="' + sumCls + '">';
       html += '<span class="care-today-summary-main">今日のケア <b>' + doneCt + '</b> / ' + totalCt + ' 項目</span>';
@@ -1010,40 +1046,83 @@ function toggleFold(id, btn) {
         html += '<span class="care-today-summary-ok">すべて記録済み</span>';
       }
       html += '</div>';
-      html += '<p class="care-today-help">未実施の行は左の□をタップすると記録されます（記録者・時刻も保存）。チェックを外すと取り消し。</p>';
-      html += '<div class="care-today-rows">';
-      for (var ti = 0; ti < types.length; ti++) {
-        var ct = types[ti];
-        var rt = ct.record_type || 'care';
-        var lab = ct.label || '';
-        var qk = careQuickMapKey(rt, lab);
-        var ent = todayMap[qk];
-        var chk = ent && ent.done;
-        var rid = (ent && ent.done) ? ent.id : '';
-        var escLab = escapeHtml(lab);
-        var rowCls = 'care-today-item' + (chk ? ' care-today-item--done' : ' care-today-item--pending');
-        var hint = '';
-        if (chk) {
-          var hm = [];
-          if (ent.recorded_time) hm.push(ent.recorded_time);
-          if (ent.recorder_name) hm.push(ent.recorder_name);
-          else if (ent.recorded_by) hm.push(String(ent.recorded_by));
-          hint = hm.length ? escapeHtml(hm.join(' · ')) : '記録済み';
-        } else {
-          hint = '未実施 — タップで記録';
+      html += '<p class="care-today-help">下の「まとめて記録」でブラシ・アゴ・耳・お尻・目ヤニ拭きの5項目を<strong>一括で実施済み</strong>にします（チェック不要）。爪切り・肉球はその下の行の□から個別に記録・取り消しできます。</p>';
+      html += '<div class="care-bundle-actions" style="margin:10px 0 14px;padding:12px;background:rgba(167,139,250,0.1);border-radius:10px;border:1px solid rgba(167,139,250,0.35);">';
+      html += '<button type="button" class="btn btn-primary" id="careGroomingBundleBtn" onclick="completeCareGroomingBundle()" style="width:100%;max-width:100%;font-size:14px;padding:12px 14px;font-weight:800;">🪮 5項目まとめて記録（ブラシ・アゴ・耳・お尻・目ヤニ）</button>';
+      html += '<p class="dim" style="font-size:11px;margin:8px 0 0;line-height:1.45;">本日まだ「済」になっていない5項目だけ追加します。</p>';
+      html += '</div>';
+      if (groomTypes.length > 0) {
+        html += '<div class="care-today-divider">グルーミング5項目（状態表示・上のボタンで記録）</div>';
+        html += '<div class="care-today-rows">';
+        for (var gi = 0; gi < groomTypes.length; gi++) {
+          var ctg = groomTypes[gi];
+          var rtg = ctg.record_type || 'care';
+          var labg = ctg.label || '';
+          var qkg = careQuickMapKey(rtg, labg);
+          var entg = todayMap[qkg];
+          var chkg = entg && entg.done;
+          var escLabg = escapeHtml(labg);
+          var rowClsg = 'care-today-item care-today-item--readonly' + (chkg ? ' care-today-item--done' : ' care-today-item--pending');
+          var hintg = '';
+          if (chkg) {
+            var hmg = [];
+            if (entg.recorded_time) hmg.push(entg.recorded_time);
+            if (entg.recorder_name) hmg.push(entg.recorder_name);
+            else if (entg.recorded_by) hmg.push(String(entg.recorded_by));
+            hintg = hmg.length ? escapeHtml(hmg.join(' · ')) : '記録済み';
+          } else {
+            hintg = '未実施 — 上のまとめて記録で一括登録';
+          }
+          var pillClsg = chkg ? 'care-today-item-pill care-today-item-pill--done' : 'care-today-item-pill care-today-item-pill--wait';
+          var pillTxtg = chkg ? '済' : '未';
+          html += '<div class="' + rowClsg + '">';
+          html += '<span class="care-today-cb-spacer" aria-hidden="true"></span>';
+          html += '<span class="care-today-item-main">';
+          html += '<span class="care-today-item-title">' + escLabg + '</span>';
+          html += '<span class="care-today-item-hint">' + hintg + '</span>';
+          html += '</span>';
+          html += '<span class="' + pillClsg + '">' + pillTxtg + '</span>';
+          html += '</div>';
         }
-        var pillCls = chk ? 'care-today-item-pill care-today-item-pill--done' : 'care-today-item-pill care-today-item-pill--wait';
-        var pillTxt = chk ? '済' : '未';
-        html += '<label class="' + rowCls + '">';
-        html += '<input type="checkbox" class="care-today-cb"' + (chk ? ' checked' : '') + ' data-record-type="' + htmlAttr(rt) + '" data-details="' + htmlAttr(lab) + '" data-record-id="' + htmlAttr(rid) + '" onchange="toggleCareQuick(this)">';
-        html += '<span class="care-today-item-main">';
-        html += '<span class="care-today-item-title">' + escLab + '</span>';
-        html += '<span class="care-today-item-hint">' + hint + '</span>';
-        html += '</span>';
-        html += '<span class="' + pillCls + '">' + pillTxt + '</span>';
-        html += '</label>';
+        html += '</div>';
       }
-      html += '</div></div>';
+      if (otherTypes.length > 0) {
+        html += '<div class="care-today-divider">爪切り・肉球（□で個別記録）</div>';
+        html += '<div class="care-today-rows">';
+        for (var ti = 0; ti < otherTypes.length; ti++) {
+          var ct = otherTypes[ti];
+          var rt = ct.record_type || 'care';
+          var lab = ct.label || '';
+          var qk = careQuickMapKey(rt, lab);
+          var ent = todayMap[qk];
+          var chk = ent && ent.done;
+          var rid = (ent && ent.done) ? ent.id : '';
+          var escLab = escapeHtml(lab);
+          var rowCls = 'care-today-item' + (chk ? ' care-today-item--done' : ' care-today-item--pending');
+          var hint = '';
+          if (chk) {
+            var hm = [];
+            if (ent.recorded_time) hm.push(ent.recorded_time);
+            if (ent.recorder_name) hm.push(ent.recorder_name);
+            else if (ent.recorded_by) hm.push(String(ent.recorded_by));
+            hint = hm.length ? escapeHtml(hm.join(' · ')) : '記録済み';
+          } else {
+            hint = '未実施 — タップで記録';
+          }
+          var pillCls = chk ? 'care-today-item-pill care-today-item-pill--done' : 'care-today-item-pill care-today-item-pill--wait';
+          var pillTxt = chk ? '済' : '未';
+          html += '<label class="' + rowCls + '">';
+          html += '<input type="checkbox" class="care-today-cb"' + (chk ? ' checked' : '') + ' data-record-type="' + htmlAttr(rt) + '" data-details="' + htmlAttr(lab) + '" data-record-id="' + htmlAttr(rid) + '" onchange="toggleCareQuick(this)">';
+          html += '<span class="care-today-item-main">';
+          html += '<span class="care-today-item-title">' + escLab + '</span>';
+          html += '<span class="care-today-item-hint">' + hint + '</span>';
+          html += '</span>';
+          html += '<span class="' + pillCls + '">' + pillTxt + '</span>';
+          html += '</label>';
+        }
+        html += '</div>';
+      }
+      html += '</div>';
     }
 
     if (records.length === 0) {
@@ -1112,6 +1191,110 @@ function toggleFold(id, btn) {
     html += '</div>';
     careArea.innerHTML = html;
   }
+
+  window.completeCareGroomingBundle = function () {
+    var btn = document.getElementById('careGroomingBundleBtn');
+    if (btn && btn.getAttribute('data-care-bundle-busy') === '1') return;
+    if (btn) {
+      btn.setAttribute('data-care-bundle-busy', '1');
+      btn.disabled = true;
+    }
+    var today = todayJstYmd();
+    var catParam = encodeURIComponent(catId);
+    Promise.all([
+      fetch(API_BASE + '/health/records?cat_id=' + catParam + '&type=care&limit=120', { headers: apiHeaders(), cache: 'no-store' }).then(function (r) { return r.json(); }),
+      fetch(API_BASE + '/health/records?cat_id=' + catParam + '&type=eye_discharge&limit=120', { headers: apiHeaders(), cache: 'no-store' }).then(function (r) { return r.json(); }),
+    ]).then(function (results) {
+      var careRecs = (results[0] && results[0].records) ? results[0].records : [];
+      var eyeRecs = (results[1] && results[1].records) ? results[1].records : [];
+      var merged = careRecs.slice();
+      for (var ei = 0; ei < eyeRecs.length; ei++) {
+        eyeRecs[ei].details = '目ヤニ拭き';
+        merged.push(eyeRecs[ei]);
+      }
+      var todayMap = buildTodayCareQuickMap(merged, today);
+      var pending = [];
+      for (var pi = 0; pi < CARE_GROOMING_BUNDLE_SPECS.length; pi++) {
+        var sp = CARE_GROOMING_BUNDLE_SPECS[pi];
+        var qk = careQuickMapKey(sp.record_type, sp.label);
+        var ent = todayMap[qk];
+        if (!ent || !ent.done) pending.push(sp);
+      }
+      if (pending.length === 0) {
+        if (btn) {
+          btn.disabled = false;
+          btn.removeAttribute('data-care-bundle-busy');
+        }
+        alert('ブラシ・アゴ・耳・お尻・目ヤニ拭きは本日すでにすべて記録済みです');
+        return;
+      }
+      var idx = 0;
+      function finishAll() {
+        if (btn) {
+          btn.disabled = false;
+          btn.removeAttribute('data-care-bundle-busy');
+        }
+        loadCareSection();
+      }
+      function postNext() {
+        if (idx >= pending.length) {
+          finishAll();
+          return;
+        }
+        var sp = pending[idx];
+        var body = {
+          cat_id: catId,
+          record_type: sp.record_type,
+          record_date: today,
+          value: '記録',
+          details: sp.label,
+          recorded_time: nowJstHm(),
+        };
+        fetch(API_BASE + '/health/records', {
+          method: 'POST',
+          headers: apiHeaders(),
+          cache: 'no-store',
+          body: JSON.stringify(body),
+        }).then(function (r) { return r.json(); })
+          .then(function (data) {
+            if (data.error) {
+              if (btn) {
+                btn.disabled = false;
+                btn.removeAttribute('data-care-bundle-busy');
+              }
+              alert('エラー: ' + (data.message || data.error));
+              loadCareSection();
+              return;
+            }
+            var newId = data.record && data.record.id;
+            if (newId) {
+              deleteCareRecordsForSlotExcept(today, sp.record_type, sp.label, newId, function () {
+                idx++;
+                postNext();
+              });
+            } else {
+              idx++;
+              postNext();
+            }
+          })
+          .catch(function () {
+            if (btn) {
+              btn.disabled = false;
+              btn.removeAttribute('data-care-bundle-busy');
+            }
+            alert('ケア記録の保存に失敗しました');
+            loadCareSection();
+          });
+      }
+      postNext();
+    }).catch(function () {
+      if (btn) {
+        btn.disabled = false;
+        btn.removeAttribute('data-care-bundle-busy');
+      }
+      alert('記録の取得に失敗しました');
+    });
+  };
 
   window.toggleCareQuick = function (el) {
     if (!el || el.getAttribute('data-care-busy') === '1') return;
@@ -2534,6 +2717,9 @@ function toggleFold(id, btn) {
         h += '<span style="font-size:12px;color:#4ade80;">✅ 完食</span>';
         h += '<button class="btn-edit-small" onclick="openLeftoverEdit(' + log.id + ',' + offG + ')" title="修正" style="font-size:11px;">✏️</button>';
         h += '</div>';
+      } else if (log && (log.eaten_pct === null || log.eaten_pct === undefined)) {
+        h += '<div style="font-size:11px;color:#fbbf24;margin-bottom:6px;">摂取 0%（未確認）</div>';
+        h += renderLeftoverControls(log.id, offG, 'log');
       } else if (log) {
         h += renderLeftoverControls(log.id, offG, 'log');
       } else if (plan) {
@@ -2804,6 +2990,10 @@ function toggleFold(id, btn) {
             }
             if (isFed && fedLog.eaten_pct !== null && fedLog.eaten_pct !== undefined && fedLog.eaten_pct < 100) {
               html += '<div style="font-size:10px;color:#facc15;">食べた量: ' + fedLog.eaten_pct + '%</div>';
+            } else if (isFed && (fedLog.eaten_pct === null || fedLog.eaten_pct === undefined)) {
+              html += '<div style="font-size:10px;color:#fbbf24;">食べた量: 0%（未確認・🍽で入力）</div>';
+            } else if (isFed && fedLog.eaten_pct === 100) {
+              html += '<div style="font-size:10px;color:#4ade80;">食べた量: 100%（完食）</div>';
             }
             html += '</div>';
 
@@ -2850,6 +3040,8 @@ function toggleFold(id, btn) {
         if (l.eaten_pct !== null && l.eaten_pct !== undefined) {
           var eatColor = l.eaten_pct >= 80 ? '#4ade80' : l.eaten_pct >= 50 ? '#facc15' : '#f87171';
           html += '<span style="font-size:12px;color:' + eatColor + ';">' + l.eaten_pct + '%</span>';
+        } else {
+          html += '<span style="font-size:12px;color:#fbbf24;">0%</span>';
         }
         html += '<button type="button" class="btn-edit-small" onclick="openFeedingLogModalForEdit(' + l.id + ')" title="編集">✏️</button>';
         html += '</span></div>';
@@ -2944,15 +3136,20 @@ function toggleFold(id, btn) {
   };
 
   var _cdQfPlanId = null;
+  var _cdQfPlanAmountG = null;
 
   window.openQuickFedModal = function (planId, foodName, amountG) {
     _cdQfPlanId = planId;
+    var ag = amountG != null && !isNaN(Number(amountG)) ? Number(amountG) : NaN;
+    _cdQfPlanAmountG = !isNaN(ag) && ag > 0 ? ag : null;
     var t = document.getElementById('cdQfTitle');
     if (t) t.textContent = '🍚 あげた記録';
     var fn = document.getElementById('cdQfFoodName');
     if (fn) fn.textContent = foodName || '—';
     var og = document.getElementById('cdQfOfferedG');
     if (og) og.value = amountG != null && !isNaN(Number(amountG)) ? String(amountG) : '';
+    var lfg = document.getElementById('cdQfLeftG');
+    if (lfg) lfg.value = '';
     var qfst = document.getElementById('cdQfServedTime');
     if (qfst) qfst.value = nowJstHm();
     var m = document.getElementById('cdQuickFedModal');
@@ -2961,19 +3158,39 @@ function toggleFold(id, btn) {
 
   window.closeCdQuickFedModal = function () {
     _cdQfPlanId = null;
+    _cdQfPlanAmountG = null;
     var modal = document.getElementById('cdQuickFedModal');
     if (modal) modal.classList.remove('open');
   };
 
-  window.submitCdQuickFed = function () {
+  window.submitCdQuickFed = function (deferIntake) {
     if (!_cdQfPlanId) return;
+    deferIntake = !!deferIntake;
     var og = document.getElementById('cdQfOfferedG');
-    var offeredG = og && og.value ? parseFloat(og.value) : null;
+    var offeredG = og && String(og.value).trim() !== '' ? parseFloat(og.value) : null;
     var qfst = document.getElementById('cdQfServedTime');
     var st = qfst && qfst.value ? qfst.value.trim() : '';
     if (!st) st = nowJstHm();
     var payload = { log_date: todayJstYmd(), served_time: st };
     if (offeredG != null && !isNaN(offeredG) && offeredG > 0) payload.offered_g = offeredG;
+    if (!deferIntake) {
+      var lfin = document.getElementById('cdQfLeftG');
+      var leftStr = lfin && lfin.value != null ? String(lfin.value).trim() : '';
+      // 空欄＝摂取未確認（leftover なし → eaten_pct null）。0 入力＝完食(100%)。
+      if (leftStr !== '') {
+        var leftG = parseFloat(leftStr);
+        if (isNaN(leftG) || leftG < 0) {
+          alert('残り量は0以上の数値にしてください');
+          return;
+        }
+        var effectiveOff = offeredG != null && !isNaN(offeredG) && offeredG > 0 ? offeredG : _cdQfPlanAmountG;
+        if (effectiveOff != null && leftG > effectiveOff) {
+          alert('残りが提供量(' + effectiveOff + 'g)を超えています');
+          return;
+        }
+        payload.leftover_g = leftG;
+      }
+    }
     fetch(API_BASE + '/feeding/plans/' + encodeURIComponent(_cdQfPlanId) + '/fed', {
       method: 'POST',
       headers: apiHeaders(), cache: 'no-store',
@@ -3410,12 +3627,42 @@ function toggleFold(id, btn) {
     var desc = prompt('説明（任意・プリセット全体のメモ）', '');
     fetch(API_BASE + '/feeding/presets', {
       method: 'POST', headers: apiHeaders(), cache: 'no-store',
-      body: JSON.stringify({ name: name, description: desc || null, location_id: loc })
-    }).then(function (r) { return r.json(); })
-    .then(function (data) {
-      if (data.error) { alert('エラー: ' + (data.message || data.error)); return; }
+      body: JSON.stringify({
+        name: name,
+        description: desc != null && String(desc).trim() !== '' ? String(desc) : null,
+        location_id: loc,
+      }),
+    }).then(function (r) {
+      return r.text().then(function (text) {
+        var data = {};
+        if (text) {
+          try {
+            data = JSON.parse(text);
+          } catch (_) {
+            alert('作成に失敗しました（応答の解析エラー） HTTP ' + r.status);
+            return null;
+          }
+        }
+        if (!r.ok) {
+          alert('エラー: ' + (data.message || data.error || ('HTTP ' + r.status)));
+          return null;
+        }
+        return data;
+      });
+    }).then(function (data) {
+      if (!data) return;
+      if (data.error) {
+        alert('エラー: ' + (data.message || data.error));
+        return;
+      }
+      if (!data.preset || data.preset.id == null) {
+        alert('エラー: プリセット情報が返りませんでした');
+        return;
+      }
       editPresetItems(data.preset.id);
-    }).catch(function () { alert('作成に失敗しました'); });
+    }).catch(function (e) {
+      alert('作成に失敗しました: ' + (e && e.message ? e.message : 'network'));
+    });
   };
 
   window.editPresetItems = function (presetId) {
@@ -4989,16 +5236,16 @@ function toggleFold(id, btn) {
           var t = tasks[i];
           var isDone = t.status === 'done' || t.status === 'skipped';
           var icon = t.status === 'done' ? '✅' : t.status === 'skipped' ? '⏭️' : '⬜';
-          html += '<div style="display:flex;align-items:center;gap:8px;padding:6px 0;border-bottom:1px solid var(--border);' + (isDone ? 'opacity:0.5;' : '') + '">';
-          html += '<span style="font-size:14px;">' + icon + '</span>';
-          html += '<div style="flex:1;min-width:0;">';
-          html += '<div style="font-size:13px;' + (isDone ? 'text-decoration:line-through;' : '') + '">' + escapeHtml(t.title) + '</div>';
+          html += '<div class="cat-task-row' + (isDone ? ' cat-task-row--done' : '') + '">';
+          html += '<span class="cat-task-icon" aria-hidden="true">' + icon + '</span>';
+          html += '<div class="cat-task-main">';
+          html += '<div class="cat-task-title"' + (isDone ? ' style="text-decoration:line-through;"' : '') + '>' + escapeHtml(t.title) + '</div>';
           if (t.assigned_name) {
-            html += '<div style="font-size:11px;color:var(--text-dim);">担当: ' + escapeHtml(t.assigned_name) + '</div>';
+            html += '<div class="cat-task-assignee">担当: ' + escapeHtml(t.assigned_name) + '</div>';
           }
           html += '</div>';
           if (!isDone) {
-            html += '<button class="btn btn-sm" style="font-size:11px;padding:2px 8px;" onclick="catTaskDone(' + t.id + ')">完了</button>';
+            html += '<button type="button" class="btn btn-primary btn-sm" onclick="catTaskDone(' + t.id + ')">完了</button>';
           }
           html += '</div>';
         }

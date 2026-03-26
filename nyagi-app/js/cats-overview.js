@@ -79,8 +79,8 @@
   var OPT_SLOT = '<option value="">帯</option><option value="朝">朝</option><option value="昼">昼</option><option value="夜">夜</option><option value="途中">途中</option>';
   var OPT_CARE_TYPE = '<option value="">項目</option><option value="care:ブラシ">ブラシ</option><option value="care:アゴ">アゴ</option><option value="care:耳">耳</option><option value="care:爪切り">爪切り</option><option value="care:肉球">肉球</option><option value="care:お尻">お尻</option><option value="eye_discharge:目ヤニ拭き">目ヤニ拭き</option>';
   var OPT_CARE_DONE = '<option value="1">実施</option><option value="0">スキップ</option>';
-  /** 項目ごと「まとめ記録」対象（爪切り・肉球は除外。個別フォームから入力） */
-  var OV_CARE_BULK_SPECS = [
+  /** ワンタップまとめ記録（ブラシ・アゴ・耳・お尻・目ヤニ）。爪切り・肉球は個別フォームから */
+  var OV_CARE_BUNDLE_SPECS = [
     { value: 'care:ブラシ', label: 'ブラシ' },
     { value: 'care:アゴ', label: 'アゴ' },
     { value: 'care:耳', label: '耳' },
@@ -566,15 +566,20 @@
   }
 
   var _ovQfPlanId = null;
+  var _ovQfPlanAmountG = null;
 
   function ovOpenQuickFedModal(planId, foodName, amountG) {
     _ovQfPlanId = planId;
+    var amgParse = amountG != null && String(amountG).trim() !== '' ? parseFloat(amountG) : NaN;
+    _ovQfPlanAmountG = !isNaN(amgParse) && amgParse > 0 ? amgParse : null;
     var t = document.getElementById('ovQfTitle');
     if (t) t.textContent = '🍚 あげた記録';
     var fn = document.getElementById('ovQfFoodName');
     if (fn) fn.textContent = foodName || '—';
     var og = document.getElementById('ovQfOfferedG');
     if (og) og.value = amountG || '';
+    var lfg = document.getElementById('ovQfLeftG');
+    if (lfg) lfg.value = '';
     var qfst = document.getElementById('ovQfServedTime');
     if (qfst) qfst.value = nowJstHm();
     var m = document.getElementById('ovQuickFedModal');
@@ -583,18 +588,38 @@
 
   function ovCloseQuickFedModal() {
     _ovQfPlanId = null;
+    _ovQfPlanAmountG = null;
     var m = document.getElementById('ovQuickFedModal');
     if (m) m.classList.remove('open');
   }
 
-  function ovSubmitQuickFed() {
+  function ovSubmitQuickFed(deferIntake) {
     if (!_ovQfPlanId) return;
+    deferIntake = !!deferIntake;
     var og = document.getElementById('ovQfOfferedG');
-    var offeredG = og && og.value ? parseFloat(og.value) : null;
+    var offeredG = og && String(og.value).trim() !== '' ? parseFloat(og.value) : null;
     var qfst2 = document.getElementById('ovQfServedTime');
     var stQf = qfst2 && qfst2.value ? qfst2.value : nowJstHm();
     var payload = { log_date: todayJstYmd(), served_time: stQf };
-    if (offeredG != null && offeredG > 0) payload.offered_g = offeredG;
+    if (offeredG != null && !isNaN(offeredG) && offeredG > 0) payload.offered_g = offeredG;
+    if (!deferIntake) {
+      var lfin = document.getElementById('ovQfLeftG');
+      var leftStr = lfin && lfin.value != null ? String(lfin.value).trim() : '';
+      // 空欄＝摂取未確認（leftover なし → eaten_pct null）。0 入力＝完食(100%)。
+      if (leftStr !== '') {
+        var leftG = parseFloat(leftStr);
+        if (isNaN(leftG) || leftG < 0) {
+          alert('残り量は0以上の数値にしてください');
+          return;
+        }
+        var effectiveOff = offeredG != null && !isNaN(offeredG) && offeredG > 0 ? offeredG : _ovQfPlanAmountG;
+        if (effectiveOff != null && leftG > effectiveOff) {
+          alert('残りが提供量(' + effectiveOff + 'g)を超えています');
+          return;
+        }
+        payload.leftover_g = leftG;
+      }
+    }
     fetch(feedingApiBase() + '/plans/' + encodeURIComponent(_ovQfPlanId) + '/fed', {
       method: 'POST',
       headers: apiHeaders(),
@@ -619,7 +644,9 @@
     var og = document.getElementById('ovElOfferedG');
     if (og) og.value = offeredG || '';
     var ep = document.getElementById('ovElEatenPct');
-    if (ep) ep.value = eatenPct || '100';
+    if (ep) {
+      ep.value = eatenPct != null && String(eatenPct).trim() !== '' && String(eatenPct) !== 'undefined' ? String(eatenPct) : '';
+    }
     var elst = document.getElementById('ovElServedTime');
     if (elst) elst.value = ovFmtFedServedTime(servedTimeRaw) || nowJstHm();
     var m = document.getElementById('ovEditLogModal');
@@ -772,6 +799,8 @@
       html += '<div style="font-size:11px;color:#4ade80;margin-bottom:4px;">✅ ' + log.eaten_pct + '% 食べた（' + ateG + 'g） / 残り ' + leftG + 'g</div>';
     } else if (log && log.eaten_pct === 100) {
       html += '<div style="font-size:11px;color:#4ade80;margin-bottom:4px;">✅ 完食</div>';
+    } else if (log && (log.eaten_pct === null || log.eaten_pct === undefined)) {
+      html += '<div style="font-size:11px;color:#fbbf24;margin-bottom:4px;">摂取 0%（未確認）</div>';
     }
 
     html += '<div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;margin-top:4px;">';
@@ -984,7 +1013,9 @@
     var cqf = document.getElementById('ovCloseQfBtn');
     if (cqf && !cqf._ovBound) { cqf._ovBound = true; cqf.addEventListener('click', ovCloseQuickFedModal); }
     var sqf = document.getElementById('ovSubmitQfBtn');
-    if (sqf && !sqf._ovBound) { sqf._ovBound = true; sqf.addEventListener('click', ovSubmitQuickFed); }
+    if (sqf && !sqf._ovBound) { sqf._ovBound = true; sqf.addEventListener('click', function () { ovSubmitQuickFed(false); }); }
+    var sqfd = document.getElementById('ovSubmitQfDeferBtn');
+    if (sqfd && !sqfd._ovBound) { sqfd._ovBound = true; sqfd.addEventListener('click', function () { ovSubmitQuickFed(true); }); }
     var cel = document.getElementById('ovCloseElBtn');
     if (cel && !cel._ovBound) { cel._ovBound = true; cel.addEventListener('click', ovCloseEditLogModal); }
     var sel = document.getElementById('ovSubmitElBtn');
@@ -1076,19 +1107,47 @@
         method: 'POST',
         headers: apiHeaders(),
         cache: 'no-store',
-        body: JSON.stringify({ name: name, description: desc || null, location_id: loc, species: _ovFeedCtx.species || 'cat' }),
-      }).then(function (r) { return r.json(); })
-        .then(function (data) {
-          if (data.error) { alert('エラー: ' + (data.message || data.error)); return; }
-          if (data.preset && data.preset.id) {
-            _ovPendingPresetItem = String(data.preset.id);
-            ovOpenAddPlanModal(_ovFeedCtx.catId, 'morning', null, { preservePendingPreset: true });
-            var t0 = document.querySelector('#ovAddPlanModal .modal-title');
-            if (t0) t0.innerHTML = '📋 プリセットにフード追加 <span class="dim">' + esc(name) + '</span>';
-          } else {
-            ovFillPresetManageModal(loc);
+        body: JSON.stringify({
+          name: name,
+          description: desc != null && String(desc).trim() !== '' ? String(desc) : null,
+          location_id: loc,
+          species: _ovFeedCtx.species || 'cat',
+        }),
+      }).then(function (r) {
+        return r.text().then(function (text) {
+          var data = {};
+          if (text) {
+            try {
+              data = JSON.parse(text);
+            } catch (_) {
+              alert('作成に失敗しました（応答の解析エラー） HTTP ' + r.status);
+              return null;
+            }
           }
-        }).catch(function () { alert('作成に失敗しました'); });
+          if (!r.ok) {
+            alert('エラー: ' + (data.message || data.error || ('HTTP ' + r.status)));
+            return null;
+          }
+          return data;
+        });
+      }).then(function (data) {
+        if (!data) return;
+        if (data.error) {
+          alert('エラー: ' + (data.message || data.error));
+          return;
+        }
+        if (data.preset && data.preset.id) {
+          _ovPendingPresetItem = String(data.preset.id);
+          ovOpenAddPlanModal(_ovFeedCtx.catId, 'morning', null, { preservePendingPreset: true });
+          var t0 = document.querySelector('#ovAddPlanModal .modal-title');
+          if (t0) t0.innerHTML = '📋 プリセットにフード追加 <span class="dim">' + esc(name) + '</span>';
+        } else {
+          alert('エラー: プリセット情報が返りませんでした');
+          ovFillPresetManageModal(loc);
+        }
+      }).catch(function (e) {
+        alert('作成に失敗しました: ' + (e && e.message ? e.message : 'network'));
+      });
       return;
     }
     var cy = t.closest('[data-ov-cycle-preset-loc]');
@@ -1449,34 +1508,40 @@
     postHealthRecord(body, btn);
   }
 
-  function saveBulkSelectedCare(catId, form, btn) {
-    var dt = form.querySelector('.ov-inp-care-bulk-date');
-    var recordDate = dt && dt.value;
+  function ovParseCareDetailsRaw(d) {
+    if (!d) return '';
+    if (typeof d === 'string' && d.charAt(0) === '"') {
+      try { return JSON.parse(d); } catch (e) { return d; }
+    }
+    return d;
+  }
+
+  function ovCareDetailLabel(d) {
+    var x = ovParseCareDetailsRaw(d);
+    if (x && typeof x === 'object' && x.label) return String(x.label);
+    return String(x || '');
+  }
+
+  function ovCareSlotKey(recordType, details) {
+    return (recordType || '') + '|' + ovCareDetailLabel(details);
+  }
+
+  /** ブラシ・アゴ・耳・お尻・目ヤニ拭きを1ボタンで記録（指定日・未実施分のみ） */
+  function saveGroomingBundleCare(catId, form, btn) {
+    var recordDate = todayJstYmd();
+    if (form) {
+      var dt = form.querySelector('.ov-inp-care-bulk-date');
+      if (dt && dt.value) recordDate = dt.value;
+    }
     if (!recordDate) {
       alert('日付を入力してください');
       return;
     }
-    var cbs = form.querySelectorAll('.ov-care-bulk-cb:checked');
-    if (!cbs || cbs.length === 0) {
-      alert('記録する項目にチェックを入れてください');
-      return;
+    var prevText = btn ? btn.textContent : '';
+    if (btn) {
+      btn.disabled = true;
+      btn.textContent = '…';
     }
-    var allowed = {};
-    for (var ai = 0; ai < OV_CARE_BULK_SPECS.length; ai++) {
-      allowed[OV_CARE_BULK_SPECS[ai].value] = true;
-    }
-    var items = [];
-    for (var aj = 0; aj < cbs.length; aj++) {
-      var cv = cbs[aj].value;
-      if (allowed[cv]) items.push(cv);
-    }
-    if (items.length === 0) {
-      alert('有効な項目がありません');
-      return;
-    }
-    var prevText = btn.textContent;
-    btn.disabled = true;
-    btn.textContent = '…';
 
     function buildCareBody(careVal) {
       var parts = careVal.split(':');
@@ -1495,34 +1560,80 @@
       return b;
     }
 
-    function runSeq(idx) {
-      if (idx >= items.length) {
-        btn.disabled = false;
-        btn.textContent = prevText;
-        var allCb = form.querySelectorAll('.ov-care-bulk-cb');
-        for (var u = 0; u < allCb.length; u++) {
-          allCb[u].checked = false;
-        }
-        fetchCatsDataSilent();
-        return;
+    var catEnc = encodeURIComponent(catId);
+    Promise.all([
+      fetch(apiOpsBase() + '/health/records?cat_id=' + catEnc + '&type=care&limit=120', { headers: apiHeaders(), cache: 'no-store' }).then(function (r) { return r.json(); }),
+      fetch(apiOpsBase() + '/health/records?cat_id=' + catEnc + '&type=eye_discharge&limit=120', { headers: apiHeaders(), cache: 'no-store' }).then(function (r) { return r.json(); }),
+    ]).then(function (results) {
+      var careRecs = (results[0] && results[0].records) ? results[0].records : [];
+      var eyeRecs = (results[1] && results[1].records) ? results[1].records : [];
+      var doneKeys = {};
+      for (var ci = 0; ci < careRecs.length; ci++) {
+        var r = careRecs[ci];
+        if ((r.record_date || '') !== recordDate) continue;
+        if (r.value === '×' || r.value === 'ー') continue;
+        doneKeys[ovCareSlotKey(r.record_type, r.details)] = true;
       }
-      postHealthRecordPromise(buildCareBody(items[idx]))
-        .then(function (res) {
-          if (!res.ok || (res.data && res.data.error)) {
-            btn.disabled = false;
-            btn.textContent = prevText;
-            alert('エラー: ' + ((res.data && (res.data.message || res.data.error)) || 'HTTPエラー'));
-            return;
-          }
-          runSeq(idx + 1);
-        })
-        .catch(function () {
+      for (var ei = 0; ei < eyeRecs.length; ei++) {
+        var re = eyeRecs[ei];
+        if ((re.record_date || '') !== recordDate) continue;
+        if (re.value === '×' || re.value === 'ー') continue;
+        doneKeys[ovCareSlotKey('eye_discharge', '目ヤニ拭き')] = true;
+        doneKeys[ovCareSlotKey(re.record_type, re.details)] = true;
+      }
+      var items = [];
+      for (var bi = 0; bi < OV_CARE_BUNDLE_SPECS.length; bi++) {
+        var spec = OV_CARE_BUNDLE_SPECS[bi];
+        var parts = spec.value.split(':');
+        var rt = parts[0] || 'care';
+        var det = parts.slice(1).join(':') || '';
+        if (!doneKeys[(rt || '') + '|' + det]) items.push(spec.value);
+      }
+      if (items.length === 0) {
+        if (btn) {
           btn.disabled = false;
           btn.textContent = prevText;
-          alert('保存に失敗しました');
-        });
-    }
-    runSeq(0);
+        }
+        alert('ブラシ・アゴ・耳・お尻・目ヤニ拭きは、選択した日付ですでに記録済みです');
+        return;
+      }
+      function runSeq(idx) {
+        if (idx >= items.length) {
+          if (btn) {
+            btn.disabled = false;
+            btn.textContent = prevText;
+          }
+          fetchCatsDataSilent();
+          return;
+        }
+        postHealthRecordPromise(buildCareBody(items[idx]))
+          .then(function (res) {
+            if (!res.ok || (res.data && res.data.error)) {
+              if (btn) {
+                btn.disabled = false;
+                btn.textContent = prevText;
+              }
+              alert('エラー: ' + ((res.data && (res.data.message || res.data.error)) || 'HTTPエラー'));
+              return;
+            }
+            runSeq(idx + 1);
+          })
+          .catch(function () {
+            if (btn) {
+              btn.disabled = false;
+              btn.textContent = prevText;
+            }
+            alert('保存に失敗しました');
+          });
+      }
+      runSeq(0);
+    }).catch(function () {
+      if (btn) {
+        btn.disabled = false;
+        btn.textContent = prevText;
+      }
+      alert('記録の取得に失敗しました');
+    });
   }
 
   /** 投薬ログ done/undo。本文 POST { action } を優先し、405 のとき従来の /done|/undo にフォールバック */
@@ -1602,6 +1713,14 @@
       }
     });
     cardArea.addEventListener('click', function (ev) {
+      var pccCareBundle = ev.target.closest && ev.target.closest('.btn-pcc-care-bundle');
+      if (pccCareBundle) {
+        ev.preventDefault();
+        ev.stopPropagation();
+        var cidB = pccCareBundle.getAttribute('data-cat-id');
+        if (cidB) saveGroomingBundleCare(cidB, null, pccCareBundle);
+        return;
+      }
       var fp = ev.target.closest && ev.target.closest('.btn-ov-feed-preset');
       if (fp) {
         ev.preventDefault();
@@ -1659,9 +1778,9 @@
         var elid = felg.getAttribute('data-log-id');
         var elfn = felg.getAttribute('data-food-name') || '';
         var elog = felg.getAttribute('data-offered-g') || '';
-        var elep = felg.getAttribute('data-eaten-pct') || '100';
+        var elep = felg.getAttribute('data-eaten-pct');
         var elst = felg.getAttribute('data-served-time') || '';
-        if (elid) ovOpenEditLogModal(elid, elfn, elog, elep, elst);
+        if (elid) ovOpenEditLogModal(elid, elfn, elog, elep != null ? elep : '', elst);
         return;
       }
       var fund = ev.target.closest && ev.target.closest('.btn-ov-feed-undofed');
@@ -1803,6 +1922,17 @@
         saveTaskAction(taskSkipBtn, 'skip');
         return;
       }
+      var bundleCareBtn = ev.target.closest && ev.target.closest('.btn-ov-care-bundle-save');
+      if (bundleCareBtn) {
+        ev.preventDefault();
+        ev.stopPropagation();
+        var formB = bundleCareBtn.closest('.inline-form');
+        if (!formB) return;
+        var catIdB = formB.getAttribute('data-cat-id');
+        if (!catIdB) return;
+        saveGroomingBundleCare(catIdB, formB, bundleCareBtn);
+        return;
+      }
       var btn = ev.target.closest && ev.target.closest('.btn-ov-save');
       if (!btn) return;
       ev.preventDefault();
@@ -1854,25 +1984,16 @@
       '</div>';
   }
 
-  function buildCareBulkCheckboxesHtml() {
-    var h = '<div class="ov-care-bulk-cbs">';
-    for (var bi = 0; bi < OV_CARE_BULK_SPECS.length; bi++) {
-      var s = OV_CARE_BULK_SPECS[bi];
-      h += '<label class="ov-care-bulk-lab"><input type="checkbox" class="ov-care-bulk-cb" value="' + escAttr(s.value) + '">' + esc(s.label) + '</label>';
-    }
-    h += '</div>';
-    return h;
-  }
-
   function buildCareInlineEdit(c) {
     return '<div class="inline-form ov-care-inline-form" data-cat-id="' + escAttr(c.id) + '">' +
       '<div class="ov-care-bulk-block">' +
-      '<div class="ov-care-bulk-hint">まとめ記録（複数選択可）— 爪切り・肉球は下の個別から</div>' +
-      buildCareBulkCheckboxesHtml() +
-      '<div class="ov-care-bulk-actions">' +
+      '<div class="ov-care-bulk-hint" style="font-weight:600;color:var(--text-main);">ワンタップで5項目を実施済みに記録（ブラシ・アゴ・耳・お尻・目ヤニ拭き）</div>' +
+      '<div class="ov-care-bulk-actions" style="flex-wrap:wrap;">' +
       '<input type="date" class="ov-inline-date ov-inp-care-bulk-date" value="' + escAttr(todayJstYmd()) + '">' +
-      '<button type="button" class="btn btn-primary btn-ov-care-bulk-save">選択をまとめて記録</button>' +
-      '</div></div>' +
+      '<button type="button" class="btn btn-primary btn-ov-care-bundle-save" style="flex:1;min-width:11rem;font-size:13px;padding:10px 12px;">🪮 5項目をまとめて記録</button>' +
+      '</div>' +
+      '<p class="dim" style="font-size:10px;margin:6px 0 0;line-height:1.4;">その日付で未記録の項目だけ追加します（チェック不要）。爪切り・肉球は下の個別フォームから。</p>' +
+      '</div>' +
       '<div class="ov-care-sep">個別記録（全項目・1件ずつ）</div>' +
       '<select class="ov-inline-select ov-sel-care-type">' + OPT_CARE_TYPE + '</select>' +
       '<select class="ov-inline-select ov-sel-care-done">' + OPT_CARE_DONE + '</select>' +
@@ -2253,6 +2374,11 @@
         html += '</div>';
       }
 
+      html += '<div class="pcc-care-bundle-wrap" style="margin-top:8px;padding-top:8px;border-top:1px solid rgba(255,255,255,0.06);">';
+      html += '<button type="button" class="btn btn-primary btn-pcc-care-bundle" data-cat-id="' + escAttr(String(c.id)) + '" style="width:100%;font-size:11px;padding:8px 10px;">🪮 ケア5項目まとめて記録</button>';
+      html += '<div class="dim" style="font-size:9px;margin-top:4px;line-height:1.35;text-align:center;">ブラシ・アゴ・耳・お尻・目ヤニ（当日・未記録分のみ）</div>';
+      html += '</div>';
+
       html += '</a>';
     }
     html += '</div>';
@@ -2267,7 +2393,8 @@
     cardArea.addEventListener('click', function (ev) {
       if (!ev.target.closest) return;
       var inMedBlock = ev.target.closest('.pcc-med-block');
-      if (!inMedBlock) return;
+      var inCareBundle = ev.target.closest('.pcc-care-bundle-wrap');
+      if (!inMedBlock && !inCareBundle) return;
       var anchor = ev.target.closest('a.per-cat-card');
       if (anchor) { ev.preventDefault(); }
     });
@@ -2538,15 +2665,18 @@
     var list = catsData.slice();
     var pinContext = currentLocationId === 'cafe' || currentStatusId === 'active';
     if (!pinContext) return list;
-    function feedingPinRank(name) {
-      var n = (name || '').trim();
-      if (n === 'コハダ') return 0;
+    function feedingPinRank(cat) {
+      var id = String((cat && cat.id) || '').trim();
+      var n = (cat && cat.name) ? String(cat.name).trim() : '';
+      if (id === 'cat_こはだ') return 0;
+      if (n === 'コハダ' || n === 'こはだ') return 0;
+      if (id === 'cat_なめこ') return 1;
       if (n === 'なめこ' || n === 'ナメコ') return 1;
       return 100;
     }
     list.sort(function (a, b) {
-      var ra = feedingPinRank(a.name);
-      var rb = feedingPinRank(b.name);
+      var ra = feedingPinRank(a);
+      var rb = feedingPinRank(b);
       if (ra !== rb) return ra - rb;
       var sa = a.health_score !== null && a.health_score !== undefined ? a.health_score : 999;
       var sb = b.health_score !== null && b.health_score !== undefined ? b.health_score : 999;
@@ -2587,8 +2717,9 @@
             st = '<span class="feed-done">✅</span>';
             if (fedTm) st += '<span class="dim" style="margin-left:3px;">🕐' + esc(fedTm) + '</span> ';
             if (p.eaten_pct_today != null && p.eaten_pct_today !== '') st += '<span class="dim">' + esc(String(p.eaten_pct_today)) + '%</span> ';
+            else st += '<span class="dim" style="color:#fbbf24;">0%</span> ';
             if (logIdStr) {
-              st += '<button type="button" class="btn btn-outline btn-ov-feed-editlog" data-log-id="' + escAttr(logIdStr) + '" data-food-name="' + escAttr(p.food_name || '') + '" data-offered-g="' + escAttr(offeredGLogStr || String(p.amount_g || '')) + '" data-eaten-pct="' + escAttr(String(p.eaten_pct_today != null ? p.eaten_pct_today : 100)) + '" data-served-time="' + escAttr(fedTm || '') + '">✏️</button> ';
+              st += '<button type="button" class="btn btn-outline btn-ov-feed-editlog" data-log-id="' + escAttr(logIdStr) + '" data-food-name="' + escAttr(p.food_name || '') + '" data-offered-g="' + escAttr(offeredGLogStr || String(p.amount_g || '')) + '" data-eaten-pct="' + escAttr(p.eaten_pct_today != null && p.eaten_pct_today !== '' ? String(p.eaten_pct_today) : '') + '" data-served-time="' + escAttr(fedTm || '') + '">✏️</button> ';
               st += '<button type="button" class="btn btn-outline btn-ov-feed-undofed" data-log-id="' + escAttr(logIdStr) + '">取消</button> ';
             }
           } else if (pidStr) {
@@ -2610,7 +2741,7 @@
 
   function renderItemCard_Care() {
     var html = '<div class="item-card">';
-    html += '<div class="item-card-title">🩹 ケア実施</div>';
+    html += '<div class="item-card-title">🩹 ケア実施 <small class="dim" style="font-weight:500;">各行「5項目をまとめて記録」で一括</small></div>';
     html += '<div class="item-card-body">';
     for (var i = 0; i < catsData.length; i++) {
       var c = catsData[i];

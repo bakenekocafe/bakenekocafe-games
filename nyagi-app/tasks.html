@@ -158,6 +158,40 @@
     .attr-group-tasks { transition: none; }
     .attr-group-tasks.hidden { display: none; }
 
+    .task-finished-section {
+      margin-top: 10px;
+      border-radius: 8px;
+      overflow: hidden;
+      border: 1px solid rgba(255,255,255,0.08);
+    }
+    .task-finished-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 10px 12px;
+      background: rgba(255,255,255,0.04);
+      font-size: 12px;
+      color: var(--text-dim);
+      cursor: pointer;
+      user-select: none;
+    }
+    .task-finished-header:active { background: rgba(255,255,255,0.07); }
+    .task-finished-header .tfi-chevron {
+      font-size: 10px;
+      opacity: 0.75;
+      transition: transform 0.15s ease;
+    }
+    .task-finished-header.folded .tfi-chevron {
+      transform: rotate(-90deg);
+    }
+    .task-finished-body {
+      padding: 6px 8px 10px;
+      background: rgba(0,0,0,0.15);
+    }
+    .task-finished-body.hidden { display: none; }
+    .task-finished-body .task-item { margin-bottom: 6px; }
+    .task-finished-body .task-item:last-child { margin-bottom: 0; }
+
     /* ── タスクアイテム ───────────────────────── */
     .task-item {
       background: var(--surface);
@@ -943,7 +977,7 @@
   <script src="js/nyagi-boot-overlay.js?v=203"></script>
   <script src="js/login-gate.js?v=203"></script>
   <script src="js/app.js?v=203"></script>
-  <script src="js/tasks.js?v=204"></script>
+  <script src="js/tasks.js?v=205"></script>
   <script src="js/voice-console.js?v=203"></script>
 </body>
 </html>

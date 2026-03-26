@@ -202,6 +202,15 @@
     }
   };
 
+  /** 完了済みブロックの開閉（既定は閉じて未完了だけ見やすく） */
+  window.toggleTaskFinishedSection = function (sectionUid) {
+    var body = document.getElementById('task-finished-body-' + sectionUid);
+    var hdr = document.getElementById('task-finished-hdr-' + sectionUid);
+    if (!body || !hdr) return;
+    body.classList.toggle('hidden');
+    hdr.classList.toggle('folded');
+  };
+
   window.loadTasks = function () {
     var date = document.getElementById('filterDate').value || new Date().toISOString().slice(0, 10);
     var status = document.getElementById('filterStatus').value;
@@ -270,6 +279,18 @@
     if (el) el.scrollIntoView({ behavior: 'smooth', block: 'start' });
   };
 
+  function partitionTasksPendingFirst(tasks) {
+    var pending = [];
+    var finished = [];
+    var arr = tasks || [];
+    for (var i = 0; i < arr.length; i++) {
+      var t = arr[i];
+      if (t.status === 'done' || t.status === 'skipped') finished.push(t);
+      else pending.push(t);
+    }
+    return { pending: pending, finished: finished };
+  }
+
   function renderAttrGroupedTasks(groups) {
     if (groups.length === 0) {
       document.getElementById('taskListArea').innerHTML = '<div class="empty-msg">タスクなし</div>';
@@ -280,9 +301,11 @@
     for (var g = 0; g < groups.length; g++) {
       var grp = groups[g];
       var tasks = grp.tasks || [];
+      var part = partitionTasksPendingFirst(tasks);
       var attr = escapeHtml(grp.attribute);
       var allDone = grp.progress.pct === 100;
       var isFolded = allDone || (foldedGroups[grp.attribute] !== false);
+      var sectionUid = 'grp-' + g;
 
       html += '<div id="attr-group-' + attr + '">';
       html += '<div id="attr-header-' + attr + '" class="attr-group-header' + (isFolded ? ' folded' : '') + '" onclick="toggleAttrGroup(\'' + attr + '\')">';
@@ -295,9 +318,10 @@
       html += '</div>';
 
       html += '<div id="attr-tasks-' + attr + '" class="attr-group-tasks' + (isFolded ? ' hidden' : '') + '">';
-      for (var j = 0; j < tasks.length; j++) {
-        html += renderTaskItem(tasks[j]);
+      for (var j = 0; j < part.pending.length; j++) {
+        html += renderTaskItem(part.pending[j]);
       }
+      html += renderFinishedTasksSection(part.finished, sectionUid);
       html += '</div>';
       html += '</div>';
     }
@@ -310,8 +334,10 @@
       document.getElementById('taskListArea').innerHTML = '<div class="empty-msg">タスクなし</div>';
       return;
     }
+    var part = partitionTasksPendingFirst(tasks);
     var html = '';
-    for (var i = 0; i < tasks.length; i++) html += renderTaskItem(tasks[i]);
+    for (var i = 0; i < part.pending.length; i++) html += renderTaskItem(part.pending[i]);
+    html += renderFinishedTasksSection(part.finished, 'flat');
     document.getElementById('taskListArea').innerHTML = html;
   }
 
@@ -361,6 +387,21 @@
       html += '</div>';
     }
 
+    html += '</div></div>';
+    return html;
+  }
+
+  function renderFinishedTasksSection(finished, sectionUid) {
+    if (!finished || finished.length === 0) return '';
+    var uid = String(sectionUid || 'sec').replace(/[^a-zA-Z0-9_-]/g, '_');
+    var html = '<div class="task-finished-section">';
+    html += '<div id="task-finished-hdr-' + uid + '" class="task-finished-header folded" onclick="toggleTaskFinishedSection(\'' + uid + '\')">';
+    html += '<span>完了済み <strong>' + finished.length + '</strong> 件（タップで開閉）</span>';
+    html += '<span class="tfi-chevron">▼</span></div>';
+    html += '<div id="task-finished-body-' + uid + '" class="task-finished-body hidden">';
+    for (var fi = 0; fi < finished.length; fi++) {
+      html += renderTaskItem(finished[fi]);
+    }
     html += '</div></div>';
     return html;
   }

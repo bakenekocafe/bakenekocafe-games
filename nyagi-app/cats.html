@@ -137,10 +137,11 @@
     .item-card-title.collapsed::after {
       transform: rotate(180deg);
     }
+    /* max-height を小さくすると項目ごとカード内で猫行が途中で切れる（ごはんは行数が多い） */
     .item-card-body {
       overflow: hidden;
-      transition: max-height 0.25s ease, opacity 0.2s ease;
-      max-height: 2000px;
+      transition: max-height 0.35s ease, opacity 0.2s ease;
+      max-height: 200000px;
       opacity: 1;
       margin-top: 10px;
     }
@@ -691,7 +692,7 @@
   <script src="js/nyagi-boot-overlay.js?v=203"></script>
   <script src="js/login-gate.js?v=203"></script>
   <script src="js/app.js?v=203"></script>
-  <script src="js/cats-overview.js?v=221"></script>
+  <script src="js/cats-overview.js?v=222"></script>
   <script src="js/voice-console.js?v=203"></script>
 </body>
 </html>

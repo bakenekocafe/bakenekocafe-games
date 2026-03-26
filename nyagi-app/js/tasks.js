@@ -36,6 +36,21 @@
     };
   }
 
+  /** completed_at を日本時刻 HH:mm で表示（従来の UTC 文字列も Date 経由で補正） */
+  function formatTaskCompletedAtJst(isoStr) {
+    if (!isoStr) return '';
+    try {
+      var d = new Date(isoStr);
+      if (isNaN(d.getTime())) {
+        var s = String(isoStr);
+        return s.length >= 16 ? s.slice(11, 16) : s;
+      }
+      return d.toLocaleTimeString('sv-SE', { timeZone: 'Asia/Tokyo', hour: '2-digit', minute: '2-digit', hour12: false });
+    } catch (_) {
+      return String(isoStr).slice(11, 16);
+    }
+  }
+
   credentials = loadCredentials();
   if (!credentials) {
     loginGate.style.display = 'block';
@@ -326,8 +341,8 @@
     html += '</div>';
 
     if (task.status === 'done' && task.completed_at) {
-      var timeStr = (task.completed_at || '').slice(11, 16);
-      html += '<div class="task-done-info">完了 ' + escapeHtml(task.completed_by || '') + ' ' + timeStr + '</div>';
+      var timeStr = formatTaskCompletedAtJst(task.completed_at);
+      html += '<div class="task-done-info">完了 ' + escapeHtml(task.completed_by || '') + ' ' + escapeHtml(timeStr) + '</div>';
     }
 
     if (task.status === 'skipped' && task.skip_reason) {

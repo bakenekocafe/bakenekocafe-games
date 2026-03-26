@@ -4895,6 +4895,7 @@ function toggleFold(id, btn) {
 
   function formatFreqLabel(freq) {
     if (!freq) return '毎日';
+    if (freq === '週3回') return '週3回（月水金）';
     if (freq.indexOf('週:') === 0) return '毎週 ' + freq.slice(2);
     if (freq.indexOf('月1:') === 0) return '毎月' + freq.slice(3) + '日';
     return freq;

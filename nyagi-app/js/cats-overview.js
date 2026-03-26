@@ -2533,13 +2533,36 @@
     return h;
   }
 
+  /** ごはんカード用の並び: CAFE 拠点 or 在籍フィルタ時はコハダ・なめこを最上段（ゲームキャラ優先） */
+  function orderCatsForFeedingCard() {
+    var list = catsData.slice();
+    var pinContext = currentLocationId === 'cafe' || currentStatusId === 'active';
+    if (!pinContext) return list;
+    function feedingPinRank(name) {
+      var n = (name || '').trim();
+      if (n === 'コハダ') return 0;
+      if (n === 'なめこ' || n === 'ナメコ') return 1;
+      return 100;
+    }
+    list.sort(function (a, b) {
+      var ra = feedingPinRank(a.name);
+      var rb = feedingPinRank(b.name);
+      if (ra !== rb) return ra - rb;
+      var sa = a.health_score !== null && a.health_score !== undefined ? a.health_score : 999;
+      var sb = b.health_score !== null && b.health_score !== undefined ? b.health_score : 999;
+      return sa - sb;
+    });
+    return list;
+  }
+
   function renderItemCard_FeedingCheck() {
     var html = '<div class="item-card">';
     html += '<div class="item-card-title">🍚 ごはん <small class="dim">あげた・残し</small></div>';
     html += '<div class="item-card-body">';
     html += '<div class="ov-feed-hint" style="font-size:11px;color:var(--text-dim);margin-bottom:6px;line-height:1.4;">献立の追加・編集・手動記録は「詳細」から行ってください。</div>';
-    for (var i = 0; i < catsData.length; i++) {
-      var c = catsData[i];
+    var feedCats = orderCatsForFeedingCard();
+    for (var i = 0; i < feedCats.length; i++) {
+      var c = feedCats[i];
       var plan = c.feeding_plan || [];
       var inner = '';
       var toolbar = '<div class="ov-feed-toolbar">' +

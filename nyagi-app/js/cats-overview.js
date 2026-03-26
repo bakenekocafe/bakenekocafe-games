@@ -639,13 +639,22 @@
     return d.toLocaleDateString('sv-SE', { timeZone: 'Asia/Tokyo' });
   }
 
-  function ovIsEveningMealSlot(slot) {
-    var s = String(slot || '').toLowerCase();
-    return s === 'evening' || s === 'night' || s === 'dinner';
+  /** dashboard.js normMealSlotForOverview と同じ（プリセットが日本語 meal_slot のときも一致） */
+  function ovNormMealSlot(slot) {
+    if (slot == null || slot === '') return '';
+    var x = String(slot).toLowerCase().trim();
+    if (x === '朝' || x === 'morning' || x === 'am') return 'morning';
+    if (x === '昼' || x === 'afternoon' || x === 'noon' || x === 'lunch') return 'afternoon';
+    if (x === '夜' || x === 'evening' || x === 'night' || x === 'dinner' || x === '夕' || x === '晩') return 'evening';
+    return x;
   }
-  function ovIsAfternoonMealSlot(slot) {
-    var s = String(slot || '').toLowerCase();
-    return s === 'afternoon' || s === 'lunch';
+  function ovIsEveningMealSlot(slot) {
+    return ovNormMealSlot(slot) === 'evening';
+  }
+  /** 当日の「朝・昼」枠（残し記録セクション2） */
+  function ovIsDaytimeMealSlot(slot) {
+    var n = ovNormMealSlot(slot);
+    return n === 'morning' || n === 'afternoon';
   }
 
   function ovFilterPlansBySlot(plans, pred) {
@@ -770,9 +779,9 @@
       var prevNightLogs = ovFilterLogsBySlot(yLogsAll, ovIsEveningMealSlot);
       var itemsPrev = ovBuildLeftoverItems(prevNightPlans, prevNightLogs);
 
-      var lunchPlans = ovFilterPlansBySlot(allPlans, ovIsAfternoonMealSlot);
-      var lunchLogs = ovFilterLogsBySlot(tLogsAll, ovIsAfternoonMealSlot);
-      var itemsLunch = ovBuildLeftoverItems(lunchPlans, lunchLogs);
+      var dayPlans = ovFilterPlansBySlot(allPlans, ovIsDaytimeMealSlot);
+      var dayLogs = ovFilterLogsBySlot(tLogsAll, ovIsDaytimeMealSlot);
+      var itemsDay = ovBuildLeftoverItems(dayPlans, dayLogs);
 
       var evePlans = ovFilterPlansBySlot(allPlans, ovIsEveningMealSlot);
       var eveLogs = ovFilterLogsBySlot(tLogsAll, ovIsEveningMealSlot);
@@ -780,7 +789,7 @@
 
       var html = '';
       html += ovRenderLeftoverSection('🌙 前日夜（昨夜の夜ごはんと同じ）', itemsPrev, yesterdayStr, 'prev');
-      html += ovRenderLeftoverSection('☀️ 当日昼', itemsLunch, todayStr, 'lunch');
+      html += ovRenderLeftoverSection('☀️ 当日朝・昼', itemsDay, todayStr, 'day');
       html += ovRenderLeftoverSection('🌙 当日夜', itemsEve, todayStr, 'eve');
       body.innerHTML = html;
     }).catch(function () {

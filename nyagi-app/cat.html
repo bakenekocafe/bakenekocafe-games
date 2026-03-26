@@ -13,14 +13,16 @@
   <meta name="theme-color" content="#1a1a2e">
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-  <link rel="stylesheet" href="style.css?v=203">
+  <link rel="stylesheet" href="style.css?v=207">
+  <script src="js/nyagi-fixed-header.js?v=207" defer></script>
   <link rel="stylesheet" href="voice-console.css?v=203">
   <style>
-    .cat-back-bar {
+    .app-sticky-top .cat-back-bar {
       display: flex;
       align-items: center;
-      padding: 4px 0 14px;
-      margin-top: -4px;
+      justify-content: center;
+      padding: 0 0 10px;
+      margin-top: 0;
     }
     .cat-back-btn {
       font-size: 14px;
@@ -868,25 +870,27 @@
 </head>
 <body>
 
-  <div class="header">
-    <h1>NYAGI</h1>
-    <p>猫詳細</p>
-    <nav class="header-nav">
-      <a href="dashboard.html">ダッシュボード</a>
-      <a href="cats.html">猫一覧</a>
-      <a href="tasks.html">タスク</a>
-      <a href="foods.html">フード</a>
-      <a href="medicines.html">薬</a>
-      <a href="manual.html">📖 マニュアル</a>
-    </nav>
+  <div class="app-sticky-top">
+    <div class="header">
+      <h1>NYAGI</h1>
+      <p>猫詳細</p>
+      <nav class="header-nav">
+        <a href="dashboard.html">ダッシュボード</a>
+        <a href="cats.html">猫一覧</a>
+        <a href="tasks.html">タスク</a>
+        <a href="foods.html">フード</a>
+        <a href="medicines.html">薬</a>
+        <a href="manual.html">📖 マニュアル</a>
+      </nav>
+    </div>
+    <div id="catStickyBack" class="cat-back-bar" style="display:none;">
+      <button type="button" class="btn btn-outline cat-back-btn" id="catBackBtn" aria-label="前の画面に戻る">← 戻る</button>
+    </div>
   </div>
 
   <div id="loginGate" style="display:none;"></div>
 
   <div id="catContent" style="display:none;">
-    <div class="cat-back-bar">
-      <button type="button" class="btn btn-outline cat-back-btn" id="catBackBtn" aria-label="前の画面に戻る">← 戻る</button>
-    </div>
     <div id="catHeaderArea"></div>
     <div id="alertBannerArea"></div>
     <div id="scoreCardArea"></div>
@@ -1558,7 +1562,7 @@
   <script src="js/nyagi-boot-overlay.js?v=203"></script>
   <script src="js/login-gate.js?v=203"></script>
   <script src="js/app.js?v=203"></script>
-  <script src="js/cat-detail.js?v=218"></script>
+  <script src="js/cat-detail.js?v=220"></script>
   <script src="js/voice-console.js?v=203"></script>
 </body>
 </html>

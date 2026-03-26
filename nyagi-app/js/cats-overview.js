@@ -1645,6 +1645,42 @@
       else if (kind === 'weight') saveInlineWeight(catId, form, btn);
       else if (kind === 'care') saveInlineCare(catId, form, btn);
     });
+    cardArea.addEventListener('change', function (ev) {
+      var cb = ev.target;
+      if (!cb || cb.type !== 'checkbox' || !cb.classList || !cb.classList.contains('ov-med-log-cb')) return;
+      var logId = cb.getAttribute('data-log-id');
+      if (!logId) return;
+      var wantDone = cb.checked;
+      function revert() { cb.checked = !wantDone; }
+      cb.disabled = true;
+      var action = wantDone ? 'done' : 'undo';
+      fetch(apiOpsBase() + '/health/medication-logs/' + encodeURIComponent(logId) + '/' + action, {
+        method: 'POST',
+        headers: apiHeaders(),
+        cache: 'no-store',
+        body: JSON.stringify({}),
+      })
+        .then(function (r) {
+          return r.json().then(function (data) {
+            return { ok: r.ok, data: data };
+          });
+        })
+        .then(function (res) {
+          cb.disabled = false;
+          if (!res.ok || (res.data && res.data.error)) {
+            revert();
+            var msg = (res.data && (res.data.message || res.data.error)) || 'HTTPエラー';
+            alert('エラー: ' + msg);
+            return;
+          }
+          fetchCatsDataSilent();
+        })
+        .catch(function () {
+          cb.disabled = false;
+          revert();
+          alert('投薬の更新に失敗しました');
+        });
+    });
   }
 
   function buildStoolInlineEdit(c) {
@@ -2288,7 +2324,7 @@
       h += '<div style="display:flex;align-items:flex-start;justify-content:space-between;gap:6px;margin-bottom:2px;">';
       h += '<span style="font-weight:600;color:#fb923c;">🍽 食事メモ</span>';
       if (noteId) {
-        h += '<button type="button" class="btn btn-outline btn-ov-feed-delmemo" style="font-size:9px;padding:1px 6px;line-height:1.2;flex-shrink:0;color:#f87171;border-color:rgba(248,113,113,0.5);" data-note-id="' + escAttr(noteId) + '" title="このメモを削除">削除</button>';
+        h += '<button type="button" class="btn btn-outline btn-ov-feed-delmemo" data-note-id="' + escAttr(noteId) + '" title="このメモを削除">削除</button>';
       }
       h += '</div><span style="color:var(--text-main);white-space:pre-wrap;">' + esc(fn) + '</span></div>';
     }
@@ -2299,14 +2335,14 @@
     var html = '<div class="item-card">';
     html += '<div class="item-card-title">🍚 ごはん <small class="dim">あげた・残し</small></div>';
     html += '<div class="item-card-body">';
-    html += '<div class="ov-feed-hint" style="font-size:11px;color:var(--text-dim);margin-bottom:8px;">献立の追加・編集・手動記録は「詳細」から行ってください。</div>';
+    html += '<div class="ov-feed-hint" style="font-size:11px;color:var(--text-dim);margin-bottom:6px;line-height:1.4;">献立の追加・編集・手動記録は「詳細」から行ってください。</div>';
     for (var i = 0; i < catsData.length; i++) {
       var c = catsData[i];
       var plan = c.feeding_plan || [];
       var inner = '';
-      var toolbar = '<div class="ov-feed-toolbar" style="display:flex;flex-wrap:wrap;gap:4px;margin-bottom:6px;width:100%;">' +
-        '<button type="button" class="btn btn-outline btn-ov-feed-leftover" style="font-size:10px;padding:2px 6px;" data-cat-id="' + escAttr(String(c.id)) + '">🥄残し</button>' +
-        '<a href="' + catLink(c.id, 'feedingArea') + '" class="btn btn-outline" style="font-size:10px;padding:2px 6px;text-decoration:none;">詳細</a>' +
+      var toolbar = '<div class="ov-feed-toolbar">' +
+        '<button type="button" class="btn btn-outline btn-ov-feed-leftover" data-cat-id="' + escAttr(String(c.id)) + '">🥄残し</button>' +
+        '<a href="' + catLink(c.id, 'feedingArea') + '" class="btn btn-outline" style="text-decoration:none;">詳細</a>' +
         '</div>';
       var memoBlock = ovHtmlFeedingSyncedMemos(c);
       if (plan.length === 0) {
@@ -2327,15 +2363,15 @@
             if (fedTm) st += '<span class="dim" style="margin-left:3px;">🕐' + esc(fedTm) + '</span> ';
             if (p.eaten_pct_today != null && p.eaten_pct_today !== '') st += '<span class="dim">' + esc(String(p.eaten_pct_today)) + '%</span> ';
             if (logIdStr) {
-              st += '<button type="button" class="btn btn-outline btn-ov-feed-editlog" style="font-size:10px;padding:1px 6px;" data-log-id="' + escAttr(logIdStr) + '" data-food-name="' + escAttr(p.food_name || '') + '" data-offered-g="' + escAttr(offeredGLogStr || String(p.amount_g || '')) + '" data-eaten-pct="' + escAttr(String(p.eaten_pct_today != null ? p.eaten_pct_today : 100)) + '" data-served-time="' + escAttr(fedTm || '') + '">✏️</button> ';
-              st += '<button type="button" class="btn btn-outline btn-ov-feed-undofed" style="font-size:10px;padding:1px 6px;" data-log-id="' + escAttr(logIdStr) + '">取消</button> ';
+              st += '<button type="button" class="btn btn-outline btn-ov-feed-editlog" data-log-id="' + escAttr(logIdStr) + '" data-food-name="' + escAttr(p.food_name || '') + '" data-offered-g="' + escAttr(offeredGLogStr || String(p.amount_g || '')) + '" data-eaten-pct="' + escAttr(String(p.eaten_pct_today != null ? p.eaten_pct_today : 100)) + '" data-served-time="' + escAttr(fedTm || '') + '">✏️</button> ';
+              st += '<button type="button" class="btn btn-outline btn-ov-feed-undofed" data-log-id="' + escAttr(logIdStr) + '">取消</button> ';
             }
           } else if (pidStr) {
-            st = '<button type="button" class="btn btn-primary btn-ov-feed-markfed" style="font-size:10px;padding:1px 8px;" data-plan-id="' + escAttr(pidStr) + '" data-food-name="' + escAttr(p.food_name || '') + '" data-amount-g="' + escAttr(String(p.amount_g || '')) + '">あげた</button> ';
+            st = '<button type="button" class="btn btn-primary btn-ov-feed-markfed" data-plan-id="' + escAttr(pidStr) + '" data-food-name="' + escAttr(p.food_name || '') + '" data-amount-g="' + escAttr(String(p.amount_g || '')) + '">あげた</button> ';
           } else {
             st = '<span class="feed-pending">⬜</span> ';
           }
-          inner += '<div class="ov-feed-line"><span class="ov-feed-slot">' + feedingMealSlotLabelJp(p.meal_slot) + '</span><span class="ov-feed-menu">' + menu + '</span><span class="ov-feed-status" style="text-align:right;">' + st + '</span></div>';
+          inner += '<div class="ov-feed-line"><span class="ov-feed-slot">' + feedingMealSlotLabelJp(p.meal_slot) + '</span><span class="ov-feed-menu">' + menu + '</span><span class="ov-feed-status">' + st + '</span></div>';
           if (p.notes && String(p.notes).trim()) {
             inner += '<div style="font-size:10px;color:var(--text-dim);margin:-2px 0 6px 0;padding:4px 8px 4px 28px;background:rgba(255,255,255,0.04);border-radius:4px;line-height:1.35;">📝 ' + esc(String(p.notes).trim()) + '</div>';
           }
@@ -2385,9 +2421,10 @@
             var ds = String(it.due_time);
             timeStr = '<span class="dim" style="margin-right:4px;">' + esc(ds.length >= 5 ? ds.slice(0, 5) : ds) + '</span>';
           }
-          taskVals += '<div class="ov-task-line">' + timeStr + '<span class="ov-task-title">' + esc(it.title) + '</span>' +
+          taskVals += '<div class="ov-task-line"><div class="ov-task-head">' + timeStr + '<span class="ov-task-title">' + esc(it.title) + '</span></div>' +
+            '<div class="ov-task-actions">' +
             '<button type="button" class="btn btn-ov-task-done" data-task-id="' + escAttr(String(it.id)) + '">完了</button>' +
-            '<button type="button" class="btn btn-ov-task-skip" data-task-id="' + escAttr(String(it.id)) + '">スキップ</button></div>';
+            '<button type="button" class="btn btn-ov-task-skip" data-task-id="' + escAttr(String(it.id)) + '">スキップ</button></div></div>';
         }
       }
       html += itemRowEditable(c, '<div class="item-values-medcol">' + taskVals + '</div>', '');
@@ -2417,7 +2454,15 @@
           var isSkipped = it.status === 'skipped';
           var itemIcon = isDone ? '✅' : isSkipped ? '⏭️' : '🔴';
           var itemCls = isDone ? 'med-item-done' : isSkipped ? 'med-item-skip' : 'med-item-pending';
-          medVals += '<span class="' + itemCls + '" style="font-size:12px;">' + itemIcon + ' ' + (it.slot ? '<b>' + esc(it.slot) + '</b> ' : '') + esc(it.name) + (it.dosage ? ' <small>' + esc(it.dosage) + '</small>' : '') + '</span>';
+          var lid = it.log_id != null && it.log_id !== '' ? String(it.log_id) : '';
+          if (lid) {
+            medVals += '<label class="ov-med-item-row ' + itemCls + '">' +
+              '<input type="checkbox" class="ov-med-log-cb" data-log-id="' + escAttr(lid) + '" ' + (isDone ? 'checked' : '') + ' title="あげた／取消">' +
+              '<span class="ov-med-item-text">' + itemIcon + ' ' + (it.slot ? '<b>' + esc(it.slot) + '</b> ' : '') + esc(it.name) + (it.dosage ? ' <small>' + esc(it.dosage) + '</small>' : '') + '</span>' +
+              '</label>';
+          } else {
+            medVals += '<span class="' + itemCls + '" style="font-size:12px;">' + itemIcon + ' ' + (it.slot ? '<b>' + esc(it.slot) + '</b> ' : '') + esc(it.name) + (it.dosage ? ' <small>' + esc(it.dosage) + '</small>' : '') + '</span>';
+          }
         }
       }
       html += itemRowEditable(c, '<div class="item-values-medcol">' + medVals + '</div>', '');

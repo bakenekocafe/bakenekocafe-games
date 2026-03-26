@@ -13,7 +13,8 @@
   <meta name="theme-color" content="#1a1a2e">
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-  <link rel="stylesheet" href="style.css?v=203">
+  <link rel="stylesheet" href="style.css?v=207">
+  <script src="js/nyagi-fixed-header.js?v=207" defer></script>
   <link rel="stylesheet" href="voice-console.css?v=203">
   <style>
     /* ── タブ ─────────────────────────────────── */
@@ -383,17 +384,19 @@
 </head>
 <body>
 
-  <div class="header">
-    <h1>NYAGI</h1>
-    <p>フードDB ビルドモード</p>
-    <nav class="header-nav">
-      <a href="dashboard.html">ダッシュボード</a>
-      <a href="cats.html">猫一覧</a>
-      <a href="tasks.html">タスク</a>
-      <a href="foods.html" class="nav-current">フード</a>
-      <a href="medicines.html">薬</a>
-      <a href="manual.html">📖 マニュアル</a>
-    </nav>
+  <div class="app-sticky-top">
+    <div class="header">
+      <h1>NYAGI</h1>
+      <p>フードDB ビルドモード</p>
+      <nav class="header-nav">
+        <a href="dashboard.html">ダッシュボード</a>
+        <a href="cats.html">猫一覧</a>
+        <a href="tasks.html">タスク</a>
+        <a href="foods.html" class="nav-current">フード</a>
+        <a href="medicines.html">薬</a>
+        <a href="manual.html">📖 マニュアル</a>
+      </nav>
+    </div>
   </div>
 
   <div id="loginGate" style="display:none;"></div>

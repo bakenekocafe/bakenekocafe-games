@@ -13,14 +13,17 @@
   <meta name="theme-color" content="#1a1a2e">
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-  <link rel="stylesheet" href="style.css?v=203">
+  <link rel="stylesheet" href="style.css?v=207">
+  <script src="js/nyagi-fixed-header.js?v=207" defer></script>
   <link rel="stylesheet" href="voice-console.css?v=203">
   <style>
     /* モバイルスクロール対応: 専用スクロールコンテナ */
     html, body { height: 100%; overflow: hidden; margin: 0; }
     body { max-width: 640px; margin: 0 auto; display: flex; flex-direction: column; }
+    /* ヘッダーは style.css の position:fixed（本文は .page-scroll のみスクロール） */
     .page-scroll {
       flex: 1;
+      min-height: 0;
       overflow-y: auto;
       overflow-x: hidden;
       -webkit-overflow-scrolling: touch;
@@ -197,6 +200,31 @@
       gap: 4px;
       -webkit-tap-highlight-color: rgba(255,255,255,0.1);
     }
+    /* 項目ごと: 猫名を1行目・本文を下に回して横幅を確保（はみ出し防止） */
+    .item-card .item-row-editable {
+      flex-direction: column;
+      align-items: stretch;
+      gap: 8px;
+    }
+    .item-card .item-row-editable .item-cat-link {
+      width: 100%;
+      max-width: 100%;
+      min-width: 0;
+      padding-bottom: 4px;
+      border-bottom: 1px solid rgba(255,255,255,0.06);
+      box-sizing: border-box;
+    }
+    .item-card .item-row-editable .item-values {
+      flex: none;
+      width: 100%;
+      max-width: 100%;
+      min-width: 0;
+    }
+    .item-card .item-row-editable .item-inline-edit {
+      width: 100%;
+      max-width: 100%;
+      box-sizing: border-box;
+    }
     .item-row-editable .item-cat-link:active { opacity: 0.75; }
     .item-inline-edit {
       flex: 1 1 100%;
@@ -209,6 +237,35 @@
       flex-wrap: wrap;
       align-items: center;
       gap: 6px;
+    }
+    /* 項目ごとカード内フォーム: 1行に詰めず折り返し、ボタンは内容幅 */
+    .item-card-body .inline-form {
+      gap: 8px;
+      align-items: flex-start;
+    }
+    .item-card-body .inline-form .ov-inline-select,
+    .item-card-body .inline-form .ov-inline-date,
+    .item-card-body .inline-form .ov-inline-num {
+      flex: 1 1 42%;
+      min-width: 0;
+      max-width: 100%;
+      box-sizing: border-box;
+    }
+    .item-card-body .inline-form .btn,
+    .item-card-body .inline-form .btn-primary,
+    .item-card-body .inline-form .btn-outline {
+      flex: 0 0 auto !important;
+      width: auto !important;
+      max-width: 100%;
+      min-width: 0;
+      padding: 5px 12px !important;
+      font-size: 11px !important;
+      font-weight: 600;
+      line-height: 1.25;
+      white-space: normal;
+      word-break: keep-all;
+      overflow-wrap: break-word;
+      min-height: 34px;
     }
     .ov-inline-select,
     .ov-inline-date,
@@ -230,6 +287,9 @@
       min-width: 0;
       width: 100%;
     }
+    .item-card-body .item-values-medcol {
+      overflow-x: hidden;
+    }
     .ov-task-line {
       display: flex;
       flex-wrap: wrap;
@@ -241,20 +301,128 @@
       border-top: 1px dashed rgba(255,255,255,0.06);
     }
     .ov-task-line:first-of-type { margin-top: 2px; padding-top: 0; border-top: none; }
-    .ov-feed-block { gap: 6px !important; }
-    .ov-feed-line {
+    .item-card-body .ov-task-line {
+      flex-direction: column;
+      align-items: stretch;
+      gap: 6px;
+    }
+    .item-card-body .ov-task-head {
       display: flex;
       flex-wrap: wrap;
       align-items: baseline;
-      gap: 6px 10px;
-      font-size: 13px;
+      gap: 4px 8px;
+      width: 100%;
+      min-width: 0;
+    }
+    .item-card-body .ov-task-head .ov-task-title {
+      flex: 1 1 12rem;
+      min-width: 0;
+    }
+    .item-card-body .ov-task-actions {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      gap: 6px;
+    }
+    .item-card-body .ov-task-actions .btn {
+      width: auto !important;
+      flex: 0 0 auto !important;
+    }
+    .ov-feed-block { gap: 6px !important; }
+    /* ごはんカード内: 共通 .btn の width:100%・大パディングを打ち消し（コンパクトなチップ型） */
+    .ov-feed-block .btn,
+    .ov-feed-block a.btn {
+      width: auto !important;
+      max-width: 100%;
+      box-sizing: border-box;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      padding: 3px 9px !important;
+      font-size: 11px !important;
+      font-weight: 600;
+      line-height: 1.25;
+      border-radius: 5px;
+      min-height: 0;
+      gap: 3px;
+    }
+    .ov-feed-block .btn-outline { border-width: 1px; }
+    .ov-feed-block .btn.btn-ov-feed-delmemo {
+      padding: 1px 6px !important;
+      font-size: 10px !important;
+      color: #f87171 !important;
+      border-color: rgba(248, 113, 113, 0.45) !important;
+    }
+    .ov-feed-toolbar {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: flex-start;
+      justify-content: flex-start;
+      gap: 6px;
+      margin-bottom: 4px;
+      width: 100%;
+    }
+    .ov-feed-toolbar .btn,
+    .ov-feed-toolbar a.btn {
+      flex: 0 0 auto !important;
+    }
+    .ov-feed-line {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: flex-start;
+      gap: 6px 8px;
+      font-size: 12px;
       border-top: 1px solid rgba(255,255,255,0.08);
-      padding-top: 6px;
+      padding-top: 5px;
     }
     .ov-feed-line:first-child { border-top: none; padding-top: 0; }
-    .ov-feed-slot { font-weight: 700; min-width: 2.2em; color: rgba(255,255,255,0.88); }
-    .ov-feed-menu { flex: 1; min-width: 120px; line-height: 1.35; }
-    .ov-feed-status { font-size: 12px; white-space: nowrap; }
+    .ov-feed-slot { font-weight: 700; min-width: 2.2em; color: rgba(255,255,255,0.88); flex-shrink: 0; }
+    .ov-feed-menu { flex: 1 1 100px; min-width: 0; line-height: 1.35; font-size: 12px; }
+    .ov-feed-status {
+      display: inline-flex;
+      flex-wrap: wrap;
+      align-items: center;
+      justify-content: flex-end;
+      gap: 4px 6px;
+      font-size: 11px;
+      flex: 0 0 auto;
+      width: max-content;
+      max-width: 100%;
+      min-width: 0;
+      margin-left: auto;
+      text-align: right;
+    }
+    .ov-feed-status .btn,
+    .ov-feed-status a.btn {
+      flex: 0 0 auto !important;
+      width: auto !important;
+    }
+    /* ごはん: 1行目＝枠＋献立、2行目＝ステータス・ボタン（横長ボタン防止） */
+    .item-card-body .ov-feed-line {
+      display: grid;
+      grid-template-columns: auto minmax(0, 1fr);
+      grid-template-areas:
+        "slot menu"
+        "status status";
+      column-gap: 10px;
+      row-gap: 6px;
+      align-items: start;
+    }
+    .item-card-body .ov-feed-slot { grid-area: slot; }
+    .item-card-body .ov-feed-menu {
+      grid-area: menu;
+      min-width: 0;
+      word-break: break-word;
+      overflow-wrap: anywhere;
+    }
+    .item-card-body .ov-feed-status {
+      grid-area: status;
+      margin-left: 0;
+      width: 100%;
+      max-width: 100%;
+      justify-content: flex-start;
+      box-sizing: border-box;
+    }
     .feed-done { color: #9d9; }
     .feed-pending { color: rgba(255,255,255,0.5); }
     .ov-task-title { flex: 1 1 120px; min-width: 0; line-height: 1.35; }
@@ -283,7 +451,20 @@
       align-items: center;
       gap: 6px;
     }
+    .item-card-body .ov-ex-display {
+      flex-direction: column;
+      align-items: flex-start;
+      gap: 6px;
+    }
+    .item-card-body .ov-ex-display .btn-ov-hr-edit,
+    .item-card-body .ov-ex-display .btn-ov-hr-del {
+      align-self: flex-start;
+    }
     .ov-ex-text { flex: 1 1 140px; min-width: 0; font-size: 12px; line-height: 1.35; }
+    .item-card-body .ov-ex-text {
+      width: 100%;
+      flex: none;
+    }
     .btn-ov-hr-edit, .btn-ov-hr-del, .btn-ov-hr-cancel {
       font-size: 10px !important;
       padding: 2px 8px !important;
@@ -294,6 +475,15 @@
       align-items: center;
       gap: 6px;
       margin-top: 6px;
+    }
+    .item-card-body .ov-ex-edit {
+      flex-direction: column;
+      align-items: stretch;
+    }
+    .item-card-body .ov-ex-edit .btn,
+    .item-card-body .ov-ex-edit .btn-primary {
+      width: auto !important;
+      align-self: flex-start;
     }
     .ov-ex-row.is-editing .ov-ex-display { display: none; }
     .ov-ex-row.is-editing .ov-ex-edit { display: flex; }
@@ -413,9 +603,37 @@
       background: rgba(248,113,113,0.15);
       color: #f87171;
     }
+    .item-card-body .care-chip {
+      max-width: 100%;
+      box-sizing: border-box;
+      word-break: break-word;
+    }
     .med-item-done { color: #4ade80; }
     .med-item-skip { color: #facc15; text-decoration: line-through; opacity: 0.7; }
     .med-item-pending { color: #f87171; }
+    .ov-med-item-row {
+      display: flex;
+      align-items: flex-start;
+      gap: 8px;
+      font-size: 12px;
+      margin: 4px 0;
+      cursor: pointer;
+    }
+    .item-card-body .ov-med-item-row {
+      width: 100%;
+      max-width: 100%;
+      box-sizing: border-box;
+    }
+    .item-card-body .ov-med-item-row .ov-med-item-text {
+      flex: 1;
+      min-width: 0;
+      word-break: break-word;
+      overflow-wrap: anywhere;
+      line-height: 1.35;
+    }
+    .ov-med-item-row .ov-med-log-cb { flex-shrink: 0; margin-top: 2px; }
+    .ov-med-item-row.med-item-skip { text-decoration: none; opacity: 1; }
+    .ov-med-item-row.med-item-skip .ov-med-item-text { text-decoration: line-through; opacity: 0.7; }
 
     .footer-actions {
       display: flex;
@@ -528,19 +746,22 @@
 </head>
 <body>
 
-  <div class="page-scroll">
-  <div class="header">
-    <h1>NYAGI</h1>
-    <p>猫一覧</p>
-    <nav class="header-nav">
-      <a href="dashboard.html">ダッシュボード</a>
-      <a href="cats.html" class="nav-current">猫一覧</a>
-      <a href="tasks.html">タスク</a>
-      <a href="foods.html">フード</a>
-      <a href="medicines.html">薬</a>
-      <a href="manual.html">📖 マニュアル</a>
-    </nav>
+  <div class="app-sticky-top">
+    <div class="header">
+      <h1>NYAGI</h1>
+      <p>猫一覧</p>
+      <nav class="header-nav">
+        <a href="dashboard.html">ダッシュボード</a>
+        <a href="cats.html" class="nav-current">猫一覧</a>
+        <a href="tasks.html">タスク</a>
+        <a href="foods.html">フード</a>
+        <a href="medicines.html">薬</a>
+        <a href="manual.html">📖 マニュアル</a>
+      </nav>
+    </div>
   </div>
+
+  <div class="page-scroll">
 
   <div id="loginGate" style="display:none;"></div>
 
@@ -704,7 +925,7 @@
   <script src="js/nyagi-boot-overlay.js?v=203"></script>
   <script src="js/login-gate.js?v=203"></script>
   <script src="js/app.js?v=203"></script>
-  <script src="js/cats-overview.js?v=228"></script>
+  <script src="js/cats-overview.js?v=232"></script>
   <script src="js/voice-console.js?v=203"></script>
 </body>
 </html>

@@ -27,6 +27,7 @@ function toggleFold(id, btn) {
 
   var loginGate            = document.getElementById('loginGate');
   var catContent           = document.getElementById('catContent');
+  var catStickyBack        = document.getElementById('catStickyBack');
   var catHeaderArea        = document.getElementById('catHeaderArea');
   var alertBannerArea      = document.getElementById('alertBannerArea');
   var basicInfoArea        = document.getElementById('basicInfoArea');
@@ -232,6 +233,8 @@ function toggleFold(id, btn) {
 
     if (!credentials) {
       if (loginGate) loginGate.style.display = 'block';
+      if (catStickyBack) catStickyBack.style.display = 'none';
+      if (window.NyagiFixedHeader) window.NyagiFixedHeader.update();
       return;
     }
     if (!catId) {
@@ -239,6 +242,8 @@ function toggleFold(id, btn) {
       return;
     }
     if (catContent) catContent.style.display = 'block';
+    if (catStickyBack) catStickyBack.style.display = 'flex';
+    if (window.NyagiFixedHeader) window.NyagiFixedHeader.update();
     if (!_feedingMidnightRefreshBound) {
       _feedingMidnightRefreshBound = true;
       document.addEventListener('visibilitychange', function () {

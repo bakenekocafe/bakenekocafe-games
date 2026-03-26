@@ -5316,6 +5316,157 @@ function toggleFold(id, btn) {
 
   var _medPresets = [];
   var _editingMedPresetId = null;
+  var _editingMedPresetItemId = null;
+  var _mpItemsCache = {};
+
+  function applyFrequencyStringToMpForm(freq) {
+    var sel = document.getElementById('mpFrequency');
+    if (!sel) return;
+    var f = (freq != null && freq !== '') ? String(freq) : '毎日';
+    if (f === '隔日') f = '隔日(A)';
+
+    if (f.indexOf('月1:') === 0) {
+      sel.value = 'monthly';
+      var dom = document.getElementById('mpMonthDay');
+      if (dom) dom.value = String(parseInt(f.slice(3), 10) || '');
+      onMpFreqChange();
+      return;
+    }
+    if (f.indexOf('週:') === 0) {
+      sel.value = 'weekly';
+      onMpFreqChange();
+      var allDow = document.querySelectorAll('input[name="mpDow"]');
+      for (var i = 0; i < allDow.length; i++) allDow[i].checked = false;
+      var days = f.slice(2).split(',');
+      for (var j = 0; j < days.length; j++) {
+        var d = days[j].trim();
+        for (var k = 0; k < allDow.length; k++) {
+          if (allDow[k].value === d) allDow[k].checked = true;
+        }
+      }
+      return;
+    }
+
+    var found = false;
+    for (var oi = 0; oi < sel.options.length; oi++) {
+      if (sel.options[oi].value === f) { sel.selectedIndex = oi; found = true; break; }
+    }
+    if (!found) sel.value = '毎日';
+    onMpFreqChange();
+  }
+
+  function clearMedPresetItemForm() {
+    _editingMedPresetItemId = null;
+    var btn = document.getElementById('mpItemSubmitBtn');
+    if (btn) btn.textContent = '＋ この薬を追加';
+    var hint = document.getElementById('mpItemEditHint');
+    if (hint) hint.style.display = 'none';
+    var cbtn = document.getElementById('mpItemCancelEditBtn');
+    if (cbtn) cbtn.style.display = 'none';
+
+    var selM = document.getElementById('mpMedicineId');
+    if (selM) selM.value = '';
+    var inp = document.getElementById('mpMedSearchInput');
+    if (inp) inp.value = '';
+    var amt = document.getElementById('mpDosageAmount');
+    if (amt) amt.value = '';
+    var unit = document.getElementById('mpDosageUnit');
+    if (unit) unit.value = '';
+    var route = document.getElementById('mpRoute');
+    if (route) route.value = '経口';
+    var fq = document.getElementById('mpFrequency');
+    if (fq) fq.value = '毎日';
+    var md = document.getElementById('mpMonthDay');
+    if (md) md.value = '';
+    var slots = document.querySelectorAll('#mpSlotChecks input[type="checkbox"]');
+    for (var si = 0; si < slots.length; si++) {
+      slots[si].checked = (slots[si].value === '朝' || slots[si].value === '晩');
+    }
+    var dows = document.querySelectorAll('input[name="mpDow"]');
+    for (var dj = 0; dj < dows.length; dj++) dows[dj].checked = false;
+    onMpFreqChange();
+  }
+
+  window.cancelEditMedPresetItem = function () {
+    clearMedPresetItemForm();
+  };
+
+  window.startEditMedPresetItem = function (itemId) {
+    var it = _mpItemsCache[itemId];
+    if (!it) { alert('データが見つかりません。一覧を再読み込みしてください。'); return; }
+    _editingMedPresetItemId = itemId;
+
+    var btn = document.getElementById('mpItemSubmitBtn');
+    if (btn) btn.textContent = '💾 変更を保存';
+    var hint = document.getElementById('mpItemEditHint');
+    if (hint) hint.style.display = 'block';
+    var cbtn = document.getElementById('mpItemCancelEditBtn');
+    if (cbtn) cbtn.style.display = 'block';
+
+    var selM = document.getElementById('mpMedicineId');
+    if (selM) selM.value = it.medicine_id || '';
+    var inp = document.getElementById('mpMedSearchInput');
+    if (inp) {
+      inp.value = (it.medicine_name || '') + (it.medicine_form ? ' (' + it.medicine_form + ')' : '');
+    }
+    var amt = document.getElementById('mpDosageAmount');
+    if (amt) amt.value = (it.dosage_amount != null && it.dosage_amount !== '') ? String(it.dosage_amount) : '';
+    var unit = document.getElementById('mpDosageUnit');
+    if (unit) unit.value = it.dosage_unit || '';
+    var route = document.getElementById('mpRoute');
+    if (route) route.value = it.route || '経口';
+
+    applyFrequencyStringToMpForm(it.frequency);
+
+    var slotArr = [];
+    try { slotArr = JSON.parse(it.time_slots || '[]'); } catch (_) { slotArr = []; }
+    var slotChecks = document.querySelectorAll('#mpSlotChecks input[type="checkbox"]');
+    for (var sc = 0; sc < slotChecks.length; sc++) {
+      slotChecks[sc].checked = slotArr.indexOf(slotChecks[sc].value) !== -1;
+    }
+    var anySlot = false;
+    for (var sc2 = 0; sc2 < slotChecks.length; sc2++) { if (slotChecks[sc2].checked) anySlot = true; }
+    if (!anySlot && slotChecks.length) {
+      for (var sc3 = 0; sc3 < slotChecks.length; sc3++) {
+        if (slotChecks[sc3].value === '朝') slotChecks[sc3].checked = true;
+      }
+    }
+
+    var formAnchor = document.getElementById('mpItemSubmitBtn');
+    if (formAnchor && formAnchor.scrollIntoView) {
+      try { formAnchor.scrollIntoView({ block: 'nearest', behavior: 'smooth' }); } catch (_) { formAnchor.scrollIntoView(false); }
+    }
+  };
+
+  window.saveMedPresetMeta = function () {
+    if (!_editingMedPresetId) return;
+    var nameIn = document.getElementById('mpPresetName');
+    var descIn = document.getElementById('mpPresetDescription');
+    var name = nameIn ? nameIn.value.trim() : '';
+    if (!name) { alert('プリセット名を入力してください'); return; }
+    fetch(API_BASE + '/health/medication-presets/' + _editingMedPresetId, {
+      method: 'PUT',
+      headers: apiHeaders(),
+      cache: 'no-store',
+      body: JSON.stringify({
+        name: name,
+        description: descIn && descIn.value.trim() ? descIn.value.trim() : null,
+      }),
+    }).then(function (r) { return r.json(); })
+      .then(function (data) {
+        if (data.error) { alert('エラー: ' + (data.message || data.error)); return; }
+        var titleEl = document.getElementById('mpEditTitle');
+        if (titleEl) titleEl.textContent = '📋 ' + name + ' の編集';
+        for (var pi = 0; pi < _medPresets.length; pi++) {
+          if (_medPresets[pi].id === _editingMedPresetId) {
+            _medPresets[pi].name = name;
+            _medPresets[pi].description = descIn && descIn.value.trim() ? descIn.value.trim() : null;
+            break;
+          }
+        }
+        alert('プリセット情報を保存しました');
+      }).catch(function () { alert('保存に失敗しました'); });
+  };
 
   window.deleteMedPresetConfirm = function (presetId) {
     if (!confirm('このプリセットを削除しますか？')) return;
@@ -5331,12 +5482,18 @@ function toggleFold(id, btn) {
 
   window.editMedPreset = function (presetId) {
     _editingMedPresetId = presetId;
+    clearMedPresetItemForm();
     var p = null;
     for (var i = 0; i < _medPresets.length; i++) {
       if (_medPresets[i].id === presetId) { p = _medPresets[i]; break; }
     }
     var titleEl = document.getElementById('mpEditTitle');
     if (titleEl && p) titleEl.textContent = '📋 ' + p.name + ' の編集';
+
+    var nameIn = document.getElementById('mpPresetName');
+    var descIn = document.getElementById('mpPresetDescription');
+    if (nameIn) nameIn.value = p ? (p.name || '') : '';
+    if (descIn) descIn.value = p ? (p.description || '') : '';
 
     var editModal = document.getElementById('medPresetEditModal');
     if (editModal) editModal.classList.add('open');
@@ -5535,6 +5692,7 @@ function toggleFold(id, btn) {
   function renderMedPresetItems(items) {
     var el = document.getElementById('mpEditItemList');
     if (!el) return;
+    _mpItemsCache = {};
     if (items.length === 0) {
       el.innerHTML = '<div class="empty-msg">薬が登録されていません</div>';
       return;
@@ -5542,6 +5700,7 @@ function toggleFold(id, btn) {
     var html = '';
     for (var i = 0; i < items.length; i++) {
       var it = items[i];
+      _mpItemsCache[it.id] = it;
       var slots = [];
       try { slots = JSON.parse(it.time_slots || '[]'); } catch (_) {}
       var slotLabels = '';
@@ -5549,8 +5708,8 @@ function toggleFold(id, btn) {
         var cls = slots[s] === '朝' ? 'background:rgba(250,204,21,0.2);color:#facc15;' : slots[s] === '晩' ? 'background:rgba(129,140,248,0.2);color:#818cf8;' : 'background:rgba(74,222,128,0.15);color:#4ade80;';
         slotLabels += '<span style="display:inline-block;padding:1px 6px;border-radius:4px;font-size:10px;font-weight:600;' + cls + '">' + escapeHtml(slots[s]) + '</span> ';
       }
-      html += '<div style="display:flex;justify-content:space-between;align-items:center;padding:8px 10px;background:var(--surface);border-radius:6px;margin-bottom:4px;">';
-      html += '<div>';
+      html += '<div style="display:flex;justify-content:space-between;align-items:center;padding:8px 10px;background:var(--surface);border-radius:6px;margin-bottom:4px;gap:6px;">';
+      html += '<div style="min-width:0;flex:1;">';
       html += '<div style="font-size:13px;font-weight:600;">' + escapeHtml(it.medicine_name || '') + '</div>';
       html += '<div style="font-size:11px;color:var(--text-dim);">';
       if (it.dosage_amount) html += it.dosage_amount + (it.dosage_unit ? escapeHtml(it.dosage_unit) : '') + ' ';
@@ -5558,8 +5717,10 @@ function toggleFold(id, btn) {
       html += slotLabels;
       if (it.route) html += '(' + escapeHtml(it.route) + ')';
       html += '</div></div>';
-      html += '<button class="btn-med-stop" onclick="deleteMedPresetItemConfirm(' + it.id + ')" title="削除">🗑</button>';
-      html += '</div>';
+      html += '<div style="display:flex;gap:4px;flex-shrink:0;">';
+      html += '<button type="button" class="btn-med-edit" onclick="startEditMedPresetItem(' + it.id + ')" title="編集">✏️</button>';
+      html += '<button type="button" class="btn-med-stop" onclick="deleteMedPresetItemConfirm(' + it.id + ')" title="削除">🗑</button>';
+      html += '</div></div>';
     }
     el.innerHTML = html;
   }
@@ -5591,27 +5752,33 @@ function toggleFold(id, btn) {
     for (var c = 0; c < checks.length; c++) slots.push(checks[c].value);
     if (slots.length === 0) { alert('タイミング（朝/晩）を1つ以上選択してください'); return; }
 
-    fetch(API_BASE + '/health/medication-presets/' + _editingMedPresetId + '/items', {
-      method: 'POST', headers: apiHeaders(), cache: 'no-store',
-      body: JSON.stringify({
-        medicine_id: medId,
-        dosage_amount: amount || null,
-        dosage_unit: unit || null,
-        frequency: freq,
-        time_slots: slots,
-        route: route,
-      }),
+    var payload = {
+      medicine_id: medId,
+      dosage_amount: amount || null,
+      dosage_unit: unit || null,
+      frequency: freq,
+      time_slots: slots,
+      route: route,
+    };
+
+    var url = API_BASE + '/health/medication-presets/' + _editingMedPresetId + '/items';
+    var method = 'POST';
+    if (_editingMedPresetItemId) {
+      url += '/' + _editingMedPresetItemId;
+      method = 'PUT';
+    }
+
+    fetch(url, {
+      method: method,
+      headers: apiHeaders(),
+      cache: 'no-store',
+      body: JSON.stringify(payload),
     }).then(function (r) { return r.json(); })
     .then(function (data) {
       if (data.error) { alert('エラー: ' + (data.message || data.error)); return; }
-      var selEl = document.getElementById('mpMedicineId');
-      if (selEl) selEl.value = '';
-      var inp = document.getElementById('mpMedSearchInput');
-      if (inp) inp.value = '';
-      var amtEl = document.getElementById('mpDosageAmount');
-      if (amtEl) amtEl.value = '';
+      clearMedPresetItemForm();
       loadMedPresetItems(_editingMedPresetId);
-    }).catch(function () { alert('追加に失敗しました'); });
+    }).catch(function () { alert(method === 'PUT' ? '更新に失敗しました' : '追加に失敗しました'); });
   };
 
   window.deleteMedPresetItemConfirm = function (itemId) {
@@ -5621,6 +5788,7 @@ function toggleFold(id, btn) {
     }).then(function (r) { return r.json(); })
     .then(function (data) {
       if (data.error) { alert('エラー: ' + (data.message || data.error)); return; }
+      if (String(itemId) === String(_editingMedPresetItemId)) clearMedPresetItemForm();
       loadMedPresetItems(_editingMedPresetId);
     }).catch(function () { alert('削除に失敗しました'); });
   };
@@ -5628,6 +5796,8 @@ function toggleFold(id, btn) {
   window.closeMedPresetEditModal = function () {
     var editModal = document.getElementById('medPresetEditModal');
     if (editModal) editModal.classList.remove('open');
+    clearMedPresetItemForm();
+    _mpItemsCache = {};
     _medActiveTab = 'preset';
     loadMedicationSchedule();
   };

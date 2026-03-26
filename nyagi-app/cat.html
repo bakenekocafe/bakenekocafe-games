@@ -1438,6 +1438,17 @@
   <div id="medPresetEditModal" class="modal-overlay">
     <div class="modal-box" style="max-height:90vh;overflow-y:auto;">
       <div class="modal-title" id="mpEditTitle">📋 プリセット編集</div>
+      <div style="margin-bottom:12px;padding:10px;background:var(--surface-alt);border-radius:8px;">
+        <div class="form-group">
+          <label class="form-label">プリセット名</label>
+          <input type="text" id="mpPresetName" class="form-input" placeholder="プリセット名">
+        </div>
+        <div class="form-group">
+          <label class="form-label">説明（任意）</label>
+          <textarea id="mpPresetDescription" class="form-textarea" rows="2" placeholder="スタッフ向けメモ"></textarea>
+        </div>
+        <button type="button" class="btn btn-outline" style="font-size:12px;width:100%;" onclick="saveMedPresetMeta()">プリセット名・説明を保存</button>
+      </div>
       <div id="mpEditItemList" style="margin-bottom:12px;"></div>
       <div style="border-top:1px solid var(--surface-alt);padding-top:12px;">
         <div class="form-group">
@@ -1525,10 +1536,13 @@
             <option value="点眼">点眼</option>
             <option value="点鼻">点鼻</option>
             <option value="点耳">点耳</option>
+            <option value="皮下注射">皮下注射</option>
             <option value="塗布">塗布</option>
           </select>
         </div>
-        <button class="btn btn-primary" style="width:100%;font-size:13px;" onclick="addMedPresetItem()">＋ この薬を追加</button>
+        <div id="mpItemEditHint" class="form-hint" style="display:none;margin-bottom:8px;font-size:11px;color:#38bdf8;">✏️ 一覧の薬を編集中です。内容を変えて「変更を保存」するか、「追加モードに戻る」で新規追加に切り替えられます。</div>
+        <button type="button" class="btn btn-outline" id="mpItemCancelEditBtn" style="display:none;width:100%;font-size:12px;margin-bottom:6px;" onclick="cancelEditMedPresetItem()">追加モードに戻る</button>
+        <button class="btn btn-primary" id="mpItemSubmitBtn" style="width:100%;font-size:13px;" onclick="addMedPresetItem()">＋ この薬を追加</button>
       </div>
       <div class="modal-actions" style="margin-top:12px;">
         <button class="btn btn-outline" onclick="closeMedPresetEditModal()">戻る</button>
@@ -1544,7 +1558,7 @@
   <script src="js/nyagi-boot-overlay.js?v=203"></script>
   <script src="js/login-gate.js?v=203"></script>
   <script src="js/app.js?v=203"></script>
-  <script src="js/cat-detail.js?v=217"></script>
+  <script src="js/cat-detail.js?v=218"></script>
   <script src="js/voice-console.js?v=203"></script>
 </body>
 </html>

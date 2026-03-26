@@ -1826,10 +1826,21 @@ function toggleFold(id, btn) {
       method: 'POST',
       headers: apiHeaders(), cache: 'no-store',
       body: JSON.stringify({}),
-    }).then(function (r) { return r.json(); })
-    .then(function (data) {
+    }).then(function (r) {
+      return r.text().then(function (text) {
+        var data = null;
+        try { data = text ? JSON.parse(text) : {}; } catch (_) {}
+        return { ok: r.ok, status: r.status, data: data, raw: text };
+      });
+    })
+    .then(function (res) {
+      if (!res.ok) {
+        var msg = (res.data && (res.data.message || res.data.error)) || ('HTTP ' + res.status);
+        alert('エラー: ' + msg);
+        return;
+      }
+      var data = res.data || {};
       if (data.error) { alert('エラー: ' + (data.message || data.error)); return; }
-      // ログ行だけ更新
       var el = document.getElementById('medlog-' + logId);
       if (el && data.log) {
         el.outerHTML = renderMedicationLogItem(data.log);

@@ -626,6 +626,60 @@
       box-sizing: border-box;
       word-break: break-word;
     }
+    .ov-care-inline-form {
+      flex-direction: column;
+      align-items: stretch;
+      gap: 8px;
+    }
+    .ov-care-bulk-block {
+      padding: 8px 0 10px;
+      border-bottom: 1px solid rgba(255,255,255,0.08);
+    }
+    .ov-care-bulk-hint {
+      font-size: 11px;
+      color: var(--text-dim);
+      line-height: 1.4;
+      margin-bottom: 6px;
+    }
+    .ov-care-bulk-cbs {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 6px 12px;
+      margin-bottom: 8px;
+    }
+    .ov-care-bulk-lab {
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+      font-size: 12px;
+      cursor: pointer;
+      user-select: none;
+    }
+    .ov-care-bulk-lab input {
+      width: 16px;
+      height: 16px;
+      accent-color: #5cb8a5;
+      flex-shrink: 0;
+    }
+    .ov-care-bulk-actions {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      gap: 8px;
+    }
+    .ov-care-bulk-actions .ov-inline-date { flex: 0 0 auto; }
+    .ov-care-bulk-actions .btn-ov-care-bulk-save {
+      width: auto !important;
+      flex: 0 0 auto;
+      font-size: 12px;
+      padding: 8px 12px;
+    }
+    .ov-care-sep {
+      font-size: 11px;
+      color: var(--text-dim);
+      margin-top: 4px;
+      padding-top: 6px;
+    }
     .med-item-done { color: #4ade80; }
     .med-item-skip { color: #facc15; text-decoration: line-through; opacity: 0.7; }
     .med-item-pending { color: #f87171; }
@@ -949,7 +1003,7 @@
   <script src="js/nyagi-boot-overlay.js?v=203"></script>
   <script src="js/login-gate.js?v=203"></script>
   <script src="js/app.js?v=203"></script>
-  <script src="js/cats-overview.js?v=234"></script>
+  <script src="js/cats-overview.js?v=235"></script>
   <script src="js/voice-console.js?v=203"></script>
 </body>
 </html>

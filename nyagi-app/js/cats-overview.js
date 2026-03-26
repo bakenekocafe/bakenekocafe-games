@@ -79,6 +79,14 @@
   var OPT_SLOT = '<option value="">帯</option><option value="朝">朝</option><option value="昼">昼</option><option value="夜">夜</option><option value="途中">途中</option>';
   var OPT_CARE_TYPE = '<option value="">項目</option><option value="care:ブラシ">ブラシ</option><option value="care:アゴ">アゴ</option><option value="care:耳">耳</option><option value="care:爪切り">爪切り</option><option value="care:肉球">肉球</option><option value="care:お尻">お尻</option><option value="eye_discharge:目ヤニ拭き">目ヤニ拭き</option>';
   var OPT_CARE_DONE = '<option value="1">実施</option><option value="0">スキップ</option>';
+  /** 項目ごと「まとめ記録」対象（爪切り・肉球は除外。個別フォームから入力） */
+  var OV_CARE_BULK_SPECS = [
+    { value: 'care:ブラシ', label: 'ブラシ' },
+    { value: 'care:アゴ', label: 'アゴ' },
+    { value: 'care:耳', label: '耳' },
+    { value: 'care:お尻', label: 'お尻' },
+    { value: 'eye_discharge:目ヤニ拭き', label: '目ヤニ拭き' },
+  ];
 
   /** DB英語キー → フォーム選択肢（日本語） */
   var STOOL_EN_TO_JA = { normal: '健康', hard: '硬い', soft: '軟便', liquid: '下痢', recorded: '記録あり' };
@@ -1236,6 +1244,27 @@
       });
   }
 
+  function postHealthRecordPromise(body) {
+    return fetch(apiOpsBase() + '/health/records', {
+      method: 'POST',
+      headers: apiHeaders(),
+      cache: 'no-store',
+      body: JSON.stringify(body),
+    }).then(function (r) {
+      return r.text().then(function (text) {
+        var data = {};
+        if (text) {
+          try {
+            data = JSON.parse(text);
+          } catch (e) {
+            data = { error: 'invalid_response', message: text.slice(0, 240) };
+          }
+        }
+        return { ok: r.ok, data: data };
+      });
+    });
+  }
+
   function putHealthRecord(recordId, body, btn) {
     var prevText = btn ? btn.textContent : '';
     if (btn) { btn.disabled = true; btn.textContent = '…'; }
@@ -1418,6 +1447,82 @@
       body.recorded_time = nowJstHm();
     }
     postHealthRecord(body, btn);
+  }
+
+  function saveBulkSelectedCare(catId, form, btn) {
+    var dt = form.querySelector('.ov-inp-care-bulk-date');
+    var recordDate = dt && dt.value;
+    if (!recordDate) {
+      alert('日付を入力してください');
+      return;
+    }
+    var cbs = form.querySelectorAll('.ov-care-bulk-cb:checked');
+    if (!cbs || cbs.length === 0) {
+      alert('記録する項目にチェックを入れてください');
+      return;
+    }
+    var allowed = {};
+    for (var ai = 0; ai < OV_CARE_BULK_SPECS.length; ai++) {
+      allowed[OV_CARE_BULK_SPECS[ai].value] = true;
+    }
+    var items = [];
+    for (var aj = 0; aj < cbs.length; aj++) {
+      var cv = cbs[aj].value;
+      if (allowed[cv]) items.push(cv);
+    }
+    if (items.length === 0) {
+      alert('有効な項目がありません');
+      return;
+    }
+    var prevText = btn.textContent;
+    btn.disabled = true;
+    btn.textContent = '…';
+
+    function buildCareBody(careVal) {
+      var parts = careVal.split(':');
+      var recordType = parts[0] || 'care';
+      var details = parts.slice(1).join(':') || '';
+      var b = {
+        cat_id: catId,
+        record_type: recordType,
+        record_date: recordDate,
+        value: '記録',
+        details: details,
+      };
+      if (recordType === 'care' || recordType === 'eye_discharge') {
+        b.recorded_time = nowJstHm();
+      }
+      return b;
+    }
+
+    function runSeq(idx) {
+      if (idx >= items.length) {
+        btn.disabled = false;
+        btn.textContent = prevText;
+        var allCb = form.querySelectorAll('.ov-care-bulk-cb');
+        for (var u = 0; u < allCb.length; u++) {
+          allCb[u].checked = false;
+        }
+        fetchCatsDataSilent();
+        return;
+      }
+      postHealthRecordPromise(buildCareBody(items[idx]))
+        .then(function (res) {
+          if (!res.ok || (res.data && res.data.error)) {
+            btn.disabled = false;
+            btn.textContent = prevText;
+            alert('エラー: ' + ((res.data && (res.data.message || res.data.error)) || 'HTTPエラー'));
+            return;
+          }
+          runSeq(idx + 1);
+        })
+        .catch(function () {
+          btn.disabled = false;
+          btn.textContent = prevText;
+          alert('保存に失敗しました');
+        });
+    }
+    runSeq(0);
   }
 
   /** 投薬ログ done/undo。本文 POST { action } を優先し、405 のとき従来の /done|/undo にフォールバック */
@@ -1749,8 +1854,26 @@
       '</div>';
   }
 
+  function buildCareBulkCheckboxesHtml() {
+    var h = '<div class="ov-care-bulk-cbs">';
+    for (var bi = 0; bi < OV_CARE_BULK_SPECS.length; bi++) {
+      var s = OV_CARE_BULK_SPECS[bi];
+      h += '<label class="ov-care-bulk-lab"><input type="checkbox" class="ov-care-bulk-cb" value="' + escAttr(s.value) + '">' + esc(s.label) + '</label>';
+    }
+    h += '</div>';
+    return h;
+  }
+
   function buildCareInlineEdit(c) {
-    return '<div class="inline-form" data-cat-id="' + escAttr(c.id) + '">' +
+    return '<div class="inline-form ov-care-inline-form" data-cat-id="' + escAttr(c.id) + '">' +
+      '<div class="ov-care-bulk-block">' +
+      '<div class="ov-care-bulk-hint">まとめ記録（複数選択可）— 爪切り・肉球は下の個別から</div>' +
+      buildCareBulkCheckboxesHtml() +
+      '<div class="ov-care-bulk-actions">' +
+      '<input type="date" class="ov-inline-date ov-inp-care-bulk-date" value="' + escAttr(todayJstYmd()) + '">' +
+      '<button type="button" class="btn btn-primary btn-ov-care-bulk-save">選択をまとめて記録</button>' +
+      '</div></div>' +
+      '<div class="ov-care-sep">個別記録（全項目・1件ずつ）</div>' +
       '<select class="ov-inline-select ov-sel-care-type">' + OPT_CARE_TYPE + '</select>' +
       '<select class="ov-inline-select ov-sel-care-done">' + OPT_CARE_DONE + '</select>' +
       '<input type="date" class="ov-inline-date ov-inp-date" value="' + escAttr(todayJstYmd()) + '">' +

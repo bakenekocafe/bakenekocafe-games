@@ -3623,14 +3623,18 @@ function toggleFold(id, btn) {
     var loc = getStoredPresetLocation();
     if (!confirm('拠点「' + presetLocShortLabel(loc) + '」用のプリセットを新規作成します。\n（別の拠点の場合は、一覧の上でタブを切り替えてから再度「+ 新規」を押してください）')) return;
     var name = prompt('プリセット名を入力してください（例: 腎臓ケアセット）');
-    if (!name) return;
+    if (name == null) return;
+    name = String(name).trim();
+    if (!name) { alert('プリセット名を入力してください'); return; }
     var desc = prompt('説明（任意・プリセット全体のメモ）', '');
+    var sp = (currentCatData && currentCatData.species) || 'cat';
     fetch(API_BASE + '/feeding/presets', {
       method: 'POST', headers: apiHeaders(), cache: 'no-store',
       body: JSON.stringify({
         name: name,
         description: desc != null && String(desc).trim() !== '' ? String(desc) : null,
         location_id: loc,
+        species: sp,
       }),
     }).then(function (r) {
       return r.text().then(function (text) {

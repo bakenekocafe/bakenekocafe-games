@@ -1558,9 +1558,48 @@
     lines.push(closeDayData.date + '  報告者: ' + (credentials.staffName || credentials.staffId));
     lines.push('━━━━━━━━━━━━━━━━━━━━');
     lines.push('');
-    lines.push('✅ 完了: ' + s.done + '/' + s.total + '（' + pct + '%）');
-    lines.push('⏳ スキップ: ' + s.pending + '件');
+    lines.push('✅ タスク完了状況');
+    lines.push('  完了: ' + s.done + '/' + s.total + '（' + pct + '%）');
+    lines.push('  スキップ予定: ' + s.pending + '件（送信時に翌日へ繰越）');
     lines.push('');
+
+    var CLOSE_PREVIEW_MAX = 20;
+    var medPrev = closeDayData.medication_close_day;
+    if (medPrev) {
+      lines.push('💊 本日の投薬（未完了）');
+      if (!medPrev.total) {
+        lines.push('  当日分の投薬スケジュールはありません');
+      } else {
+        var medPct = medPrev.total > 0 ? Math.round((medPrev.done / medPrev.total) * 100) : 0;
+        lines.push('  予定: ' + medPrev.total + '件 / 完了: ' + medPrev.done + '件（' + medPct + '%）');
+        if (medPrev.skipped > 0) lines.push('  スキップ済: ' + medPrev.skipped + '件');
+        var pitems = medPrev.pending_items || [];
+        for (var pi = 0; pi < pitems.length && pi < CLOSE_PREVIEW_MAX; pi++) {
+          var pit = pitems[pi];
+          lines.push('  • ' + pit.cat_name + ' — ' + pit.slot_label + ' ' + pit.medicine_name + '（未）');
+        }
+        if (pitems.length > CLOSE_PREVIEW_MAX) lines.push('  … 他' + (pitems.length - CLOSE_PREVIEW_MAX) + '件');
+        if (pitems.length === 0) lines.push('  未完了の投薬はありません');
+      }
+      lines.push('');
+    }
+    var feedPrev = closeDayData.feeding_close_day;
+    if (feedPrev) {
+      lines.push('🍚 本日のごはん（未完了・要確認）');
+      if (!feedPrev.plan_count) {
+        lines.push('  有効な献立がありません');
+      } else {
+        lines.push('  献立 ' + feedPrev.plan_count + '行のうち、未完了: ' + feedPrev.incomplete_count + '件');
+        var fi = feedPrev.incomplete_items || [];
+        for (var qi = 0; qi < fi.length && qi < CLOSE_PREVIEW_MAX; qi++) {
+          var q = fi[qi];
+          lines.push('  • ' + q.cat_name + ' — ' + q.slot_label + '（' + q.detail + '）');
+        }
+        if (fi.length > CLOSE_PREVIEW_MAX) lines.push('  … 他' + (fi.length - CLOSE_PREVIEW_MAX) + '件');
+        if (fi.length === 0) lines.push('  献立に対する未記録・未確認はありません');
+      }
+      lines.push('');
+    }
 
     if (closeDayData.pending_tasks.length > 0) {
       lines.push('⚠ スキップされるタスク:');

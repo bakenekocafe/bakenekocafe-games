@@ -283,6 +283,20 @@
     .task-type-badge.event     { background: #3b0764; color: #d8b4fe; }
     .task-type-badge.monitoring { background: #14532d; color: #86efac; }
 
+    .task-due-date {
+      display: inline-block;
+      font-size: 10px;
+      font-weight: 600;
+      color: #93c5fd;
+      background: rgba(59, 130, 246, 0.18);
+      padding: 2px 6px;
+      border-radius: 4px;
+    }
+    .task-due-date--overdue {
+      color: #fecaca;
+      background: rgba(248, 113, 113, 0.22);
+    }
+
     .task-overdue-badge {
       display: inline-block;
       font-size: 10px;
@@ -997,7 +1011,7 @@
   <script src="js/nyagi-boot-overlay.js?v=213"></script>
   <script src="js/login-gate.js?v=213"></script>
   <script src="js/app.js?v=213"></script>
-  <script src="js/tasks.js?v=212"></script>
+  <script src="js/tasks.js?v=213"></script>
   <script src="js/voice-console.js?v=213"></script>
 </body>
 </html>

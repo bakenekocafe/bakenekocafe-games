@@ -363,6 +363,47 @@
     return '<span class="task-overdue-badge">期限切れ</span>';
   }
 
+  function taskListFilterDateYmd() {
+    var el = document.getElementById('filterDate');
+    if (el && el.value) {
+      var v = String(el.value).slice(0, 10);
+      if (v.length === 10 && v.charAt(4) === '-') return v;
+    }
+    return todayJstYmd();
+  }
+
+  /** YYYY-MM-DD → M/D（曜） */
+  function formatTaskDueDateForList(ymdRaw) {
+    var ymd = String(ymdRaw || '').slice(0, 10);
+    if (ymd.length !== 10 || ymd.charAt(4) !== '-') return '';
+    var parts = ymd.split('-');
+    var y = parseInt(parts[0], 10);
+    var mo = parseInt(parts[1], 10);
+    var d = parseInt(parts[2], 10);
+    if (isNaN(y) || isNaN(mo) || isNaN(d)) return '';
+    var dt = new Date(y, mo - 1, d);
+    var wdays = ['日', '月', '火', '水', '木', '金', '土'];
+    var w = wdays[dt.getDay()];
+    return mo + '/' + d + '（' + w + '）';
+  }
+
+  /**
+   * 期限（暦日）の表示。ルーティンで一覧の日付と同じ場合は省略（日付はヘッダで分かるため）。
+   * イベント・監視などは期限を必ず表示。
+   */
+  function taskDueDateMetaHtml(task) {
+    var dd = task.due_date ? String(task.due_date).slice(0, 10) : '';
+    if (dd.length !== 10 || dd.charAt(4) !== '-') return '';
+    var tt = task.task_type || 'routine';
+    if (tt === 'routine' && dd === taskListFilterDateYmd()) return '';
+    var label = formatTaskDueDateForList(dd);
+    if (!label) return '';
+    var today = todayJstYmd();
+    var overdue = dd < today && task.status !== 'done' && task.status !== 'skipped';
+    var cls = overdue ? 'task-due-date task-due-date--overdue' : 'task-due-date';
+    return '<span class="' + cls + '">期限 ' + escapeHtml(label) + '</span>';
+  }
+
   function renderTaskItem(task) {
     var statusClass = task.status === 'done' ? ' done' : task.status === 'skipped' ? ' skipped' : '';
     var checkIcon = task.status === 'done' ? '✅' : task.status === 'skipped' ? '⏭' : '⬜';
@@ -385,6 +426,7 @@
       var prioLabel = { urgent: '緊急', high: '高', low: '低' }[task.priority] || task.priority;
       html += '<span class="task-priority-badge ' + task.priority + '">' + prioLabel + '</span>';
     }
+    html += taskDueDateMetaHtml(task);
     if (task.due_time) html += '<span>' + escapeHtml(slotLabel(task.due_time)) + '</span>';
     if (task.assigned_name) html += '<span style="opacity:0.7;">担当: ' + escapeHtml(task.assigned_name) + '</span>';
     html += '</div>';

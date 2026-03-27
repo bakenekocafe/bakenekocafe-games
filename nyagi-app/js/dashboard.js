@@ -197,8 +197,8 @@
       for (var i = 0; i < watches.length; i++) html += renderAlertCard(watches[i], 'watch');
     }
 
-    // 2. 🏥 健康スコア（注意順 TOP5）
-    html += renderHealthScoreTop5(m.cats_summary || []);
+    // 2. 🏥 健康スコア（フィルタ内の全猫・注意順）
+    html += renderHealthScoreSection(m.cats_summary || []);
 
     // 2.5 🤮 はき戻し（直近7日で記録がある猫のみ）
     html += renderVomitSummary(m.cats_summary || []);
@@ -568,43 +568,55 @@
     return html;
   }
 
-  // ── 健康スコア TOP5 ──
+  // ── 健康スコア（拠点・ステータスフィルタに一致する全猫、スコア昇順＝注意順。未算出は末尾） ──
 
-  function renderHealthScoreTop5(cats) {
-    var scored = [];
+  function renderHealthScoreSection(cats) {
+    if (!cats || cats.length === 0) return '';
+
+    var withScore = [];
+    var withoutScore = [];
     for (var i = 0; i < cats.length; i++) {
-      if (cats[i].health_score !== null && cats[i].health_score !== undefined) {
-        scored.push(cats[i]);
+      var ci = cats[i];
+      if (ci.health_score !== null && ci.health_score !== undefined) {
+        withScore.push(ci);
+      } else {
+        withoutScore.push(ci);
       }
     }
-    if (scored.length === 0) return '';
+    withScore.sort(function (a, b) { return a.health_score - b.health_score; });
+    withoutScore.sort(function (a, b) { return String(a.name || '').localeCompare(String(b.name || ''), 'ja'); });
+    var ordered = withScore.concat(withoutScore);
 
-    scored.sort(function (a, b) { return a.health_score - b.health_score; });
-    var top = scored.slice(0, 5);
-
-    var html = '<div class="section-title dash-fold-title" data-fold="healthScore">🏥 健康スコア（注意順）</div>';
+    var html = '<div class="section-title dash-fold-title" data-fold="healthScore">🏥 健康スコア（注意順）';
+    html += ' <small class="dim" style="font-weight:500;">' + ordered.length + '匹</small></div>';
     html += '<div class="dash-fold-body" data-fold-target="healthScore">';
-    html += '<div class="card">';
-    for (var i = 0; i < top.length; i++) {
-      var c = top[i];
-      var s = c.health_score;
-      var colorHex = s >= 80 ? '#4ade80' : s >= 60 ? '#facc15' : s >= 40 ? '#fb923c' : '#f87171';
+    html += '<div class="card dash-health-score-list">';
+    for (var j = 0; j < ordered.length; j++) {
+      var c = ordered[j];
+      var hasScore = c.health_score !== null && c.health_score !== undefined;
+      var s = hasScore ? c.health_score : null;
+      var colorHex = !hasScore ? 'var(--text-dim)' : (s >= 80 ? '#4ade80' : s >= 60 ? '#facc15' : s >= 40 ? '#fb923c' : '#f87171');
       var icon = c.species === 'dog' ? '🐶' : '🐱';
-      var border = i < top.length - 1 ? 'border-bottom:1px solid rgba(255,255,255,0.06);' : '';
+      var border = j < ordered.length - 1 ? 'border-bottom:1px solid rgba(255,255,255,0.06);' : '';
 
-      var topComment = extractTopComment(c.score_detail);
+      var topComment = hasScore ? extractTopComment(c.score_detail) : null;
 
       html += '<a href="cat.html?id=' + encodeURIComponent(c.id || '') + '" style="display:block;padding:8px 0;text-decoration:none;color:inherit;' + border + '">';
       html += '<div style="display:flex;align-items:center;gap:10px;">';
-      html += '<span style="font-size:22px;font-weight:900;min-width:38px;text-align:center;color:' + colorHex + ';">' + s + '</span>';
+      html += '<span style="font-size:22px;font-weight:900;min-width:38px;text-align:center;color:' + colorHex + ';">' + (hasScore ? s : '—') + '</span>';
       html += '<div style="flex:1;min-width:0;">';
       html += '<div style="font-size:13px;font-weight:600;display:flex;align-items:center;gap:6px;">' + icon + ' ' + escapeHtml(c.name);
+      if (!hasScore) {
+        html += ' <span class="dim" style="font-size:10px;font-weight:500;">スコア未算出</span>';
+      }
       if (c.vomit_7d > 0) {
         html += ' <span style="font-size:10px;background:rgba(248,113,113,0.2);color:#f87171;padding:1px 5px;border-radius:10px;font-weight:600;">🤮' + c.vomit_7d + '</span>';
       }
       html += '</div>';
       html += '<div style="background:var(--surface-alt);border-radius:3px;height:4px;margin-top:4px;">';
-      html += '<div style="background:' + colorHex + ';width:' + s + '%;height:100%;border-radius:3px;"></div>';
+      if (hasScore) {
+        html += '<div style="background:' + colorHex + ';width:' + s + '%;height:100%;border-radius:3px;"></div>';
+      }
       html += '</div></div></div>';
 
       if (topComment) {

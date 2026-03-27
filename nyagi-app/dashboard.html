@@ -164,6 +164,13 @@
       background: rgba(255,255,255,0.3);
     }
 
+    /* フィルタ内の全猫表示時も画面が伸びすぎないようカード内スクロール */
+    .dash-health-score-list {
+      max-height: min(70vh, 520px);
+      overflow-y: auto;
+      -webkit-overflow-scrolling: touch;
+    }
+
   </style>
 </head>
 <body>
@@ -217,7 +224,7 @@
   <script src="js/nyagi-boot-overlay.js?v=213"></script>
   <script src="js/login-gate.js?v=213"></script>
   <script src="js/app.js?v=213"></script>
-  <script src="js/dashboard.js?v=207"></script>
+  <script src="js/dashboard.js?v=208"></script>
   <script src="js/voice-console.js?v=213"></script>
 </body>
 </html>

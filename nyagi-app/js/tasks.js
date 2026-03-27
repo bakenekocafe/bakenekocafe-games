@@ -16,6 +16,11 @@
   var staffList = [];
   var currentProjectId = null;
 
+  /** 今日の暦日 YYYY-MM-DD（日本時間）。GET /tasks の due_date・テンプレ生成日と一致させる */
+  function todayJstYmd() {
+    return new Date().toLocaleDateString('sv-SE', { timeZone: 'Asia/Tokyo' });
+  }
+
   function loadCredentials() {
     try {
       var stored = localStorage.getItem('nyagi_creds');
@@ -76,7 +81,7 @@
           credentials = { adminKey: adminKey, staffId: data.staffId };
           loginGate.style.display = 'none';
           taskContent.style.display = 'block';
-          var today = new Date().toISOString().slice(0, 10);
+          var today = todayJstYmd();
           document.getElementById('filterDate').value = today;
           document.getElementById('ntDueDate').value = today;
           loadCatList();
@@ -93,13 +98,16 @@
   }
 
   function loadCatList() {
-    fetch(API_BASE + '/cats', { headers: apiHeaders(), cache: 'no-store' })
+    var loc = getSelectedLocation();
+    var url = API_BASE + '/cats';
+    if (loc) url += '?location=' + encodeURIComponent(loc);
+    return fetch(url, { headers: apiHeaders(), cache: 'no-store' })
       .then(function (r) { return r.json(); })
       .then(function (data) {
         catList = data.cats || [];
         populateCatSelects();
       })
-      .catch(function () {});
+      .catch(function () { return null; });
   }
 
   function populateCatSelects() {
@@ -166,6 +174,8 @@
       document.getElementById('ntExpiresGroup').style.display = isMonitoring ? 'block' : 'none';
       document.getElementById('ntDateGroup').style.display = isMonitoring ? 'none' : 'block';
       document.getElementById('ntTimeGroup').style.display = isMonitoring ? 'none' : 'block';
+      var hint = document.getElementById('ntCatHint');
+      if (hint) hint.style.display = isMonitoring ? 'block' : 'none';
     });
   }
 
@@ -179,6 +189,7 @@
   }
 
   window.onLocationChange = function () {
+    loadCatList();
     if (currentTab === 'today') loadTasks();
     else if (currentTab === 'templates') loadTemplates();
     else if (currentTab === 'projects') loadProjects();
@@ -212,13 +223,14 @@
   };
 
   window.loadTasks = function () {
-    var date = document.getElementById('filterDate').value || new Date().toISOString().slice(0, 10);
+    var date = document.getElementById('filterDate').value || todayJstYmd();
     var status = document.getElementById('filterStatus').value;
 
     var qs = '?date=' + encodeURIComponent(date) + '&group_by=attribute';
     if (status) qs += '&status=' + encodeURIComponent(status);
     var loc = getSelectedLocation();
-    if (loc && loc !== 'both') qs += '&location=' + encodeURIComponent(loc);
+    if (loc === 'both') qs += '&location=both';
+    else if (loc) qs += '&location=' + encodeURIComponent(loc);
 
     document.getElementById('taskListArea').innerHTML = '<div class="loading"><span class="spinner"></span> 読み込み中...</div>';
     document.getElementById('progressArea').innerHTML = '';
@@ -341,6 +353,16 @@
     document.getElementById('taskListArea').innerHTML = html;
   }
 
+  /** イベントタスクで期限（暦日）が JST 今日より前なら期限切れバッジ用 */
+  function eventOverdueBadgeHtml(task) {
+    if ((task.task_type || '') !== 'event') return '';
+    if (task.status !== 'pending' && task.status !== 'in_progress') return '';
+    var dd = task.due_date ? String(task.due_date).slice(0, 10) : '';
+    if (!dd || dd.length < 10) return '';
+    if (dd >= todayJstYmd()) return '';
+    return '<span class="task-overdue-badge">期限切れ</span>';
+  }
+
   function renderTaskItem(task) {
     var statusClass = task.status === 'done' ? ' done' : task.status === 'skipped' ? ' skipped' : '';
     var checkIcon = task.status === 'done' ? '✅' : task.status === 'skipped' ? '⏭' : '⬜';
@@ -357,6 +379,7 @@
     if (tt !== 'routine') {
       html += '<span class="task-type-badge ' + tt + '">' + taskTypeLabel(tt) + '</span>';
     }
+    html += eventOverdueBadgeHtml(task);
 
     if (task.priority && task.priority !== 'normal') {
       var prioLabel = { urgent: '緊急', high: '高', low: '低' }[task.priority] || task.priority;
@@ -411,7 +434,14 @@
   function loadMonitoringTasks() {
     document.getElementById('monitoringListArea').innerHTML = '<div class="loading"><span class="spinner"></span> 読み込み中...</div>';
 
-    fetch(API_BASE + '/tasks?task_type=monitoring', { headers: apiHeaders(), cache: 'no-store' })
+    var loc = getSelectedLocation();
+    var qs = '?task_type=monitoring';
+    if (loc === 'both') qs += '&location=both';
+    else if (loc) qs += '&location=' + encodeURIComponent(loc);
+
+    loadCatList().then(function () {
+      return fetch(API_BASE + '/tasks' + qs, { headers: apiHeaders(), cache: 'no-store' });
+    })
       .then(function (r) { return r.json(); })
       .then(function (data) {
         if (data.error) {
@@ -427,29 +457,45 @@
         var html = '';
         for (var i = 0; i < tasks.length; i++) {
           var t = tasks[i];
+          var st = t.status || 'pending';
+          var tidStr = String(t.cat_id || '');
+          var inList = false;
+          var cj;
           html += '<div class="monitoring-section">';
-          html += '<div style="display:flex;justify-content:space-between;align-items:center;">';
-          html += '<div style="font-size:14px;font-weight:600;">';
+          html += '<div style="display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap;">';
+          html += '<div style="font-size:14px;font-weight:600;flex:1;min-width:0;">';
           if (t.cat_name) html += '<span style="color:#a78bfa;">' + escapeHtml(t.cat_name) + '</span> ';
           html += escapeHtml(t.title);
           html += '</div>';
-          if (t.status === 'pending') {
-            html += '<button class="task-action-btn" onclick="resolveMonitoring(' + t.id + ')" style="background:#14532d;color:#86efac;">解決</button>';
-          } else {
-            html += '<span style="font-size:11px;color:#4ade80;">解決済</span>';
-          }
+          html += '<select class="monitoring-status-select" data-task-id="' + t.id + '" data-current="' + st + '" onchange="changeMonitoringTaskStatus(this)" style="font-size:12px;padding:6px 8px;border-radius:8px;border:1px solid var(--border);background:var(--surface);color:var(--text);max-width:120px;">';
+          html += '<option value="pending"' + (st === 'pending' ? ' selected' : '') + '>監視中</option>';
+          html += '<option value="done"' + (st === 'done' ? ' selected' : '') + '>解決済</option>';
+          html += '<option value="skipped"' + (st === 'skipped' ? ' selected' : '') + '>スキップ</option>';
+          html += '</select>';
           html += '</div>';
+          html += '<div style="margin-top:8px;font-size:12px;display:flex;align-items:center;gap:8px;flex-wrap:wrap;">';
+          html += '<span class="dim" style="white-space:nowrap;">対象猫</span>';
+          html += '<select class="monitoring-cat-select" data-task-id="' + t.id + '" data-prev-cat="' + escAttr(tidStr) + '" onchange="changeMonitoringTaskCat(this)" style="flex:1;min-width:160px;max-width:100%;font-size:12px;padding:6px 8px;border-radius:8px;border:1px solid var(--border);background:var(--surface);color:var(--text);">';
+          html += '<option value="">共通（猫なし）</option>';
+          for (cj = 0; cj < catList.length; cj++) {
+            var cx = catList[cj];
+            var sel = String(cx.id) === tidStr ? ' selected' : '';
+            if (sel) { inList = true; }
+            html += '<option value="' + cx.id + '"' + sel + '>' + escapeHtml(cx.name) + '</option>';
+          }
+          if (tidStr && !inList) {
+            html += '<option value="' + escAttr(tidStr) + '" selected>' + escapeHtml(t.cat_name || ('ID ' + tidStr)) + '（他拠点）</option>';
+          }
+          html += '</select></div>';
           if (t.expires_at) {
             html += '<div style="font-size:11px;color:var(--text-dim);margin-top:4px;">期限: ' + escapeHtml(t.expires_at) + '</div>';
           }
           if (t.note) {
             html += '<div class="task-note-preview" style="margin-top:6px;">' + escapeHtml(t.note) + '</div>';
           }
-          if (t.status === 'pending') {
-            html += '<div class="task-actions-row" style="margin-top:6px;">';
-            html += '<button class="task-action-btn" onclick="openNoteModal(' + t.id + ',' + (t.cat_id ? 'true' : 'false') + ')">メモ追記</button>';
-            html += '</div>';
-          }
+          html += '<div class="task-actions-row" style="margin-top:6px;">';
+          html += '<button class="task-action-btn" onclick="openNoteModal(' + t.id + ',' + (t.cat_id ? 'true' : 'false') + ')">メモ追記</button>';
+          html += '</div>';
           html += '</div>';
         }
         document.getElementById('monitoringListArea').innerHTML = html;
@@ -459,21 +505,86 @@
       });
   }
 
-  window.resolveMonitoring = function (taskId) {
-    fetch(API_BASE + '/tasks/' + taskId + '/done', {
-      method: 'POST',
-      headers: apiHeaders(), cache: 'no-store',
-      body: JSON.stringify({ note: '解決' }),
-    }).then(function (r) { return r.json(); })
-    .then(function (data) {
-      if (data.error === 'already_completed') {
-        showToast(escapeHtml(data.completed_by) + ' が完了済みです');
-        loadMonitoringTasks();
+  /** 監視タスクのステータス変更（PUT /tasks/:id/status） */
+  window.changeMonitoringTaskStatus = function (sel) {
+    var taskId = parseInt(sel.getAttribute('data-task-id'), 10);
+    var prev = sel.getAttribute('data-current') || 'pending';
+    var newStatus = sel.value;
+    if (newStatus === prev) return;
+
+    function revert() {
+      sel.value = prev;
+    }
+
+    var body = { status: newStatus };
+    if (newStatus === 'skipped' && prev !== 'skipped') {
+      var r = window.prompt('スキップ理由（空欄でOK、キャンセルで戻す）', '');
+      if (r === null) {
+        revert();
         return;
       }
-      loadMonitoringTasks();
-    })
-    .catch(function () { alert('更新に失敗しました'); });
+      if (r && String(r).trim()) body.reason = String(r).trim();
+    }
+
+    fetch(API_BASE + '/tasks/' + taskId + '/status', {
+      method: 'PUT',
+      headers: apiHeaders(),
+      cache: 'no-store',
+      body: JSON.stringify(body),
+    }).then(function (r) { return r.json(); })
+      .then(function (data) {
+        if (data.error) {
+          alert(data.message || data.error);
+          revert();
+          return;
+        }
+        sel.setAttribute('data-current', newStatus);
+        showToast('ステータスを更新しました');
+        loadMonitoringTasks();
+      })
+      .catch(function () {
+        alert('更新に失敗しました');
+        revert();
+      });
+  };
+
+  /** 監視タスクの猫紐付け（PUT /tasks/:id body: { cat_id }） */
+  window.changeMonitoringTaskCat = function (sel) {
+    var taskId = parseInt(sel.getAttribute('data-task-id'), 10);
+    var prev = sel.getAttribute('data-prev-cat') || '';
+    var v = sel.value;
+    if (v === prev) return;
+
+    function revert() {
+      sel.value = prev;
+    }
+
+    var payload = { cat_id: v === '' ? null : parseInt(v, 10) };
+    if (payload.cat_id !== null && isNaN(payload.cat_id)) {
+      revert();
+      return;
+    }
+
+    fetch(API_BASE + '/tasks/' + taskId, {
+      method: 'PUT',
+      headers: apiHeaders(),
+      cache: 'no-store',
+      body: JSON.stringify(payload),
+    }).then(function (r) { return r.json(); })
+      .then(function (data) {
+        if (data.error) {
+          alert(data.message || data.error);
+          revert();
+          return;
+        }
+        sel.setAttribute('data-prev-cat', v);
+        showToast('対象猫を更新しました');
+        loadMonitoringTasks();
+      })
+      .catch(function () {
+        alert('更新に失敗しました');
+        revert();
+      });
   };
 
   // ── タスク完了 / スキップ ────────────────────────────────────────────────────
@@ -603,26 +714,31 @@
     document.getElementById('ntCatId').value = '';
     document.getElementById('ntPriority').value = 'normal';
     document.getElementById('ntAttribute').value = 'cat_care';
-    document.getElementById('ntDueDate').value = document.getElementById('filterDate').value || new Date().toISOString().slice(0, 10);
+    document.getElementById('ntDueDate').value = document.getElementById('filterDate').value || todayJstYmd();
     document.getElementById('ntDueTime').value = '';
     document.getElementById('ntExpiresAt').value = '';
     populateStaffSelect('ntAssignedTo');
 
-    if (presetType === 'monitoring') {
-      document.getElementById('ntTaskType').value = 'monitoring';
-      document.getElementById('ntModalTitle').textContent = '+ 監視タスクを追加';
-      document.getElementById('ntExpiresGroup').style.display = 'block';
-      document.getElementById('ntDateGroup').style.display = 'none';
-      document.getElementById('ntTimeGroup').style.display = 'none';
-    } else {
-      document.getElementById('ntTaskType').value = 'routine';
-      document.getElementById('ntModalTitle').textContent = '+ タスクを追加';
-      document.getElementById('ntExpiresGroup').style.display = 'none';
-      document.getElementById('ntDateGroup').style.display = 'block';
-      document.getElementById('ntTimeGroup').style.display = 'block';
-    }
+    var hint = document.getElementById('ntCatHint');
 
-    document.getElementById('newTaskModal').classList.add('open');
+    loadCatList().then(function () {
+      if (presetType === 'monitoring') {
+        document.getElementById('ntTaskType').value = 'monitoring';
+        document.getElementById('ntModalTitle').textContent = '+ 監視タスクを追加';
+        document.getElementById('ntExpiresGroup').style.display = 'block';
+        document.getElementById('ntDateGroup').style.display = 'none';
+        document.getElementById('ntTimeGroup').style.display = 'none';
+        if (hint) hint.style.display = 'block';
+      } else {
+        document.getElementById('ntTaskType').value = 'routine';
+        document.getElementById('ntModalTitle').textContent = '+ タスクを追加';
+        document.getElementById('ntExpiresGroup').style.display = 'none';
+        document.getElementById('ntDateGroup').style.display = 'block';
+        document.getElementById('ntTimeGroup').style.display = 'block';
+        if (hint) hint.style.display = 'none';
+      }
+      document.getElementById('newTaskModal').classList.add('open');
+    });
   };
 
   window.closeNewTaskModal = function () {
@@ -634,7 +750,7 @@
     if (!title) { alert('タイトルを入力してください'); return; }
 
     var taskType = document.getElementById('ntTaskType').value;
-    var dueDate = document.getElementById('ntDueDate').value || new Date().toISOString().slice(0, 10);
+    var dueDate = document.getElementById('ntDueDate').value || todayJstYmd();
     var dueTime = document.getElementById('ntDueTime').value || null;
     var expiresAt = document.getElementById('ntExpiresAt').value || null;
     var catId = document.getElementById('ntCatId').value || null;
@@ -655,7 +771,8 @@
 
     if (taskType === 'monitoring') {
       payload.expires_at = expiresAt;
-      payload.due_date = dueDate;
+      // 日付欄は非表示のため、未入力・古い値が残っても当日 JST に寄せる（一覧の tasks_today と整合）
+      payload.due_date = document.getElementById('ntDueDate').value.trim() || todayJstYmd();
     }
 
     fetch(API_BASE + '/tasks', {
@@ -692,7 +809,9 @@
     area.innerHTML = '<div class="loading"><span class="spinner"></span> 読み込み中...</div>';
 
     var loc = getSelectedLocation();
-    var url = API_BASE + '/tasks/templates' + ((loc && loc !== 'both') ? '?location=' + encodeURIComponent(loc) : '');
+    var url = API_BASE + '/tasks/templates';
+    if (loc === 'both') url += '?location=both';
+    else if (loc) url += '?location=' + encodeURIComponent(loc);
     fetch(url, { headers: apiHeaders(), cache: 'no-store' })
       .then(function (r) {
         if (!r.ok) {
@@ -795,6 +914,21 @@
     }
   }
 
+  function syncTemplateFormForTaskType() {
+    var ttEl = document.getElementById('tmplTaskType');
+    if (!ttEl) return;
+    var isMon = ttEl.value === 'monitoring';
+    var eg = document.getElementById('tmplExpiresGroup');
+    var tg = document.getElementById('tmplTimeSlotGroup');
+    if (eg) eg.style.display = isMon ? 'block' : 'none';
+    if (tg) tg.style.display = isMon ? 'none' : 'block';
+  }
+
+  var tmplTaskTypeEl = document.getElementById('tmplTaskType');
+  if (tmplTaskTypeEl) {
+    tmplTaskTypeEl.addEventListener('change', syncTemplateFormForTaskType);
+  }
+
   function _setRecurrenceUI(value) {
     var typeSelect = document.getElementById('tmplRecurrenceType');
     var hidden = document.getElementById('tmplRecurrence');
@@ -839,9 +973,11 @@
     document.getElementById('tmplTimeSlot').value = '';
     document.getElementById('tmplPriority').value = 'normal';
     document.getElementById('tmplSortOrder').value = '0';
+    document.getElementById('tmplExpiresAt').value = '';
     document.getElementById('tmplDeleteArea').style.display = 'none';
     document.getElementById('tmplSubmitBtn').textContent = '保存';
     populateStaffSelect('tmplAssignedTo');
+    syncTemplateFormForTaskType();
     document.getElementById('newTemplateModal').classList.add('open');
   };
 
@@ -865,12 +1001,15 @@
         document.getElementById('tmplTimeSlot').value = t.time_slot || '';
         document.getElementById('tmplPriority').value = t.priority || 'normal';
         document.getElementById('tmplSortOrder').value = t.sort_order || 0;
+        var expRaw = t.expires_at ? String(t.expires_at) : '';
+        document.getElementById('tmplExpiresAt').value = expRaw.length >= 10 ? expRaw.slice(0, 10) : '';
         document.getElementById('tmplDeleteArea').style.display = 'block';
         document.getElementById('tmplSubmitBtn').textContent = '更新';
         populateStaffSelect('tmplAssignedTo');
         if (t.assigned_to) {
           document.getElementById('tmplAssignedTo').value = t.assigned_to;
         }
+        syncTemplateFormForTaskType();
         document.getElementById('newTemplateModal').classList.add('open');
       })
       .catch(function () { alert('テンプレートの読み込みに失敗しました'); });
@@ -885,9 +1024,10 @@
     var title = document.getElementById('tmplTitle').value.trim();
     if (!title) { alert('タイトルは必須です'); return; }
 
+    var tmplTt = document.getElementById('tmplTaskType').value;
     var payload = {
       title: title,
-      task_type: document.getElementById('tmplTaskType').value,
+      task_type: tmplTt,
       attribute: document.getElementById('tmplAttribute').value,
       cat_id: document.getElementById('tmplCatId').value || null,
       assigned_to: document.getElementById('tmplAssignedTo').value || null,
@@ -897,6 +1037,12 @@
       sort_order: parseInt(document.getElementById('tmplSortOrder').value, 10) || 0,
       description: document.getElementById('tmplDescription').value.trim() || null,
     };
+    if (tmplTt === 'monitoring') {
+      var dex = (document.getElementById('tmplExpiresAt').value || '').trim();
+      payload.expires_at = dex ? dex.slice(0, 10) : null;
+    } else {
+      payload.expires_at = null;
+    }
 
     if (editId) {
       fetch(API_BASE + '/tasks/templates/' + encodeURIComponent(editId), {
@@ -948,13 +1094,18 @@
   // ── テンプレートから一括生成 ───────────────────────────────────────────────────
 
   window.generateFromTemplates = function () {
-    var date = document.getElementById('filterDate').value || new Date().toISOString().slice(0, 10);
+    var date = document.getElementById('filterDate').value || todayJstYmd();
     if (!confirm(date + ' のタスクをテンプレートから一括生成しますか？')) return;
+
+    var loc = getSelectedLocation();
+    var genBody = { date: date };
+    if (loc === 'both') genBody.location_id = 'both';
+    else if (loc) genBody.location_id = loc;
 
     fetch(API_BASE + '/tasks/templates/generate', {
       method: 'POST',
       headers: apiHeaders(), cache: 'no-store',
-      body: JSON.stringify({ date: date }),
+      body: JSON.stringify(genBody),
     }).then(function (r) { return r.json(); })
     .then(function (data) {
       if (data.error) { alert('エラー: ' + (data.message || data.error)); return; }
@@ -1229,7 +1380,7 @@
 
   function attributeLabel(attr) {
     var labels = {
-      opening: '🌅 開店準備', closing: '🌙 閉店作業', cat_care: '🐱 猫ケア',
+      opening: '🌅 開店準備', event: '📅 イベント', closing: '🌙 閉店作業', cat_care: '🐱 猫ケア',
       cleaning: '🧹 清掃', medical: '💊 医療', project: '📁 プロジェクト', other: '📋 その他',
       daily_open: '開店', daily_close: '閉店',
     };
@@ -1254,6 +1405,11 @@
       return '毎月 ' + r.replace('monthly:', '') + '日';
     }
     return r;
+  }
+
+  /** HTML属性用エスケープ（data-* / value 用。未定義だと監視タブで例外になる） */
+  function escAttr(s) {
+    return String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;');
   }
 
   function escapeHtml(str) {
@@ -1285,7 +1441,7 @@
       return;
     }
 
-    var date = document.getElementById('filterDate').value || new Date().toISOString().slice(0, 10);
+    var date = document.getElementById('filterDate').value || todayJstYmd();
     var url = API_BASE + '/tasks/close-day/preview?location=' + encodeURIComponent(loc) + '&date=' + encodeURIComponent(date);
 
     fetch(url, { headers: apiHeaders(), cache: 'no-store' })
@@ -1458,7 +1614,7 @@
 
   // ── 初期化（全関数定義後に実行） ─────────────────────────────────────────────
   if (credentials) {
-    var today = new Date().toISOString().slice(0, 10);
+    var today = todayJstYmd();
     document.getElementById('filterDate').value = today;
     document.getElementById('ntDueDate').value = today;
     loadCatList();

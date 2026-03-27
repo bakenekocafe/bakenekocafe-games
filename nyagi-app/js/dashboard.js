@@ -9,7 +9,6 @@
 
   var _origin = (window.NYAGI_API_ORIGIN != null) ? window.NYAGI_API_ORIGIN : '';
   var API_BASE = _origin + '/api/ops/dashboard';
-  var HEALTH_API_BASE = _origin + '/api/ops/health';
 
   var loginGate = document.getElementById('loginGate');
   var dashContent = document.getElementById('dashContent');
@@ -204,22 +203,6 @@
     // 2.5 🤮 はき戻し（直近7日で記録がある猫のみ）
     html += renderVomitSummary(m.cats_summary || []);
 
-    // 3. 💊 今日の投薬（朝・昼・夜カード）
-    var meds = m.medications_today || [];
-    var pendingMeds = e.pending_medications || [];
-    var medBySlot = { morning: [], noon: [], evening: [] };
-    for (var i = 0; i < meds.length; i++) {
-      var slot = (meds[i].time_slot || '').toString();
-      if (slot === '朝' || slot === 'morning') medBySlot.morning.push(meds[i]);
-      else if (slot === '昼' || slot === 'afternoon') medBySlot.noon.push(meds[i]);
-      else medBySlot.evening.push(meds[i]);
-    }
-    for (var j = 0; j < pendingMeds.length; j++) {
-      medBySlot.evening.push(pendingMeds[j]);
-    }
-    html += '<div class="section-title">💊 今日の投薬</div>';
-    html += renderMedCardsBySlot(medBySlot);
-
     // 3. ✅ タスク（タスクAPIから進捗バーを取得して表示）
     html += '<div class="section-title">✅ タスク</div>';
     html += '<div id="dashTaskProgress"><div class="loading" style="padding:12px;font-size:12px;"><span class="spinner"></span> 読み込み中...</div></div>';
@@ -401,7 +384,6 @@
     dashView.innerHTML = html;
     bindDashFolds();
     bindTodayRecordAnomaly();
-    bindDashMedActions();
     bindVetBookButtons();
     loadTaskProgressBars();
   }
@@ -413,21 +395,6 @@
     link.addEventListener('click', function () {
       var isHidden = detail.style.display === 'none';
       detail.style.display = isHidden ? 'block' : 'none';
-    });
-  }
-
-  function bindDashMedActions() {
-    dashView.addEventListener('click', function (e) {
-      var btn = e.target.closest('.btn-log-action');
-      if (!btn) return;
-      var item = btn.closest('.dash-med-item');
-      if (!item) return;
-      var catId = item.getAttribute('data-cat-id');
-      var medicationId = item.getAttribute('data-medication-id');
-      var logId = item.getAttribute('data-log-id');
-      var timeSlot = item.getAttribute('data-time-slot') || '';
-      var action = btn.getAttribute('data-action') || 'done';
-      doMedicationLogFromDashboard(catId, medicationId, logId, timeSlot, action, item);
     });
   }
 
@@ -501,52 +468,6 @@
         loadDashboard();
       }).catch(function () { alert('保存に失敗しました'); saveBtn.disabled = false; saveBtn.textContent = '保存'; });
     });
-  }
-
-  function doMedicationLogFromDashboard(catId, medicationId, logId, timeSlot, action, itemEl) {
-    if (!logId && !catId) {
-      alert('猫IDが指定されていません');
-      return;
-    }
-    var today = new Date().toISOString().slice(0, 10);
-    function postLog(id) {
-      var endpoint = HEALTH_API_BASE + '/medication-logs/' + id + '/' + action;
-      fetch(endpoint, { method: 'POST', headers: apiHeaders(), cache: 'no-store', body: JSON.stringify({}) })
-        .then(function (r) { return r.json(); })
-        .then(function (data) {
-          if (data.error) { alert('エラー: ' + (data.message || data.error)); return; }
-          initDashboard();
-        })
-        .catch(function () { alert('投薬ログの更新に失敗しました'); });
-    }
-    if (logId) {
-      postLog(logId);
-      return;
-    }
-    fetch(HEALTH_API_BASE + '/medication-logs?cat_id=' + encodeURIComponent(catId) + '&date=' + today, { headers: apiHeaders(), cache: 'no-store' })
-      .then(function (r) { return r.json(); })
-      .then(function (data) {
-        var logs = data.logs || [];
-        var norm = function (s) {
-          if (!s) return '';
-          if (s === 'morning' || s === '朝') return '朝';
-          if (s === 'afternoon' || s === '昼') return '昼';
-          if (s === 'evening' || s === '晩') return '晩';
-          return s;
-        };
-        for (var i = 0; i < logs.length; i++) {
-          var log = logs[i];
-          if (log.medication_id != null && String(log.medication_id) === String(medicationId)) {
-            var logSlot = (log.scheduled_at || '').split('T')[1] || '';
-            if (norm(logSlot) === norm(timeSlot)) {
-              postLog(log.id);
-              return;
-            }
-          }
-        }
-        alert('該当する投薬ログが見つかりませんでした');
-      })
-      .catch(function () { alert('投薬ログの取得に失敗しました'); });
   }
 
   var DASH_FOLD_KEY = 'nyagi_dash_folds_v2';
@@ -732,78 +653,6 @@
     return html;
   }
 
-  function renderMedCardsBySlot(medBySlot) {
-    var total = medBySlot.morning.length + medBySlot.noon.length + medBySlot.evening.length;
-    if (total === 0) return '<div class="empty-msg">投薬予定なし</div>';
-
-    var html = '';
-    var slots = [
-      { key: 'morning', label: '朝', emoji: '🌅', meds: medBySlot.morning },
-      { key: 'noon', label: '昼', emoji: '☀️', meds: medBySlot.noon },
-      { key: 'evening', label: '夜', emoji: '🌙', meds: medBySlot.evening }
-    ];
-    for (var s = 0; s < slots.length; s++) {
-      var slot = slots[s];
-      if (slot.meds.length === 0) continue;
-      html += '<div class="med-slot-card" style="margin-bottom:12px;">';
-      html += '<div class="med-slot-card-title" style="font-size:13px;font-weight:700;color:var(--text-dim);margin-bottom:8px;padding-left:4px;">' + slot.emoji + ' ' + slot.label + '</div>';
-      html += '<div class="card" style="margin-bottom:0;padding:8px;">';
-      for (var i = 0; i < slot.meds.length; i++) {
-        var m = slot.meds[i];
-        if (m.status !== undefined) {
-          html += renderMedItem(m, true);
-        } else {
-          html += renderPendingMed(m, true);
-        }
-      }
-      html += '</div></div>';
-    }
-    return html;
-  }
-
-  function renderMedItem(med, inSlotCard) {
-    var isDone = med.status === 'done';
-    var isSkipped = med.status === 'skipped';
-    var isPending = med.status === 'pending';
-    var stateClass = isDone ? 'med-item--done' : isSkipped ? 'med-item--skipped' : 'med-item--pending';
-    var html = '<div class="med-item dash-med-item ' + stateClass + '" data-cat-id="' + (med.cat_id || '') + '" data-medication-id="' + (med.medication_id || '') + '" data-log-id="' + (med.log_id || '') + '" data-time-slot="' + escapeHtml(med.time_slot || '') + '">';
-    if (!inSlotCard) {
-      html += '<div class="med-time" style="min-width:0;">' + escapeHtml(med.time_slot || '') + '</div>';
-    }
-    html += '<div class="med-info">';
-    if (isDone) {
-      html += '<div class="med-cat">✅ ' + escapeHtml(med.cat_name || '') + ' <span class="med-status-badge med-status-badge--done">完了済み</span></div>';
-    } else if (isSkipped) {
-      html += '<div class="med-cat">⏭️ ' + escapeHtml(med.cat_name || '') + ' <span class="med-status-badge med-status-badge--skipped">スキップ</span></div>';
-    } else {
-      html += '<div class="med-cat">⬜ ' + escapeHtml(med.cat_name || '') + ' <span class="med-status-badge med-status-badge--pending">未実施</span></div>';
-    }
-    html += '<div class="med-name">' + escapeHtml(med.medicine_name || '') + ' ' + escapeHtml(med.dosage || '') + '</div>';
-    if (med.notes) {
-      html += '<div class="med-notes">' + escapeHtml(med.notes) + '</div>';
-    }
-    if (isPending) {
-      html += '<div class="med-log-actions" style="display:flex;gap:6px;margin-top:6px;">';
-      html += '<button class="btn-log-action done" data-action="done">完了にする</button>';
-      html += '</div>';
-    }
-    html += '</div></div>';
-    return html;
-  }
-
-  function renderPendingMed(med, inSlotCard) {
-    var html = '<div class="med-item" style="border-left:3px solid #f87171;">';
-    if (!inSlotCard) {
-      html += '<div class="med-time">' + escapeHtml(med.time_slot || '') + '</div>';
-    }
-    html += '<div class="med-info">';
-    html += '<div class="med-cat">' + escapeHtml(med.cat_name || '') + '</div>';
-    html += '<div class="med-name">' + escapeHtml(med.medicine_name || '') + '</div>';
-    html += '<div class="med-notes" style="color:#f87171;">未実施</div>';
-    html += '</div></div>';
-    return html;
-  }
-
   function renderActionItem(action, type) {
     var html = '<div class="action-item ' + type + '">';
     html += '<div class="action-title">' + escapeHtml(action.title || '') + '</div>';
@@ -827,12 +676,8 @@
   function loadTaskProgressBars() {
     var container = document.getElementById('dashTaskProgress');
     if (!container) return;
-    var today = new Date();
-    var y = today.getFullYear();
-    var mo = ('0' + (today.getMonth() + 1)).slice(-2);
-    var d = ('0' + today.getDate()).slice(-2);
-    var dateStr = y + '-' + mo + '-' + d;
-    var url = _origin + '/api/ops/tasks?date=' + dateStr + '&group_by=attribute';
+    var dateStr = new Date().toLocaleDateString('sv-SE', { timeZone: 'Asia/Tokyo' });
+    var url = _origin + '/api/ops/tasks?date=' + encodeURIComponent(dateStr) + '&group_by=attribute';
     fetch(url, { headers: apiHeaders(), cache: 'no-store' })
       .then(function (r) { return r.json(); })
       .then(function (data) {

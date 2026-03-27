@@ -9,13 +9,14 @@
   </script>
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=5.0, viewport-fit=cover">
   <title>NYAGI 猫一覧</title>
-  <link rel="manifest" href="manifest.json?v=211">
+  <link rel="manifest" href="manifest.json?v=214">
   <meta name="theme-color" content="#1a1a2e">
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-  <link rel="stylesheet" href="style.css?v=207">
-  <script src="js/nyagi-fixed-header.js?v=207" defer></script>
-  <link rel="stylesheet" href="voice-console.css?v=211">
+  <link rel="stylesheet" href="style.css?v=209">
+  <script src="js/nyagi-fixed-header.js?v=209" defer></script>
+  <script src="js/nyagi-cache-clear.js?v=209" defer></script>
+  <link rel="stylesheet" href="voice-console.css?v=214">
   <style>
     /* モバイルスクロール対応: 専用スクロールコンテナ */
     html, body { height: 100%; overflow: hidden; margin: 0; }
@@ -66,31 +67,64 @@
     .per-cat-card {
       background: var(--surface);
       border-radius: 10px;
-      padding: 14px;
+      padding: 0 12px 14px;
       cursor: pointer;
       transition: transform 0.1s;
       text-decoration: none;
       color: inherit;
-      display: block;
+      display: flex;
+      flex-direction: column;
+      align-items: stretch;
+      width: 100%;
+      max-width: 100%;
+      box-sizing: border-box;
+      /* overflow:hidden は本文の見切れの原因になり得るため付けない */
     }
     .per-cat-card:active { transform: scale(0.98); }
 
+    /* 猫ごと: 名前をカード先頭の帯で強調（スクロールに追従しない） */
     .pcc-header {
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      margin-bottom: 8px;
+      position: relative;
+      z-index: 1;
+      display: block;
+      margin: 0 -12px 12px;
+      padding: 16px 52px 16px 14px;
+      border-radius: 10px 10px 0 0;
+      background: linear-gradient(135deg, rgba(233, 69, 96, 0.32) 0%, rgba(15, 52, 96, 0.92) 48%, rgba(22, 33, 62, 1) 100%);
+      border-bottom: 1px solid rgba(233, 69, 96, 0.45);
+      box-shadow: inset 0 -1px 0 rgba(255, 255, 255, 0.06), 0 4px 12px rgba(0, 0, 0, 0.25);
     }
     .pcc-name {
-      font-size: 16px;
-      font-weight: 700;
+      font-size: clamp(18px, 4.8vw, 22px);
+      font-weight: 800;
+      letter-spacing: 0.05em;
       display: flex;
       align-items: center;
-      gap: 6px;
+      justify-content: center;
+      flex-wrap: wrap;
+      gap: 6px 8px;
+      text-align: center;
+      line-height: 1.35;
+      text-shadow: 0 1px 3px rgba(0, 0, 0, 0.45);
+      color: #fff;
+    }
+    .pcc-name .badge {
+      letter-spacing: 0;
     }
     .pcc-score {
-      font-size: 20px;
-      font-weight: 700;
+      position: absolute;
+      top: 50%;
+      right: 10px;
+      transform: translateY(-50%);
+      font-size: clamp(17px, 4.2vw, 21px);
+      font-weight: 800;
+      min-width: 2em;
+      text-align: center;
+      line-height: 1.1;
+      padding: 4px 8px;
+      border-radius: 8px;
+      background: rgba(0, 0, 0, 0.25);
+      border: 1px solid rgba(255, 255, 255, 0.12);
     }
 
     .pcc-metrics {
@@ -98,6 +132,8 @@
       grid-template-columns: 1fr 1fr 1fr;
       gap: 6px 10px;
       font-size: 13px;
+      width: 100%;
+      min-width: 0;
     }
     .pcc-metric-label {
       color: var(--text-dim);
@@ -125,8 +161,32 @@
     .pcc-med-block .ov-med-item-row .ov-med-item-text {
       flex: 1; min-width: 0; word-break: break-word; line-height: 1.35;
     }
-    .pcc-anomalies {
-      margin-top: 8px;
+
+    /* グリッド外の全幅ブロック（狭い列に誤って入ると1文字ずつ折り返して縦に見える） */
+    .pcc-feed-yesterday-wrap {
+      width: 100%;
+      max-width: 100%;
+      min-width: 0;
+      box-sizing: border-box;
+      writing-mode: horizontal-tb;
+      text-orientation: mixed;
+      flex: 0 0 auto;
+      margin: 10px 0 0;
+      padding: 8px 10px;
+      background: rgba(251, 191, 36, 0.08);
+      border-radius: 8px;
+      border: 1px solid rgba(251, 191, 36, 0.2);
+    }
+    .pcc-feed-yesterday-title {
+      font-size: 11px;
+      font-weight: 700;
+      margin-bottom: 6px;
+      writing-mode: horizontal-tb;
+      white-space: normal;
+      word-break: normal;
+      overflow-wrap: break-word;
+      line-height: 1.35;
+      display: block;
     }
 
     /* ── 項目ごとカード（モード2） ── */
@@ -180,6 +240,35 @@
       font-size: 13px;
       cursor: pointer;
     }
+    /* 項目ごと・読取専用行（異常・医療など）も猫名を同じ帯スタイルに */
+    .item-card-body > a.item-row {
+      flex-direction: column;
+      align-items: stretch;
+      gap: 10px;
+      padding: 10px 0;
+    }
+    .item-card-body > a.item-row .item-cat-name {
+      justify-content: center;
+      text-align: center;
+      font-size: clamp(17px, 4.5vw, 20px);
+      font-weight: 800;
+      letter-spacing: 0.04em;
+      min-width: 0;
+      width: 100%;
+      padding: 12px 14px;
+      box-sizing: border-box;
+      border: 1px solid rgba(233, 69, 96, 0.4);
+      border-radius: 10px;
+      border-bottom-width: 2px;
+      border-bottom-color: rgba(233, 69, 96, 0.55);
+      background: linear-gradient(180deg, rgba(233, 69, 96, 0.22) 0%, rgba(22, 33, 62, 0.85) 100%);
+      color: #fff;
+      text-shadow: 0 1px 2px rgba(0, 0, 0, 0.35);
+    }
+    .item-card-body > a.item-row .item-values {
+      width: 100%;
+      max-width: 100%;
+    }
     .item-row:last-child { border-bottom: none; }
     .item-row:active { opacity: 0.7; }
     .item-cat-name {
@@ -224,13 +313,26 @@
       align-items: stretch;
       gap: 8px;
     }
+    /* 項目ごと: 猫名を中央・大きめ・帯背景で区切り（どの猫の行か瞬時に判別） */
     .item-card .item-row-editable .item-cat-link {
       width: 100%;
       max-width: 100%;
       min-width: 0;
-      padding-bottom: 4px;
-      border-bottom: 1px solid rgba(255,255,255,0.06);
       box-sizing: border-box;
+      justify-content: center;
+      text-align: center;
+      font-size: clamp(17px, 4.5vw, 20px);
+      font-weight: 800;
+      letter-spacing: 0.04em;
+      padding: 12px 14px;
+      margin: 0 0 6px;
+      border: 1px solid rgba(233, 69, 96, 0.4);
+      border-radius: 10px;
+      border-bottom-width: 2px;
+      border-bottom-color: rgba(233, 69, 96, 0.55);
+      background: linear-gradient(180deg, rgba(233, 69, 96, 0.22) 0%, rgba(22, 33, 62, 0.85) 100%);
+      color: #fff;
+      text-shadow: 0 1px 2px rgba(0, 0, 0, 0.35);
     }
     .item-card .item-row-editable .item-values {
       flex: none;
@@ -319,6 +421,18 @@
       border-top: 1px dashed rgba(255,255,255,0.06);
     }
     .ov-task-line:first-of-type { margin-top: 2px; padding-top: 0; border-top: none; }
+    .ov-task-overdue-badge {
+      display: inline-block;
+      font-size: 9px;
+      font-weight: 700;
+      color: #fecaca;
+      background: #7f1d1d;
+      padding: 2px 6px;
+      border-radius: 4px;
+      flex-shrink: 0;
+      white-space: nowrap;
+      vertical-align: middle;
+    }
     .item-card-body .ov-task-line {
       flex-direction: column;
       align-items: stretch;
@@ -887,8 +1001,8 @@
         <input type="number" id="ovApAmount" class="form-input" placeholder="例: 30" step="0.1" min="0">
       </div>
       <div class="form-group">
-        <label class="form-label">メモ（任意）</label>
-        <input type="text" id="ovApNotes" class="form-input" placeholder="食べ残しが多いので少量ずつ 等">
+        <label class="form-label">メモ（任意・改行可）</label>
+        <textarea id="ovApNotes" class="form-input" rows="3" style="resize:vertical;min-height:68px;line-height:1.45;" placeholder="食べ残しが多いので少量ずつ 等（Enterで改行）"></textarea>
       </div>
       <div class="modal-actions">
         <button type="button" class="btn btn-outline" id="ovCloseAddPlanBtn">キャンセル</button>
@@ -997,7 +1111,7 @@
   <div id="ovLeftoverModal" class="modal-overlay">
     <div class="modal-box" style="max-width:400px;">
       <div class="modal-title" id="ovLoTitle">🥄 残し記録</div>
-      <p id="ovLoHint" class="dim" style="font-size:11px;margin:-4px 12px 8px;line-height:1.45;">猫詳細の「昨夜の夜ごはん」と同じ feeding_logs に保存され、献立・手動記録と連動します。</p>
+      <p id="ovLoHint" class="dim" style="font-size:11px;margin:-4px 12px 8px;line-height:1.45;">上段：昨日の「あげた」記録はここから取り消し。下段：残し入力は猫詳細の「昨夜の夜ごはん」と同じ feeding_logs に保存され、献立・手動記録と連動します。</p>
       <div id="ovLoBody" style="max-height:60vh;overflow-y:auto;"></div>
       <div class="modal-actions">
         <button type="button" class="btn btn-outline" id="ovCloseLoBtn">閉じる</button>
@@ -1005,11 +1119,11 @@
     </div>
   </div>
 
-  <script src="config.js?v=211"></script>
-  <script src="js/nyagi-boot-overlay.js?v=211"></script>
-  <script src="js/login-gate.js?v=211"></script>
-  <script src="js/app.js?v=211"></script>
-  <script src="js/cats-overview.js?v=247"></script>
-  <script src="js/voice-console.js?v=211"></script>
+  <script src="config.js?v=214"></script>
+  <script src="js/nyagi-boot-overlay.js?v=214"></script>
+  <script src="js/login-gate.js?v=214"></script>
+  <script src="js/app.js?v=214"></script>
+  <script src="js/cats-overview.js?v=262"></script>
+  <script src="js/voice-console.js?v=214"></script>
 </body>
 </html>

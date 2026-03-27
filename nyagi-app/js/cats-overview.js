@@ -62,6 +62,31 @@
     return m + '/' + d;
   }
 
+  /** 一覧の体重: いつの記録か（日本時間）。DB の created_at を優先 */
+  function fmtWeightJstHtml(recordDateYmd, createdAtIso) {
+    if (!recordDateYmd || String(recordDateYmd).length < 10) return '';
+    var ymd = String(recordDateYmd).slice(0, 10);
+    if (createdAtIso) {
+      try {
+        var d = new Date(createdAtIso);
+        if (!isNaN(d.getTime())) {
+          var s = d.toLocaleString('ja-JP', {
+            timeZone: 'Asia/Tokyo',
+            year: 'numeric',
+            month: 'numeric',
+            day: 'numeric',
+            hour: '2-digit',
+            minute: '2-digit',
+            hour12: false,
+          });
+          return '<div class="dim ov-weight-ts" style="font-size:9px;margin-top:3px;line-height:1.35;">' + esc(s) + ' <span style="opacity:.85;">（日本時間）</span></div>';
+        }
+      } catch (e) {}
+    }
+    var md = fmtExcretionMdYmd(ymd);
+    return '<div class="dim ov-weight-ts" style="font-size:9px;margin-top:3px;line-height:1.35;">計測日 ' + esc(md || ymd) + ' <span style="opacity:.85;">（時刻情報なし）</span></div>';
+  }
+
   /** 項目ごと 排便・排尿 1行分の表示（日付＋帯/時刻＋状態） */
   function ovExcretionLineText(e) {
     var parts = [];
@@ -102,6 +127,7 @@
 
   var NYAGI_PRESET_LOC_KEY = 'nyagi_feeding_preset_location';
   var _ovFeedCtx = null;
+  var _ovPendingNewPreset = null;
   var _ovFoodsCache = null;
   var _ovFoodsSpecies = null;
   var _ovEditingPlanId = null;
@@ -181,6 +207,9 @@
       var x = '<div style="font-size:10px;color:var(--accent,#fb923c);font-weight:600;margin-top:2px;">' + esc(title) + '</div>';
       for (var m = 0; m < arr.length; m++) {
         x += '<div style="font-size:11px;color:var(--text-dim);padding:1px 0 1px 10px;">' + esc(arr[m].food_name || '') + ' ' + arr[m].amount_g + 'g</div>';
+        if (arr[m].notes && String(arr[m].notes).trim()) {
+          x += '<div style="font-size:10px;color:var(--text-dim);padding:0 0 2px 14px;line-height:1.35;white-space:pre-wrap;word-break:break-word;">📝 ' + esc(String(arr[m].notes).trim()) + '</div>';
+        }
       }
       return x;
     }
@@ -201,6 +230,7 @@
   }
 
   function ovClosePresetModal() {
+    _ovPendingNewPreset = null;
     var m = document.getElementById('ovPresetApplyModal');
     if (m) m.classList.remove('open');
   }
@@ -240,7 +270,7 @@
             innerHtml += '<div style="background:var(--surface);border-radius:8px;padding:10px 12px;margin-bottom:8px;">';
             innerHtml += '<div style="display:flex;justify-content:space-between;align-items:flex-start;gap:8px;">';
             innerHtml += '<div style="flex:1;min-width:0;"><div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;">' + ovPresetLocationBadgeHtml(ps.location_id) + '<b style="font-size:13px;">' + esc(ps.name) + '</b></div>';
-            if (ps.description) innerHtml += '<div style="font-size:11px;color:var(--text-dim);margin-top:2px;">' + esc(ps.description) + '</div>';
+            if (ps.description) innerHtml += '<div style="font-size:11px;color:var(--text-dim);margin-top:2px;line-height:1.4;white-space:pre-wrap;word-break:break-word;">' + esc(ps.description) + '</div>';
             innerHtml += ovRenderPresetItemsSummary(ps.items || [], ps.total_kcal);
             innerHtml += '</div>';
             innerHtml += '<button type="button" class="btn btn-primary" style="font-size:11px;padding:4px 10px;flex-shrink:0;" data-ov-apply-preset="' + escAttr(String(ps.id)) + '">適用</button>';
@@ -313,7 +343,12 @@
           h += '<div style="background:var(--surface);border-radius:8px;padding:10px 12px;margin-bottom:8px;">';
           h += '<div style="display:flex;justify-content:space-between;align-items:flex-start;gap:8px;">';
           h += '<div style="flex:1;min-width:0;"><div style="display:flex;align-items:center;gap:6px;">' + ovPresetLocationBadgeHtml(ps.location_id) + '<b>' + esc(ps.name) + '</b></div>';
-          h += '<div style="font-size:11px;color:var(--text-dim);">' + (ps.items || []).length + '品</div></div>';
+          h += '<div style="font-size:11px;color:var(--text-dim);">' + (ps.items || []).length + '品</div>';
+          var psDesc = ps.description != null ? String(ps.description).trim() : '';
+          h += '<div style="font-size:10px;color:var(--text-dim);margin:4px 0 0;line-height:1.35;white-space:pre-wrap;word-break:break-word;">';
+          h += psDesc ? esc(psDesc.length > 140 ? psDesc.slice(0, 140) + '…' : psDesc) : '<span class="dim">全体メモなし</span>';
+          h += '</div>';
+          h += '<button type="button" class="btn btn-outline" style="font-size:10px;padding:3px 8px;margin-top:4px;" data-ov-edit-preset-desc="' + escAttr(String(ps.id)) + '">📋 全体メモを編集</button></div>';
           h += '<div style="display:flex;flex-direction:column;align-items:flex-end;gap:4px;">';
           h += '<button type="button" class="btn-edit-small" style="font-size:10px;" data-ov-cycle-preset-loc="' + escAttr(String(ps.id)) + '" data-ov-cycle-cur="' + escAttr(ploc) + '">🏷 拠点切替</button>';
           h += '<div><button type="button" class="btn-edit-small" data-ov-rename-preset="' + escAttr(String(ps.id)) + '" data-ov-rename-name="' + escAttr(ps.name) + '">📝</button> ';
@@ -504,7 +539,7 @@
         method: 'POST',
         headers: apiHeaders(),
         cache: 'no-store',
-        body: JSON.stringify({ food_id: foodId, meal_slot: slot || 'morning', amount_g: amountG, notes: notes || null }),
+        body: JSON.stringify({ food_id: foodId, meal_slot: slot || 'morning', amount_g: amountG, notes: (notes != null && String(notes).trim() !== '') ? String(notes).trim() : null }),
       }).then(function (r) { return r.json(); })
         .then(function (data) {
           if (data.error) { alert('エラー: ' + (data.message || data.error)); return; }
@@ -516,13 +551,14 @@
       return;
     }
     if (!foodId || !amountG) { alert('フードと量は必須です'); return; }
-    var payload = { cat_id: _ovFeedCtx.catId, food_id: foodId, meal_slot: slot, amount_g: amountG, notes: notes || null, scheduled_time: null };
+    var notesPlan = (notes != null && String(notes).trim() !== '') ? String(notes).trim() : null;
+    var payload = { cat_id: _ovFeedCtx.catId, food_id: foodId, meal_slot: slot, amount_g: amountG, notes: notesPlan, scheduled_time: null };
     var url = feedingApiBase() + '/plans';
     var method = 'POST';
     if (_ovEditingPlanId) {
       url = feedingApiBase() + '/plans/' + encodeURIComponent(_ovEditingPlanId);
       method = 'PUT';
-      payload = { food_id: foodId, meal_slot: slot, amount_g: amountG, notes: notes || null, scheduled_time: null };
+      payload = { food_id: foodId, meal_slot: slot, amount_g: amountG, notes: notesPlan, scheduled_time: null };
     }
     fetch(url, { method: method, headers: apiHeaders(), cache: 'no-store', body: JSON.stringify(payload) })
       .then(function (r) { return r.json(); })
@@ -691,6 +727,7 @@
       .then(function (data) {
         if (data.error) { alert('エラー: ' + (data.message || data.error)); return; }
         fetchData(0);
+        if (_ovLoCatId) ovFillLeftoverModalBody(_ovLoCatId);
       }).catch(function () { alert('取り消しに失敗しました'); });
   }
 
@@ -723,7 +760,7 @@
     var x = String(slot).toLowerCase().trim();
     if (x === '朝' || x === 'morning' || x === 'am') return 'morning';
     if (x === '昼' || x === 'afternoon' || x === 'noon' || x === 'lunch') return 'afternoon';
-    if (x === '夜' || x === 'evening' || x === 'night' || x === 'dinner' || x === '夕' || x === '晩') return 'evening';
+    if (x === '夜' || x === 'evening' || x === 'night' || x === 'dinner' || x === '夕' || x === '晩' || x === 'pm') return 'evening';
     return x;
   }
   function ovIsEveningMealSlot(slot) {
@@ -834,6 +871,32 @@
     return html;
   }
 
+  /** 昨日（JST）の feeding_logs 一覧＋取消（猫一覧には出さず 🥄残し モーダル内のみ） */
+  function ovRenderYesterdayFedUndoFromLogs(yLogsAll) {
+    if (!yLogsAll || yLogsAll.length === 0) return '';
+    var h = '<div class="ov-yesterday-fed-in-modal" style="margin-bottom:14px;padding:8px 10px;background:rgba(251,191,36,0.08);border-radius:8px;border-left:3px solid rgba(251,191,36,0.45);">';
+    h += '<div style="font-weight:700;font-size:13px;margin-bottom:6px;color:var(--text-main);">📅 昨日のあげた記録 <span class="dim" style="font-weight:500;font-size:11px;">（誤りは取消）</span></div>';
+    for (var yi = 0; yi < yLogsAll.length; yi++) {
+      var lg = yLogsAll[yi];
+      var lid = lg.id != null ? String(lg.id) : (lg.log_id != null ? String(lg.log_id) : '');
+      if (!lid) continue;
+      var fn = lg.food_name ? String(lg.food_name) : '—';
+      var pct = lg.eaten_pct != null && lg.eaten_pct !== '' ? String(lg.eaten_pct) + '%' : '';
+      var offG = lg.offered_g != null && lg.offered_g !== '' ? String(lg.offered_g) + 'g' : '';
+      var st = lg.served_time ? ovFmtFedServedTime(lg.served_time) : '';
+      h += '<div class="ov-feed-line" style="margin-bottom:4px;">';
+      h += '<span class="ov-feed-slot">' + feedingMealSlotLabelJp(lg.meal_slot) + '</span>';
+      h += '<span class="ov-feed-menu">' + esc(fn) + (offG ? ' <strong>' + esc(offG) + '</strong>' : '') + '</span>';
+      h += '<span class="ov-feed-status">';
+      if (pct) h += '<span class="dim">' + esc(pct) + '</span> ';
+      if (st) h += '<span class="dim" style="margin-right:4px;">🕐' + esc(st) + '</span>';
+      h += '<button type="button" class="btn btn-outline btn-ov-feed-undofed" data-log-id="' + escAttr(lid) + '">取消</button>';
+      h += '</span></div>';
+    }
+    h += '</div>';
+    return h;
+  }
+
   function ovFillLeftoverModalBody(catId) {
     var c = ovFindCat(catId);
     var body = document.getElementById('ovLoBody');
@@ -868,6 +931,7 @@
       var itemsEve = ovBuildLeftoverItems(evePlans, eveLogs);
 
       var html = '';
+      html += ovRenderYesterdayFedUndoFromLogs(yLogsAll);
       html += ovRenderLeftoverSection('🌙 前日夜（昨夜の夜ごはんと同じ）', itemsPrev, yesterdayStr, 'prev');
       html += ovRenderLeftoverSection('☀️ 当日朝・昼', itemsDay, todayStr, 'day');
       html += ovRenderLeftoverSection('🌙 当日夜', itemsEve, todayStr, 'eve');
@@ -910,6 +974,13 @@
   function ovLeftoverModalClick(ev) {
     var t = ev.target;
     if (!t || !t.closest) return;
+    var undofedM = t.closest('.btn-ov-feed-undofed');
+    if (undofedM) {
+      ev.preventDefault();
+      var lidM = undofedM.getAttribute('data-log-id');
+      if (lidM) ovUndoFedLog(lidM);
+      return;
+    }
     var savePlan = t.closest('.ov-lo-save-plan');
     if (savePlan) {
       ev.preventDefault();
@@ -1026,9 +1097,83 @@
     if (loM && !loM._ovBound) { loM._ovBound = true; loM.addEventListener('click', ovLeftoverModalClick); }
   }
 
+  function ovShowNewPresetDescriptionStep() {
+    var modal = document.getElementById('ovPresetApplyModal');
+    if (!modal || !_ovFeedCtx || !_ovPendingNewPreset) return;
+    var nm = _ovPendingNewPreset.name;
+    modal.innerHTML = '<div class="modal-box" style="max-height:85vh;overflow-y:auto;"><div class="modal-title">新規プリセット — 全体メモ <span class="dim">' + esc(nm) + '</span></div>' +
+      '<div style="padding:12px 16px;"><p class="dim" style="font-size:11px;margin:0 0 8px;line-height:1.4;">改行で段落分けできます。空欄のままでも作成できます。</p>' +
+      '<textarea id="ovNewPresetDescTa" rows="5" style="width:100%;box-sizing:border-box;padding:10px;border-radius:8px;border:1px solid rgba(255,255,255,0.12);background:rgba(0,0,0,0.2);color:inherit;font-size:13px;line-height:1.45;resize:vertical;"></textarea>' +
+      '<div class="modal-actions" style="margin-top:12px;"><button type="button" class="btn btn-primary" data-ov-submit-new-preset-desc="1">作成</button> ' +
+      '<button type="button" class="btn btn-outline" data-ov-cancel-new-preset-desc="1">キャンセル</button></div></div></div>';
+  }
+
   function ovHandlePresetModalClick(ev) {
     var t = ev.target;
     if (!t || !t.closest) return;
+    var cnp = t.closest('[data-ov-cancel-new-preset-desc]');
+    if (cnp && _ovFeedCtx) {
+      ev.preventDefault();
+      _ovPendingNewPreset = null;
+      ovFillPresetManageModal(ovGetStoredPresetLocation());
+      return;
+    }
+    var snp = t.closest('[data-ov-submit-new-preset-desc]');
+    if (snp && _ovFeedCtx && _ovPendingNewPreset) {
+      ev.preventDefault();
+      var taNp = document.getElementById('ovNewPresetDescTa');
+      var rawNp = taNp ? String(taNp.value) : '';
+      var descNp = rawNp.trim() === '' ? null : rawNp.trim();
+      var locNp = _ovPendingNewPreset.location_id;
+      var nameNp = _ovPendingNewPreset.name;
+      _ovPendingNewPreset = null;
+      fetch(feedingApiBase() + '/presets', {
+        method: 'POST',
+        headers: apiHeaders(),
+        cache: 'no-store',
+        body: JSON.stringify({
+          name: nameNp,
+          description: descNp,
+          location_id: locNp,
+          species: _ovFeedCtx.species || 'cat',
+        }),
+      }).then(function (r) {
+        return r.text().then(function (text) {
+          var data = {};
+          if (text) {
+            try {
+              data = JSON.parse(text);
+            } catch (_) {
+              alert('作成に失敗しました（応答の解析エラー） HTTP ' + r.status);
+              return null;
+            }
+          }
+          if (!r.ok) {
+            alert('エラー: ' + (data.message || data.error || ('HTTP ' + r.status)));
+            return null;
+          }
+          return data;
+        });
+      }).then(function (data) {
+        if (!data) return;
+        if (data.error) {
+          alert('エラー: ' + (data.message || data.error));
+          return;
+        }
+        if (data.preset && data.preset.id) {
+          _ovPendingPresetItem = String(data.preset.id);
+          ovOpenAddPlanModal(_ovFeedCtx.catId, 'morning', null, { preservePendingPreset: true });
+          var t0 = document.querySelector('#ovAddPlanModal .modal-title');
+          if (t0) t0.innerHTML = '📋 プリセットにフード追加 <span class="dim">' + esc(nameNp) + '</span>';
+        } else {
+          alert('エラー: プリセット情報が返りませんでした');
+          ovFillPresetManageModal(ovGetStoredPresetLocation());
+        }
+      }).catch(function (e) {
+        alert('作成に失敗しました: ' + (e && e.message ? e.message : 'network'));
+      });
+      return;
+    }
     var closeB = t.closest('[data-ov-close-preset]');
     if (closeB) {
       ev.preventDefault();
@@ -1101,53 +1246,9 @@
       var loc = ovGetStoredPresetLocation();
       if (!confirm('拠点「' + ovPresetLocShortLabel(loc) + '」用のプリセットを新規作成しますか？')) return;
       var name = prompt('プリセット名', '');
-      if (!name) return;
-      var desc = prompt('説明（任意）', '');
-      fetch(feedingApiBase() + '/presets', {
-        method: 'POST',
-        headers: apiHeaders(),
-        cache: 'no-store',
-        body: JSON.stringify({
-          name: name,
-          description: desc != null && String(desc).trim() !== '' ? String(desc) : null,
-          location_id: loc,
-          species: _ovFeedCtx.species || 'cat',
-        }),
-      }).then(function (r) {
-        return r.text().then(function (text) {
-          var data = {};
-          if (text) {
-            try {
-              data = JSON.parse(text);
-            } catch (_) {
-              alert('作成に失敗しました（応答の解析エラー） HTTP ' + r.status);
-              return null;
-            }
-          }
-          if (!r.ok) {
-            alert('エラー: ' + (data.message || data.error || ('HTTP ' + r.status)));
-            return null;
-          }
-          return data;
-        });
-      }).then(function (data) {
-        if (!data) return;
-        if (data.error) {
-          alert('エラー: ' + (data.message || data.error));
-          return;
-        }
-        if (data.preset && data.preset.id) {
-          _ovPendingPresetItem = String(data.preset.id);
-          ovOpenAddPlanModal(_ovFeedCtx.catId, 'morning', null, { preservePendingPreset: true });
-          var t0 = document.querySelector('#ovAddPlanModal .modal-title');
-          if (t0) t0.innerHTML = '📋 プリセットにフード追加 <span class="dim">' + esc(name) + '</span>';
-        } else {
-          alert('エラー: プリセット情報が返りませんでした');
-          ovFillPresetManageModal(loc);
-        }
-      }).catch(function (e) {
-        alert('作成に失敗しました: ' + (e && e.message ? e.message : 'network'));
-      });
+      if (!name || !String(name).trim()) return;
+      _ovPendingNewPreset = { name: String(name).trim(), location_id: loc };
+      ovShowNewPresetDescriptionStep();
       return;
     }
     var cy = t.closest('[data-ov-cycle-preset-loc]');
@@ -1186,6 +1287,37 @@
           if (data.error) { alert('エラー: ' + (data.message || data.error)); return; }
           ovFillPresetManageModal(ovGetStoredPresetLocation());
         }).catch(function () { alert('名前変更に失敗しました'); });
+      return;
+    }
+    var edDesc = t.closest('[data-ov-edit-preset-desc]');
+    if (edDesc && _ovFeedCtx) {
+      ev.preventDefault();
+      ovShowPresetDescEditor(edDesc.getAttribute('data-ov-edit-preset-desc'));
+      return;
+    }
+    var sdDesc = t.closest('[data-ov-save-preset-desc]');
+    if (sdDesc && _ovFeedCtx) {
+      ev.preventDefault();
+      var sdp = sdDesc.getAttribute('data-ov-save-preset-desc');
+      var taD = document.getElementById('ovPresetDescTa');
+      var rawD = taD ? String(taD.value) : '';
+      var trimD = rawD.trim();
+      fetch(feedingApiBase() + '/presets/' + encodeURIComponent(sdp), {
+        method: 'PUT',
+        headers: apiHeaders(),
+        cache: 'no-store',
+        body: JSON.stringify({ description: trimD === '' ? null : trimD }),
+      }).then(function (r) { return r.json(); })
+        .then(function (data) {
+          if (data.error) { alert('エラー: ' + (data.message || data.error)); return; }
+          ovFillPresetManageModal(ovGetStoredPresetLocation());
+        }).catch(function () { alert('保存に失敗しました'); });
+      return;
+    }
+    var cdDesc = t.closest('[data-ov-cancel-preset-desc]');
+    if (cdDesc && _ovFeedCtx) {
+      ev.preventDefault();
+      ovFillPresetManageModal(ovGetStoredPresetLocation());
       return;
     }
     var ed = t.closest('[data-ov-edit-preset-items]');
@@ -1233,12 +1365,95 @@
       if (title) title.innerHTML = '📋 プリセットに追加 <span class="dim">' + esc(slot) + '</span>';
       return;
     }
+    var edIn = t.closest('[data-ov-edit-preset-item-note]');
+    if (edIn && _ovFeedCtx) {
+      ev.preventDefault();
+      var ppi = edIn.getAttribute('data-ov-preset-pid');
+      var iii = edIn.getAttribute('data-ov-item-id');
+      ovShowPresetItemNoteEditor(ppi, iii);
+      return;
+    }
+    var sdIn = t.closest('[data-ov-save-preset-item-note]');
+    if (sdIn && _ovFeedCtx) {
+      ev.preventDefault();
+      var pps = sdIn.getAttribute('data-ov-preset-pid');
+      var iis = sdIn.getAttribute('data-ov-item-id');
+      var taN = document.getElementById('ovPresetItemNoteTa');
+      var rawN = taN ? String(taN.value) : '';
+      var trimN = rawN.trim();
+      fetch(feedingApiBase() + '/presets/' + encodeURIComponent(pps) + '/items/' + encodeURIComponent(iis), {
+        method: 'PUT',
+        headers: apiHeaders(),
+        cache: 'no-store',
+        body: JSON.stringify({ notes: trimN === '' ? null : trimN }),
+      }).then(function (r) { return r.json(); })
+        .then(function (data) {
+          if (data.error) { alert('エラー: ' + (data.message || data.error)); return; }
+          ovShowPresetItemsEditor(pps);
+        }).catch(function () { alert('保存に失敗しました'); });
+      return;
+    }
+    var cnIn = t.closest('[data-ov-cancel-preset-item-note]');
+    if (cnIn && _ovFeedCtx) {
+      ev.preventDefault();
+      var ppc = cnIn.getAttribute('data-ov-preset-pid');
+      ovShowPresetItemsEditor(ppc);
+      return;
+    }
     var backM = t.closest('[data-ov-preset-items-back]');
     if (backM && _ovFeedCtx) {
       ev.preventDefault();
       ovFillPresetManageModal(ovGetStoredPresetLocation());
       return;
     }
+  }
+
+  function ovShowPresetDescEditor(presetId) {
+    var modal = document.getElementById('ovPresetApplyModal');
+    if (!modal || !_ovFeedCtx) return;
+    modal.innerHTML = '<div class="modal-box" style="max-height:85vh;overflow-y:auto;"><div class="modal-title">📋 プリセット全体メモ</div><div id="ovPresetDescBody" class="loading" style="padding:16px;">読み込み中...</div></div>';
+    var area = document.getElementById('ovPresetDescBody');
+    fetch(feedingApiBase() + '/presets/' + encodeURIComponent(presetId), { headers: apiHeaders(), cache: 'no-store' })
+      .then(function (r) { return r.json(); })
+      .then(function (data) {
+        if (data.error || !data.preset) {
+          if (area) { area.className = ''; area.innerHTML = '<div class="empty-msg">読み込み失敗</div>'; }
+          return;
+        }
+        var cur = data.preset.description != null ? String(data.preset.description) : '';
+        var inner = '<p class="dim" style="font-size:11px;margin:0 0 8px;line-height:1.4;">献立表示などに使われるプリセット単位のメモです。<b>改行で段落分け</b>できます。フード毎のメモは「✏️」一覧の 📎 から編集できます。</p>';
+        inner += '<textarea id="ovPresetDescTa" rows="6" style="width:100%;box-sizing:border-box;padding:10px;border-radius:8px;border:1px solid rgba(255,255,255,0.12);background:rgba(0,0,0,0.2);color:inherit;font-size:13px;line-height:1.45;resize:vertical;"></textarea>';
+        inner += '<div class="modal-actions" style="margin-top:12px;"><button type="button" class="btn btn-primary" data-ov-save-preset-desc="' + escAttr(String(presetId)) + '">保存</button> ';
+        inner += '<button type="button" class="btn btn-outline" data-ov-cancel-preset-desc="1">戻る</button></div>';
+        if (area) { area.className = ''; area.innerHTML = inner; }
+        var ta = document.getElementById('ovPresetDescTa');
+        if (ta) ta.value = cur;
+      }).catch(function () {
+        if (area) { area.className = ''; area.innerHTML = '<div class="empty-msg">読み込み失敗</div>'; }
+      });
+  }
+
+  function ovShowPresetItemNoteEditor(presetId, itemId) {
+    var modal = document.getElementById('ovPresetApplyModal');
+    if (!modal || !_ovFeedCtx) return;
+    var cur = '';
+    if (_ovPresetItemsCache && String(_ovPresetItemsCache.presetId) === String(presetId) && _ovPresetItemsCache.items) {
+      for (var ni = 0; ni < _ovPresetItemsCache.items.length; ni++) {
+        if (String(_ovPresetItemsCache.items[ni].id) === String(itemId)) {
+          cur = _ovPresetItemsCache.items[ni].notes != null ? String(_ovPresetItemsCache.items[ni].notes) : '';
+          break;
+        }
+      }
+    }
+    modal.innerHTML = '<div class="modal-box" style="max-height:85vh;overflow-y:auto;"><div class="modal-title">📎 フード行メモ</div><div id="ovPresetItemNoteBody" style="padding:12px 16px;"></div></div>';
+    var area = document.getElementById('ovPresetItemNoteBody');
+    var inner = '<p class="dim" style="font-size:11px;margin:0 0 8px;line-height:1.4;">このフード行のメモは、献立の説明文などにまとめて表示されます。<b>改行可</b>です。</p>';
+    inner += '<textarea id="ovPresetItemNoteTa" rows="5" style="width:100%;box-sizing:border-box;padding:10px;border-radius:8px;border:1px solid rgba(255,255,255,0.12);background:rgba(0,0,0,0.2);color:inherit;font-size:13px;line-height:1.45;resize:vertical;"></textarea>';
+    inner += '<div class="modal-actions" style="margin-top:12px;"><button type="button" class="btn btn-primary" data-ov-save-preset-item-note="1" data-ov-preset-pid="' + escAttr(String(presetId)) + '" data-ov-item-id="' + escAttr(String(itemId)) + '">保存</button> ';
+    inner += '<button type="button" class="btn btn-outline" data-ov-cancel-preset-item-note="1" data-ov-preset-pid="' + escAttr(String(presetId)) + '">戻る</button></div>';
+    if (area) area.innerHTML = inner;
+    var ta = document.getElementById('ovPresetItemNoteTa');
+    if (ta) ta.value = cur;
   }
 
   function ovShowPresetItemsEditor(presetId) {
@@ -1254,9 +1469,15 @@
         var h = '';
         for (var i = 0; i < items.length; i++) {
           var it = items[i];
-          h += '<div style="padding:8px;background:var(--surface);border-radius:6px;margin-bottom:6px;display:flex;justify-content:space-between;align-items:center;gap:8px;">';
-          h += '<div style="font-size:12px;flex:1;">' + esc(it.food_name || '') + ' <b>' + it.amount_g + 'g</b> <span class="dim">' + esc(it.meal_slot || '') + '</span></div>';
+          h += '<div style="padding:8px;background:var(--surface);border-radius:6px;margin-bottom:6px;">';
+          h += '<div style="display:flex;justify-content:space-between;align-items:flex-start;gap:8px;">';
+          h += '<div style="font-size:12px;flex:1;min-width:0;">' + esc(it.food_name || '') + ' <b>' + it.amount_g + 'g</b> <span class="dim">' + esc(it.meal_slot || '') + '</span></div>';
+          h += '<div style="display:flex;gap:2px;flex-shrink:0;">';
+          h += '<button type="button" class="btn-edit-small" title="フード行メモ" data-ov-edit-preset-item-note="1" data-ov-preset-pid="' + escAttr(String(presetId)) + '" data-ov-item-id="' + escAttr(String(it.id)) + '">📎</button>';
           h += '<button type="button" class="btn-edit-small" style="color:#f87171;" data-ov-del-preset-item="' + escAttr(String(presetId)) + ':' + escAttr(String(it.id)) + '">🗑</button>';
+          h += '</div></div>';
+          var nstr = it.notes != null ? String(it.notes).trim() : '';
+          if (nstr) h += '<div class="dim" style="font-size:10px;margin-top:4px;line-height:1.35;white-space:pre-wrap;word-break:break-word;">📝 ' + esc(nstr) + '</div>';
           h += '</div>';
         }
         if (items.length === 0) h += '<div class="empty-msg">未登録</div>';
@@ -2017,6 +2238,7 @@
 
   var credentials = null;
   var catsData = [];
+  var locationTasksToday = { done: 0, total: 0, items: [] };
   var currentMode = 'perCat';
   var currentLocationId = null;
   var currentStatusId = null;
@@ -2172,6 +2394,7 @@
       })
       .then(function (data) {
         catsData = data.cats || [];
+        locationTasksToday = data.location_tasks_today || { done: 0, total: 0, items: [] };
         render();
         if (window.NyagiBootOverlay) window.NyagiBootOverlay.hideForce();
       })
@@ -2244,6 +2467,7 @@
             (Math.abs(wDiff) >= 0.05 ? Math.abs(wDiff).toFixed(1) : '') + '</span>';
         }
         html += '</div>';
+        html += fmtWeightJstHtml(c.weight_record_date, c.weight_recorded_at);
       } else {
         html += '<div class="pcc-metric-value dim">--</div>';
       }
@@ -2333,6 +2557,8 @@
 
       html += '</div>'; // pcc-metrics
 
+      // 昨日のあげた記録の取消は「🥄残し」モーダル内のみ（一覧をすっきりさせる）
+
       // 健康コメント
       var hComments = c.health_comments || [];
       if (hComments.length > 0) {
@@ -2358,18 +2584,6 @@
           html += '<span class="care-chip ' + cls + '">' + esc(care[ci].type);
           if (done && care[ci].by) html += '<small>' + esc(care[ci].by) + '</small>';
           html += '</span>';
-        }
-        html += '</div>';
-      }
-
-      // 異常バッジ
-      var anomalies = c.anomalies_7d || [];
-      if (anomalies.length > 0) {
-        html += '<div class="pcc-anomalies">';
-        for (var j = 0; j < anomalies.length; j++) {
-          var a = anomalies[j];
-          var bc = a.count >= 3 ? 'badge-red' : a.count >= 2 ? 'badge-orange' : 'badge-yellow';
-          html += '<span class="badge ' + bc + '">' + esc(a.type) + ' x' + a.count + '</span>';
         }
         html += '</div>';
       }
@@ -2413,7 +2627,7 @@
   // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
   /** 開いているカード index のみ true。未設定＝すべて折りたたみがデフォルト（カード構成変更時はキーを変えてインデックスずれを防ぐ） */
-  var EXPANDED_KEY = 'nyagi_items_expanded_v9';
+  var EXPANDED_KEY = 'nyagi_items_expanded_v11';
   var LEGACY_FOLD_KEY = 'nyagi_items_folded';
 
   function loadExpandedMap() {
@@ -2444,14 +2658,13 @@
 
   function renderPerItem() {
     var html = '';
+    html += renderItemCard_Tasks();
     html += renderItemCard_Stool();
     html += renderItemCard_Urine();
     html += renderItemCard_Weight();
     html += renderItemCard_Meds();
     html += renderItemCard_FeedingCheck();
     html += renderItemCard_Care();
-    html += renderItemCard_Tasks();
-    html += renderItemCard_Anomaly();
     html += renderItemCard_Medical();
     cardArea.innerHTML = html;
     bindOverviewInlineHandlers();
@@ -2495,6 +2708,14 @@
       '<a href="' + href + '" class="item-cat-name item-cat-link">' + alertDot(c.alert_level) + esc(c.name) + '</a>' +
       '<div class="item-values">' + valuesHtml + '</div>' +
       editBlock +
+      '</div>';
+  }
+
+  /** 猫未紐付けタスク（イベント準備・拠点共通など）用の1行 */
+  function itemRowLocationTasks(valuesHtml) {
+    return '<div class="item-row item-row-editable">' +
+      '<span class="item-cat-name" style="text-decoration:none;cursor:default;color:var(--text-dim);">📌 拠点共通</span>' +
+      '<div class="item-values">' + valuesHtml + '</div>' +
       '</div>';
   }
 
@@ -2596,13 +2817,43 @@
     return html;
   }
 
+  /** 項目ごと・体重カード: 本日（JST）計測済みを下に（未計測を上から順に操作しやすく） */
+  function orderCatsForWeightCard() {
+    var list = catsData.slice();
+    list.sort(function (a, b) {
+      var ta = a.weight_recorded_today ? 1 : 0;
+      var tb = b.weight_recorded_today ? 1 : 0;
+      if (ta !== tb) return ta - tb;
+      var sa = a.health_score !== null && a.health_score !== undefined ? a.health_score : 999;
+      var sb = b.health_score !== null && b.health_score !== undefined ? b.health_score : 999;
+      if (sa !== sb) return sa - sb;
+      return String(a.name || '').localeCompare(String(b.name || ''), 'ja');
+    });
+    return list;
+  }
+
   function renderItemCard_Weight() {
     var html = '<div class="item-card">';
-    html += '<div class="item-card-title">⚖️ 体重 / 🍽 食欲</div>';
+    html += '<div class="item-card-title">⚖️ 体重 / 🍽 食欲 <small class="dim" style="font-weight:500;">本日計測済みは下段</small></div>';
     html += '<div class="item-card-body">';
-    for (var i = 0; i < catsData.length; i++) {
-      var c = catsData[i];
-      var wStr = c.weight_latest !== null ? (c.weight_latest.toFixed(1) + 'kg' + (c.weight_previous !== null ? ' <span class="trend-' + c.weight_trend + '">' + (Math.abs(c.weight_latest - c.weight_previous) >= 0.05 ? Math.abs(c.weight_latest - c.weight_previous).toFixed(1) : '') + '</span>' : '')) : '<span class="dim">体重--</span>';
+    var weightOrder = orderCatsForWeightCard();
+    for (var i = 0; i < weightOrder.length; i++) {
+      var c = weightOrder[i];
+      var wStr = '';
+      if (c.weight_latest !== null) {
+        wStr = '<div class="ov-weight-inline" style="display:inline-flex;flex-direction:column;align-items:flex-start;max-width:100%;">' +
+          '<span style="white-space:nowrap;">' + c.weight_latest.toFixed(1) + 'kg' +
+          (c.weight_previous !== null
+            ? ' <span class="trend-' + c.weight_trend + '">' +
+              (Math.abs(c.weight_latest - c.weight_previous) >= 0.05 ? Math.abs(c.weight_latest - c.weight_previous).toFixed(1) : '') +
+              '</span>'
+            : '') +
+          '</span>' +
+          fmtWeightJstHtml(c.weight_record_date, c.weight_recorded_at) +
+          '</div>';
+      } else {
+        wStr = '<span class="dim">体重--</span>';
+      }
       var aStr = c.feeding_today_pct !== null && c.feeding_today_pct !== undefined ? '<span class="' + (c.feeding_today_pct >= 80 ? 'score-color-green' : c.feeding_today_pct >= 50 ? 'score-color-yellow' : 'score-color-red') + '">食欲 ' + c.feeding_today_pct + '%</span>' : '<span class="dim">食欲--</span>';
       html += itemRowEditable(c, wStr + aStr, buildWeightInlineEdit(c));
     }
@@ -2610,11 +2861,29 @@
     return html;
   }
 
-  /** 献立の meal_slot（DB英語キー）→ 短いラベル */
+  /**
+   * 献立の meal_slot → 短いラベル（朝と同じ BMP 記号系で夜も必ず見えるようにする）
+   * ※ 🌙(U+1F319) は端末・WebView によって非表示になり「夜」だけ見えることがあるため ☾(U+263E) を使う
+   */
   function feedingMealSlotLabelJp(slot) {
-    var s = slot == null ? '' : String(slot);
-    var m = { morning: '☀朝', afternoon: '昼', evening: '夜', night: '夜', noon: '昼' };
-    return m[s] || esc(s);
+    var raw = slot == null ? '' : String(slot).trim();
+    try {
+      if (raw.normalize) raw = raw.normalize('NFKC');
+    } catch (e) {}
+    var n = ovNormMealSlot(raw);
+    if (n === 'morning') return '☀朝';
+    if (n === 'afternoon') return '🌤昼';
+    if (n === 'evening') return '☾夜';
+    if (n === 'snack') return '🍪おやつ';
+    var sl = raw.toLowerCase();
+    var m = {
+      morning: '☀朝', afternoon: '🌤昼', evening: '☾夜', night: '☾夜', noon: '🌤昼', dinner: '☾夜',
+      朝: '☀朝', 昼: '🌤昼', 夜: '☾夜', 夕: '☾夜', 晩: '☾夜',
+      snack: '🍪おやつ', treat: '🍪おやつ',
+    };
+    if (m[raw]) return m[raw];
+    if (m[sl]) return m[sl];
+    return esc(raw);
   }
 
   /** 猫詳細の給餌ブロックと同じデータ源（overview API）: プリセット名＋説明（献立の preset_id からも解決）＋食事カテゴリ注意メモ */
@@ -2689,7 +2958,7 @@
     var html = '<div class="item-card">';
     html += '<div class="item-card-title">🍚 ごはん <small class="dim">あげた・残し</small></div>';
     html += '<div class="item-card-body">';
-    html += '<div class="ov-feed-hint" style="font-size:11px;color:var(--text-dim);margin-bottom:6px;line-height:1.4;">献立の追加・編集・手動記録は「詳細」から行ってください。</div>';
+    html += '<div class="ov-feed-hint" style="font-size:11px;color:var(--text-dim);margin-bottom:6px;line-height:1.4;">献立の追加・編集・手動記録は「詳細」から。昨日の「あげた」記録の取消は「🥄残し」内から行えます。</div>';
     var feedCats = orderCatsForFeedingCard();
     for (var i = 0; i < feedCats.length; i++) {
       var c = feedCats[i];
@@ -2756,10 +3025,41 @@
     return html;
   }
 
+  function ovJstTodayYmd() {
+    return new Date().toLocaleDateString('sv-SE', { timeZone: 'Asia/Tokyo' });
+  }
+
+  function ovEventOverdueHtml(it) {
+    if (!it || (it.task_type || '') !== 'event') return '';
+    if (it.status !== 'pending' && it.status !== 'in_progress') return '';
+    var dd = it.due_date ? String(it.due_date).slice(0, 10) : '';
+    if (!dd || dd.length < 10 || dd >= ovJstTodayYmd()) return '';
+    return '<span class="ov-task-overdue-badge">期限切れ</span>';
+  }
+
   function renderItemCard_Tasks() {
     var html = '<div class="item-card">';
     html += '<div class="item-card-title">✅ タスク</div>';
     html += '<div class="item-card-body">';
+    var lt = locationTasksToday || { done: 0, total: 0, items: [] };
+    var ltItems = lt.items || [];
+    if (lt.total > 0) {
+      var locTaskVals = '<span class="' + (lt.done >= lt.total ? 'score-color-green' : lt.done > 0 ? 'score-color-yellow' : 'score-color-red') + '" style="font-weight:700;">' + (lt.done >= lt.total ? '✅' : '⏳') + ' ' + lt.done + '/' + lt.total + '</span>';
+      locTaskVals += ' <small class="dim" style="font-weight:500;">（猫なし・イベント等）</small>';
+      for (var lj = 0; lj < ltItems.length; lj++) {
+        var lit = ltItems[lj];
+        var ltimeStr = '';
+        if (lit.due_time) {
+          var lds = String(lit.due_time);
+          ltimeStr = '<span class="dim" style="margin-right:4px;">' + esc(lds.length >= 5 ? lds.slice(0, 5) : lds) + '</span>';
+        }
+        locTaskVals += '<div class="ov-task-line"><div class="ov-task-head">' + ltimeStr + '<span class="ov-task-title">' + esc(lit.title) + '</span></div>' +
+          '<div class="ov-task-actions">' +
+          '<button type="button" class="btn btn-ov-task-done" data-task-id="' + escAttr(String(lit.id)) + '">完了</button>' +
+          '<button type="button" class="btn btn-ov-task-skip" data-task-id="' + escAttr(String(lit.id)) + '">スキップ</button></div></div>';
+      }
+      html += itemRowLocationTasks('<div class="item-values-medcol">' + locTaskVals + '</div>');
+    }
     for (var i = 0; i < catsData.length; i++) {
       var c = catsData[i];
       var tasks = c.tasks_today || { done: 0, total: 0, items: [] };
@@ -2822,28 +3122,6 @@
         }
       }
       html += itemRowEditable(c, '<div class="item-values-medcol">' + medVals + '</div>', '');
-    }
-    html += '</div></div>';
-    return html;
-  }
-
-  function renderItemCard_Anomaly() {
-    var html = '<div class="item-card">';
-    html += '<div class="item-card-title">⚠️ 健康異常</div>';
-    html += '<div class="item-card-body">';
-    for (var i = 0; i < catsData.length; i++) {
-      var c = catsData[i];
-      var anomalies = c.anomalies_7d || [];
-      var anomVals = '<span class="' + scoreColorClass(c.score_color) + '" style="font-weight:700;">' + (c.health_score !== null ? c.health_score : '--') + '</span>';
-      if (anomalies.length === 0) {
-        anomVals += '<span class="score-color-green" style="font-size:11px;">異常なし</span>';
-      } else {
-        for (var j = 0; j < anomalies.length; j++) {
-          var a = anomalies[j];
-          anomVals += '<span class="badge ' + (a.count >= 3 ? 'badge-red' : a.count >= 2 ? 'badge-orange' : 'badge-yellow') + '">' + esc(a.type) + ' x' + a.count + '</span>';
-        }
-      }
-      html += itemRowReadonly(c, '<div class="item-cat-name">' + alertDot(c.alert_level) + esc(c.name) + '</div><div class="item-values">' + anomVals + '</div>');
     }
     html += '</div></div>';
     return html;

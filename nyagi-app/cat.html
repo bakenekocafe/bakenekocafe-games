@@ -9,13 +9,14 @@
   </script>
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
   <title>NYAGI 猫詳細</title>
-  <link rel="manifest" href="manifest.json?v=211">
+  <link rel="manifest" href="manifest.json?v=213">
   <meta name="theme-color" content="#1a1a2e">
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-  <link rel="stylesheet" href="style.css?v=207">
-  <script src="js/nyagi-fixed-header.js?v=207" defer></script>
-  <link rel="stylesheet" href="voice-console.css?v=211">
+  <link rel="stylesheet" href="style.css?v=209">
+  <script src="js/nyagi-fixed-header.js?v=209" defer></script>
+  <script src="js/nyagi-cache-clear.js?v=209" defer></script>
+  <link rel="stylesheet" href="voice-console.css?v=213">
   <style>
     .app-sticky-top .cat-back-bar {
       display: flex;
@@ -346,6 +347,17 @@
     }
     .cat-task-title {
       font-size: 13px;
+    }
+    .cat-task-overdue {
+      display: inline-block;
+      margin-left: 6px;
+      font-size: 9px;
+      font-weight: 700;
+      color: #fecaca;
+      background: #7f1d1d;
+      padding: 2px 6px;
+      border-radius: 4px;
+      vertical-align: middle;
     }
     .cat-task-assignee {
       font-size: 11px;
@@ -1061,8 +1073,8 @@
         <input type="time" id="apTime" class="form-input">
       </div>
       <div class="form-group">
-        <label class="form-label">メモ（任意）</label>
-        <input type="text" id="apNotes" class="form-input" placeholder="食べ残しが多いので少量ずつ 等">
+        <label class="form-label">メモ（任意・改行可）</label>
+        <textarea id="apNotes" class="form-input" rows="3" style="resize:vertical;min-height:68px;line-height:1.45;" placeholder="食べ残しが多いので少量ずつ 等（Enterで改行）"></textarea>
       </div>
       <div class="modal-actions">
         <button class="btn btn-outline" onclick="closeAddPlanModal()">キャンセル</button>
@@ -1622,11 +1634,11 @@
     &copy; BAKENEKO GAMES
   </div>
 
-  <script src="config.js?v=211"></script>
-  <script src="js/nyagi-boot-overlay.js?v=211"></script>
-  <script src="js/login-gate.js?v=211"></script>
-  <script src="js/app.js?v=211"></script>
-  <script src="js/cat-detail.js?v=233"></script>
-  <script src="js/voice-console.js?v=211"></script>
+  <script src="config.js?v=213"></script>
+  <script src="js/nyagi-boot-overlay.js?v=213"></script>
+  <script src="js/login-gate.js?v=213"></script>
+  <script src="js/app.js?v=213"></script>
+  <script src="js/cat-detail.js?v=237"></script>
+  <script src="js/voice-console.js?v=213"></script>
 </body>
 </html>

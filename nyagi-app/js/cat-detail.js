@@ -393,7 +393,7 @@ function toggleFold(id, btn) {
     var bcsLabel = bcsVal != null ? (bcsVal === 5 ? '5（理想）' : bcsVal < 5 ? bcsVal + '（痩せ）' : bcsVal + '（肥満）') : '未設定';
     infoHtml += '<div class="info-cell" id="bcsInfoCell"><div class="info-label">体型（BCS 1-9）</div><div class="info-value">' + escapeHtml(bcsLabel) + ' <a href="#calorieArea" style="font-size:11px;color:var(--accent);">編集</a></div></div>';
     if (cat.description) {
-      infoHtml += '<div class="info-cell full"><div class="info-label">説明</div><div class="info-value" style="font-size:13px;">' + escapeHtml(cat.description) + '</div></div>';
+      infoHtml += '<div class="info-cell full"><div class="info-label">説明</div><div class="info-value" style="font-size:13px;white-space:pre-wrap;word-break:break-word;">' + escapeHtml(cat.description) + '</div></div>';
     }
     infoHtml += '</div></div>';
     basicInfoArea.innerHTML = infoHtml;
@@ -2661,6 +2661,37 @@ function toggleFold(id, btn) {
     return html;
   }
 
+  function isEveningMealSlotForYesterdayBlock(slot) {
+    var s = String(slot || '').toLowerCase();
+    return s === 'evening' || s === 'night' || s === 'dinner';
+  }
+
+  /** 昨夜ブロックと重複しないよう、昨日ログのうち朝・昼・その他のみ一覧＋取消 */
+  function renderYesterdayNonEveningLogsBlock(yesterdayLogs) {
+    yesterdayLogs = yesterdayLogs || [];
+    var rows = [];
+    for (var i = 0; i < yesterdayLogs.length; i++) {
+      if (!isEveningMealSlotForYesterdayBlock(yesterdayLogs[i].meal_slot)) rows.push(yesterdayLogs[i]);
+    }
+    if (rows.length === 0) return '';
+    rows.sort(function (a, b) { return (a.id || 0) - (b.id || 0); });
+    var h = '<div style="background:rgba(251,191,36,0.08);border:1px solid rgba(251,191,36,0.2);border-radius:10px;padding:12px;margin-bottom:12px;">';
+    h += '<div style="font-size:14px;font-weight:700;color:#fbbf24;margin-bottom:6px;">📅 昨日のあげた記録（朝・昼・その他）</div>';
+    h += '<div style="font-size:11px;color:var(--text-dim);margin-bottom:8px;line-height:1.4;">誤って「あげた」が残っているときは取消してください。夜分は上の「昨夜の夜ごはん」でも取消できます。</div>';
+    for (var j = 0; j < rows.length; j++) {
+      var l = rows[j];
+      h += '<div style="background:var(--surface);border-radius:8px;padding:8px 12px;margin-bottom:6px;display:flex;justify-content:space-between;align-items:center;gap:8px;">';
+      h += '<div style="font-size:13px;flex:1;min-width:0;">' + escapeHtml(slotLabel(l.meal_slot)) + ' · ' + escapeHtml(l.food_name || '—');
+      if (l.offered_g) h += ' <span style="color:var(--text-dim);">' + l.offered_g + 'g</span>';
+      if (l.eaten_pct !== null && l.eaten_pct !== undefined) h += ' <span style="color:var(--text-dim);">' + l.eaten_pct + '%</span>';
+      h += '</div>';
+      h += '<button type="button" class="btn-outline" style="font-size:11px;padding:4px 10px;flex-shrink:0;color:#f87171;" onclick="undoFed(' + l.id + ')">取消</button>';
+      h += '</div>';
+    }
+    h += '</div>';
+    return h;
+  }
+
   function renderLeftoverInput(eveningPlans, eveningLogs) {
     var logByPlanId = {};
     for (var li = 0; li < eveningLogs.length; li++) {
@@ -2710,18 +2741,24 @@ function toggleFold(id, btn) {
         var ateG = Math.round(offG * log.eaten_pct / 100 * 10) / 10;
         h += '<div style="display:flex;justify-content:space-between;align-items:center;">';
         h += '<span style="font-size:12px;color:#4ade80;">✅ ' + log.eaten_pct + '% 食べた（' + ateG + 'g） / 残り ' + leftG + 'g</span>';
+        h += '<span style="display:flex;gap:4px;flex-shrink:0;">';
         h += '<button class="btn-edit-small" onclick="openLeftoverEdit(' + log.id + ',' + offG + ')" title="修正" style="font-size:11px;">✏️</button>';
-        h += '</div>';
+        h += '<button type="button" class="btn-edit-small" onclick="undoFed(' + log.id + ')" title="この記録を削除" style="font-size:11px;color:#f87171;">取消</button>';
+        h += '</span></div>';
       } else if (log && log.eaten_pct === 100) {
         h += '<div style="display:flex;justify-content:space-between;align-items:center;">';
         h += '<span style="font-size:12px;color:#4ade80;">✅ 完食</span>';
+        h += '<span style="display:flex;gap:4px;flex-shrink:0;">';
         h += '<button class="btn-edit-small" onclick="openLeftoverEdit(' + log.id + ',' + offG + ')" title="修正" style="font-size:11px;">✏️</button>';
-        h += '</div>';
+        h += '<button type="button" class="btn-edit-small" onclick="undoFed(' + log.id + ')" title="この記録を削除" style="font-size:11px;color:#f87171;">取消</button>';
+        h += '</span></div>';
       } else if (log && (log.eaten_pct === null || log.eaten_pct === undefined)) {
         h += '<div style="font-size:11px;color:#fbbf24;margin-bottom:6px;">摂取 0%（未確認）</div>';
         h += renderLeftoverControls(log.id, offG, 'log');
+        h += '<div style="margin-top:6px;text-align:right;"><button type="button" class="btn-outline" style="font-size:11px;padding:4px 10px;color:#f87171;" onclick="undoFed(' + log.id + ')">記録を削除（取消）</button></div>';
       } else if (log) {
         h += renderLeftoverControls(log.id, offG, 'log');
+        h += '<div style="margin-top:6px;text-align:right;"><button type="button" class="btn-outline" style="font-size:11px;padding:4px 10px;color:#f87171;" onclick="undoFed(' + log.id + ')">記録を削除（取消）</button></div>';
       } else if (plan) {
         h += renderLeftoverControls(plan.id, offG, 'plan');
       }
@@ -2779,6 +2816,8 @@ function toggleFold(id, btn) {
     if (eveningPlans.length > 0 || eveningLogs.length > 0) {
       html += renderLeftoverInput(eveningPlans, eveningLogs);
     }
+
+    html += renderYesterdayNonEveningLogsBlock(yesterdayLogs);
 
     var yesterdayRel = (function (ymd) {
       var d = new Date(ymd + 'T12:00:00+09:00');
@@ -2988,12 +3027,10 @@ function toggleFold(id, btn) {
             if (p.notes && String(p.notes).trim()) {
               html += '<div style="font-size:10px;color:var(--text-dim);margin-top:3px;line-height:1.35;padding:4px 6px;background:rgba(255,255,255,0.04);border-radius:4px;">📝 ' + escapeHtml(String(p.notes).trim()) + '</div>';
             }
-            if (isFed && fedLog.eaten_pct !== null && fedLog.eaten_pct !== undefined && fedLog.eaten_pct === 0) {
-              html += '<div style="font-size:10px;color:#fbbf24;">まだ食べていません（0%）— 🍽で修正</div>';
-            } else if (isFed && fedLog.eaten_pct !== null && fedLog.eaten_pct !== undefined && fedLog.eaten_pct < 100) {
+            if (isFed && fedLog.eaten_pct !== null && fedLog.eaten_pct !== undefined && fedLog.eaten_pct < 100) {
               html += '<div style="font-size:10px;color:#facc15;">食べた量: ' + fedLog.eaten_pct + '%</div>';
             } else if (isFed && (fedLog.eaten_pct === null || fedLog.eaten_pct === undefined)) {
-              html += '<div style="font-size:10px;color:#fbbf24;">まだ食べていません（0%・旧データ）— 🍽で入力</div>';
+              html += '<div style="font-size:10px;color:#fbbf24;">食べた量: 0%（未確認・🍽で入力）</div>';
             } else if (isFed && fedLog.eaten_pct === 100) {
               html += '<div style="font-size:10px;color:#4ade80;">食べた量: 100%（完食）</div>';
             }
@@ -3346,7 +3383,8 @@ function toggleFold(id, btn) {
 
     if (!foodId || !amountG) { alert('フードと量は必須です'); return; }
 
-    var payload = { food_id: foodId, meal_slot: slot, amount_g: amountG, scheduled_time: time || null, notes: notes || null };
+    var notesPl = (notes != null && String(notes).trim() !== '') ? String(notes).trim() : null;
+    var payload = { food_id: foodId, meal_slot: slot, amount_g: amountG, scheduled_time: time || null, notes: notesPl };
 
     if (_editingPlanId) {
       fetch(API_BASE + '/feeding/plans/' + _editingPlanId, {
@@ -3394,7 +3432,7 @@ function toggleFold(id, btn) {
             innerHtml += '<div style="background:var(--surface);border-radius:8px;padding:10px 12px;margin-bottom:8px;">';
             innerHtml += '<div style="display:flex;justify-content:space-between;align-items:flex-start;gap:8px;">';
             innerHtml += '<div style="flex:1;min-width:0;"><div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;margin-bottom:2px;">' + presetLocationBadgeHtml(ps.location_id) + '<b style="font-size:13px;">' + escapeHtml(ps.name) + '</b></div>';
-            if (ps.description) innerHtml += '<div style="font-size:11px;color:var(--text-dim);margin-top:2px;">' + escapeHtml(ps.description) + '</div>';
+            if (ps.description) innerHtml += '<div style="font-size:11px;color:var(--text-dim);margin-top:2px;line-height:1.4;white-space:pre-wrap;word-break:break-word;">' + escapeHtml(ps.description) + '</div>';
             innerHtml += _renderPresetItemsSummary(ps.items || [], ps.total_kcal);
             innerHtml += '</div>';
             innerHtml += '<button class="btn btn-primary" style="font-size:11px;padding:4px 10px;width:auto;min-width:0;flex-shrink:0;align-self:center;" onclick="applyPreset(' + ps.id + ')">適用</button>';
@@ -3558,7 +3596,12 @@ function toggleFold(id, btn) {
           h += '<div style="background:var(--surface);border-radius:8px;padding:10px 12px;margin-bottom:8px;">';
           h += '<div style="display:flex;justify-content:space-between;align-items:flex-start;gap:8px;">';
           h += '<div style="flex:1;min-width:0;"><div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;margin-bottom:4px;">' + presetLocationBadgeHtml(ps.location_id) + '<b>' + escapeHtml(ps.name) + '</b></div>';
-          h += '<div style="font-size:11px;color:var(--text-dim);">' + (ps.items || []).length + '品</div></div>';
+          h += '<div style="font-size:11px;color:var(--text-dim);">' + (ps.items || []).length + '品</div>';
+          var psDescM = ps.description != null ? String(ps.description).trim() : '';
+          h += '<div style="font-size:10px;color:var(--text-dim);margin:4px 0 0;line-height:1.35;white-space:pre-wrap;word-break:break-word;">';
+          h += psDescM ? escapeHtml(psDescM.length > 140 ? psDescM.slice(0, 140) + '…' : psDescM) : '<span class="dim">全体メモなし</span>';
+          h += '</div>';
+          h += '<button type="button" class="btn btn-outline" style="font-size:10px;padding:3px 8px;margin-top:4px;" onclick="openEditPresetDescriptionModal(' + ps.id + ')">📋 全体メモを編集</button></div>';
           h += '<div style="display:flex;flex-direction:column;align-items:flex-end;gap:4px;flex-shrink:0;">';
           h += '<button type="button" class="btn-edit-small" style="font-size:10px;" onclick="cyclePresetLocation(' + ps.id + ',\'' + ploc + '\')" title="拠点を切替">🏷 拠点切替</button>';
           h += '<div><button class="btn-edit-small" onclick="renamePreset(' + ps.id + ',\'' + escapeHtml(ps.name).replace(/'/g, "\\'") + '\')" title="名前変更">📝</button> <button class="btn-edit-small" onclick="editPresetItems(' + ps.id + ')" title="中身編集">✏️</button> <button class="btn-edit-small" style="color:#f87171;" onclick="deletePreset(' + ps.id + ')" title="削除">🗑</button></div>';
@@ -3611,6 +3654,51 @@ function toggleFold(id, btn) {
     }).catch(function () { alert('名前変更に失敗しました'); });
   };
 
+  window.openEditPresetDescriptionModal = function (presetId) {
+    var modal = document.getElementById('presetApplyModal');
+    if (!modal) return;
+    modal.innerHTML = '<div class="modal-box" style="max-height:85vh;overflow-y:auto;"><div class="loading" style="padding:24px;">読み込み中...</div></div>';
+    fetch(API_BASE + '/feeding/presets/' + presetId, { headers: apiHeaders(), cache: 'no-store' })
+      .then(function (r) { return r.json(); })
+      .then(function (data) {
+        if (data.error || !data.preset) {
+          alert('読み込みに失敗しました');
+          window.openPresetManageModal();
+          return;
+        }
+        var cur = data.preset.description != null ? String(data.preset.description) : '';
+        modal.innerHTML = '<div class="modal-box" style="max-height:85vh;overflow-y:auto;"><div class="modal-title">📋 プリセット全体メモ</div>' +
+          '<div style="padding:12px 16px 16px;">' +
+          '<p class="dim" style="font-size:11px;margin:0 0 8px;line-height:1.4;">献立カード等に表示されるプリセット単位のメモです。<b>改行で段落分け</b>できます。フード行ごとのメモは「中身編集」→ 各品の ✏️ から変更できます。</p>' +
+          '<textarea id="presetDescTa" rows="6" style="width:100%;box-sizing:border-box;padding:10px;border-radius:8px;border:1px solid rgba(255,255,255,0.15);background:var(--surface);color:inherit;font-size:13px;line-height:1.45;resize:vertical;"></textarea>' +
+          '<div class="modal-actions" style="margin-top:12px;">' +
+          '<button type="button" class="btn btn-primary" onclick="savePresetDescription(' + presetId + ')">保存</button> ' +
+          '<button type="button" class="btn btn-outline" onclick="openPresetManageModal()">戻る</button>' +
+          '</div></div></div>';
+        var ta = document.getElementById('presetDescTa');
+        if (ta) ta.value = cur;
+      })
+      .catch(function () {
+        alert('読み込みに失敗しました');
+        window.openPresetManageModal();
+      });
+  };
+
+  window.savePresetDescription = function (presetId) {
+    var ta = document.getElementById('presetDescTa');
+    var v = ta ? String(ta.value).trim() : '';
+    fetch(API_BASE + '/feeding/presets/' + presetId, {
+      method: 'PUT',
+      headers: apiHeaders(),
+      cache: 'no-store',
+      body: JSON.stringify({ description: v === '' ? null : v }),
+    }).then(function (r) { return r.json(); })
+      .then(function (data) {
+        if (data.error) { alert('エラー: ' + (data.message || data.error)); return; }
+        window.openPresetManageModal();
+      }).catch(function () { alert('保存に失敗しました'); });
+  };
+
   window.deletePreset = function (id) {
     if (!confirm('このプリセットを削除しますか？')) return;
     fetch(API_BASE + '/feeding/presets/' + id, { method: 'DELETE', headers: apiHeaders(), cache: 'no-store' })
@@ -3628,47 +3716,8 @@ function toggleFold(id, btn) {
     if (name == null) return;
     name = String(name).trim();
     if (!name) { alert('プリセット名を入力してください'); return; }
-    var desc = prompt('説明（任意・プリセット全体のメモ）', '');
-    var sp = (currentCatData && currentCatData.species) || 'cat';
-    fetch(API_BASE + '/feeding/presets', {
-      method: 'POST', headers: apiHeaders(), cache: 'no-store',
-      body: JSON.stringify({
-        name: name,
-        description: desc != null && String(desc).trim() !== '' ? String(desc) : null,
-        location_id: loc,
-        species: sp,
-      }),
-    }).then(function (r) {
-      return r.text().then(function (text) {
-        var data = {};
-        if (text) {
-          try {
-            data = JSON.parse(text);
-          } catch (_) {
-            alert('作成に失敗しました（応答の解析エラー） HTTP ' + r.status);
-            return null;
-          }
-        }
-        if (!r.ok) {
-          alert('エラー: ' + (data.message || data.error || ('HTTP ' + r.status)));
-          return null;
-        }
-        return data;
-      });
-    }).then(function (data) {
-      if (!data) return;
-      if (data.error) {
-        alert('エラー: ' + (data.message || data.error));
-        return;
-      }
-      if (!data.preset || data.preset.id == null) {
-        alert('エラー: プリセット情報が返りませんでした');
-        return;
-      }
-      editPresetItems(data.preset.id);
-    }).catch(function (e) {
-      alert('作成に失敗しました: ' + (e && e.message ? e.message : 'network'));
-    });
+    _pendingCreatePreset = { name: name, loc: loc };
+    showCreatePresetDescriptionModal();
   };
 
   window.editPresetItems = function (presetId) {
@@ -3722,7 +3771,7 @@ function toggleFold(id, btn) {
         if (kcal) h += ' <span style="color:var(--text-dim);font-size:11px;">(' + kcal + 'kcal)</span>';
         if (it.scheduled_time) h += ' <span style="color:var(--text-dim);font-size:10px;">⏰' + escapeHtml(it.scheduled_time) + '</span>';
         if (it.notes && String(it.notes).trim()) {
-          h += '<div style="font-size:10px;color:var(--text-dim);margin-top:4px;line-height:1.35;">📝 ' + escapeHtml(String(it.notes).trim()) + '</div>';
+          h += '<div style="font-size:10px;color:var(--text-dim);margin-top:4px;line-height:1.35;white-space:pre-wrap;word-break:break-word;">📝 ' + escapeHtml(String(it.notes).trim()) + '</div>';
         }
         h += '</div>';
         h += '<div style="display:flex;gap:2px;flex-shrink:0;">';
@@ -3801,6 +3850,76 @@ function toggleFold(id, btn) {
   };
 
   var _pendingPresetId = null;
+  var _pendingCreatePreset = null;
+
+  function showCreatePresetDescriptionModal() {
+    var modal = document.getElementById('presetApplyModal');
+    if (!modal || !_pendingCreatePreset) return;
+    var nm = _pendingCreatePreset.name;
+    modal.classList.add('open');
+    modal.innerHTML = '<div class="modal-box" style="max-height:85vh;overflow-y:auto;"><div class="modal-title">新規プリセット — 全体メモ <span class="dim">' + escapeHtml(nm) + '</span></div>' +
+      '<div style="padding:12px 16px;"><p class="dim" style="font-size:11px;margin:0 0 8px;line-height:1.4;">改行で段落分けできます。空欄のままでも作成できます。</p>' +
+      '<textarea id="cdNewPresetDescTa" rows="5" style="width:100%;box-sizing:border-box;padding:10px;border-radius:8px;border:1px solid rgba(255,255,255,0.12);background:var(--surface);color:inherit;font-size:13px;line-height:1.45;resize:vertical;"></textarea>' +
+      '<div class="modal-actions" style="margin-top:12px;">' +
+      '<button type="button" class="btn btn-primary" onclick="submitCreatePresetWithDescription()">作成</button> ' +
+      '<button type="button" class="btn btn-outline" onclick="cancelCreatePresetDescription()">キャンセル</button>' +
+      '</div></div></div>';
+  }
+
+  window.cancelCreatePresetDescription = function () {
+    _pendingCreatePreset = null;
+    window.openPresetManageModal();
+  };
+
+  window.submitCreatePresetWithDescription = function () {
+    if (!_pendingCreatePreset) return;
+    var ta = document.getElementById('cdNewPresetDescTa');
+    var raw = ta ? String(ta.value) : '';
+    var desc = raw.trim() === '' ? null : raw.trim();
+    var loc = _pendingCreatePreset.loc;
+    var name = _pendingCreatePreset.name;
+    var sp = (currentCatData && currentCatData.species) || 'cat';
+    _pendingCreatePreset = null;
+    fetch(API_BASE + '/feeding/presets', {
+      method: 'POST', headers: apiHeaders(), cache: 'no-store',
+      body: JSON.stringify({
+        name: name,
+        description: desc,
+        location_id: loc,
+        species: sp,
+      }),
+    }).then(function (r) {
+      return r.text().then(function (text) {
+        var data = {};
+        if (text) {
+          try {
+            data = JSON.parse(text);
+          } catch (_) {
+            alert('作成に失敗しました（応答の解析エラー） HTTP ' + r.status);
+            return null;
+          }
+        }
+        if (!r.ok) {
+          alert('エラー: ' + (data.message || data.error || ('HTTP ' + r.status)));
+          return null;
+        }
+        return data;
+      });
+    }).then(function (data) {
+      if (!data) return;
+      if (data.error) {
+        alert('エラー: ' + (data.message || data.error));
+        return;
+      }
+      if (!data.preset || data.preset.id == null) {
+        alert('エラー: プリセット情報が返りませんでした');
+        return;
+      }
+      window.editPresetItems(data.preset.id);
+    }).catch(function (e) {
+      alert('作成に失敗しました: ' + (e && e.message ? e.message : 'network'));
+    });
+  };
 
   window.submitAddPlan = function () {
     if (_addPlanMode === 'preset') {
@@ -3818,7 +3937,8 @@ function toggleFold(id, btn) {
     if (!foodId || !amountG) { alert('フードと量は必須です'); return; }
     if (!_pendingPresetId) { alert('プリセットが選択されていません'); return; }
     var presetNotes = document.getElementById('apNotes') ? document.getElementById('apNotes').value : '';
-    var payload = { food_id: foodId, meal_slot: slot, amount_g: amountG, scheduled_time: time || null, notes: presetNotes ? presetNotes.trim() : null };
+    var notesTrim = presetNotes != null && String(presetNotes).trim() !== '' ? String(presetNotes).trim() : null;
+    var payload = { food_id: foodId, meal_slot: slot, amount_g: amountG, scheduled_time: time || null, notes: notesTrim };
     var url = API_BASE + '/feeding/presets/' + _pendingPresetId + '/items';
     var method = 'POST';
     var savingEdit = !!_editingPresetItemId;
@@ -5245,7 +5365,11 @@ function toggleFold(id, btn) {
           html += '<div class="cat-task-row' + (isDone ? ' cat-task-row--done' : '') + '">';
           html += '<span class="cat-task-icon" aria-hidden="true">' + icon + '</span>';
           html += '<div class="cat-task-main">';
-          html += '<div class="cat-task-title"' + (isDone ? ' style="text-decoration:line-through;"' : '') + '>' + escapeHtml(t.title) + '</div>';
+          var overdueMark = '';
+          if ((t.task_type || '') === 'event' && !isDone && t.due_date && String(t.due_date).slice(0, 10) < todayJstYmd()) {
+            overdueMark = ' <span class="cat-task-overdue">期限切れ</span>';
+          }
+          html += '<div class="cat-task-title"' + (isDone ? ' style="text-decoration:line-through;"' : '') + '>' + escapeHtml(t.title) + overdueMark + '</div>';
           if (t.assigned_name) {
             html += '<div class="cat-task-assignee">担当: ' + escapeHtml(t.assigned_name) + '</div>';
           }

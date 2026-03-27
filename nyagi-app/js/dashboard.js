@@ -308,10 +308,15 @@
       }
     }
 
-    // 10. 🏥 病院スケジュール（常に表示）
+    // 10. 🏥 病院スケジュール（折りたたみ可・既定は展開）
     var vetScheds = e.vet_schedules || [];
     var vetTypeLabels = { vaccine: 'ワクチン', checkup: '健診', surgery: '手術', dental: '歯科', test: '検査', observation: '経過観察' };
-    html += '<div class="section-title">🏥 病院スケジュール</div>';
+    html += '<div class="section-title dash-fold-title" data-fold="vetSchedule">🏥 病院スケジュール';
+    if (vetScheds.length > 0) {
+      html += ' <small class="dim" style="font-weight:500;">' + vetScheds.length + '件</small>';
+    }
+    html += '</div>';
+    html += '<div class="dash-fold-body" data-fold-target="vetSchedule">';
     if (vetScheds.length === 0) {
       html += '<div style="padding:12px;background:var(--surface);border-radius:8px;text-align:center;color:var(--text-dim);font-size:13px;">登録されているスケジュールはありません</div>';
     } else {
@@ -380,6 +385,7 @@
         for (var l = 0; l < later.length; l++) { html += renderVetCard(later[l]); }
       }
     }
+    html += '</div>';
 
     dashView.innerHTML = html;
     bindDashFolds();
@@ -475,7 +481,7 @@
 
   /** 未保存時に「開いたまま」にするセクション（それ以外はデフォルトで折りたたみ） */
   function dashFoldDefaultExpanded(key) {
-    return key === 'healthScore';
+    return key === 'healthScore' || key === 'vetSchedule';
   }
 
   function loadDashFolds() {
@@ -499,7 +505,7 @@
     try { localStorage.setItem(DASH_FOLD_KEY, JSON.stringify(map)); } catch (_) {}
   }
 
-  /** true: 折りたたみ表示。キー未設定時は healthScore のみ開く */
+  /** true: 折りたたみ表示。キー未設定時は healthScore・病院スケジュールは開く */
   function isDashFoldCollapsed(key, folds) {
     if (Object.prototype.hasOwnProperty.call(folds, key)) {
       return !!folds[key];

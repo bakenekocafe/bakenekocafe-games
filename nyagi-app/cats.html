@@ -951,8 +951,8 @@
       </div>
       <div class="form-group">
         <label class="form-label">皿に残った量 (g)</label>
-        <input type="number" id="ovQfLeftG" class="form-input" step="0.1" min="0" placeholder="空欄 or 未入力＝0%未確認">
-        <div class="form-hint" style="font-size:11px;color:var(--text-dim);margin-top:4px;line-height:1.4;">空欄のまま「記録する」＝摂取0%（未確認）。残りgを入れるとその分から摂取率を計算します。完食は残り <b>0</b>。「とりあえずあげた」も同じく未確認として記録します。</div>
+        <input type="number" id="ovQfLeftG" class="form-input" step="0.1" min="0" placeholder="空欄＝0%（まだ食べていない）">
+        <div class="form-hint" style="font-size:11px;color:var(--text-dim);margin-top:4px;line-height:1.4;">空欄のまま「記録する」＝<b>0%（まだ何も食べていない）</b>として保存。残りgを入れると摂取率を自動計算。完食は残り <b>0</b>。「とりあえずあげた」も同様に0%で保存されます。</div>
       </div>
       <div class="form-group">
         <label class="form-label">あげた時刻（JST）</label>
@@ -1009,7 +1009,7 @@
   <script src="js/nyagi-boot-overlay.js?v=211"></script>
   <script src="js/login-gate.js?v=211"></script>
   <script src="js/app.js?v=211"></script>
-  <script src="js/cats-overview.js?v=246"></script>
+  <script src="js/cats-overview.js?v=247"></script>
   <script src="js/voice-console.js?v=211"></script>
 </body>
 </html>

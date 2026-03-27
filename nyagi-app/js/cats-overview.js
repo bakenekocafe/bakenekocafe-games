@@ -605,7 +605,7 @@
     if (!deferIntake) {
       var lfin = document.getElementById('ovQfLeftG');
       var leftStr = lfin && lfin.value != null ? String(lfin.value).trim() : '';
-      // 空欄＝摂取未確認（leftover なし → eaten_pct null）。0 入力＝完食(100%)。
+      // 空欄＝サーバで摂取0%。残りgで％算出。0 入力＝完食(100%)。
       if (leftStr !== '') {
         var leftG = parseFloat(leftStr);
         if (isNaN(leftG) || leftG < 0) {

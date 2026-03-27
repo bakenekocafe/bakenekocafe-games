@@ -2988,10 +2988,12 @@ function toggleFold(id, btn) {
             if (p.notes && String(p.notes).trim()) {
               html += '<div style="font-size:10px;color:var(--text-dim);margin-top:3px;line-height:1.35;padding:4px 6px;background:rgba(255,255,255,0.04);border-radius:4px;">📝 ' + escapeHtml(String(p.notes).trim()) + '</div>';
             }
-            if (isFed && fedLog.eaten_pct !== null && fedLog.eaten_pct !== undefined && fedLog.eaten_pct < 100) {
+            if (isFed && fedLog.eaten_pct !== null && fedLog.eaten_pct !== undefined && fedLog.eaten_pct === 0) {
+              html += '<div style="font-size:10px;color:#fbbf24;">まだ食べていません（0%）— 🍽で修正</div>';
+            } else if (isFed && fedLog.eaten_pct !== null && fedLog.eaten_pct !== undefined && fedLog.eaten_pct < 100) {
               html += '<div style="font-size:10px;color:#facc15;">食べた量: ' + fedLog.eaten_pct + '%</div>';
             } else if (isFed && (fedLog.eaten_pct === null || fedLog.eaten_pct === undefined)) {
-              html += '<div style="font-size:10px;color:#fbbf24;">食べた量: 0%（未確認・🍽で入力）</div>';
+              html += '<div style="font-size:10px;color:#fbbf24;">まだ食べていません（0%・旧データ）— 🍽で入力</div>';
             } else if (isFed && fedLog.eaten_pct === 100) {
               html += '<div style="font-size:10px;color:#4ade80;">食べた量: 100%（完食）</div>';
             }
@@ -3176,7 +3178,7 @@ function toggleFold(id, btn) {
     if (!deferIntake) {
       var lfin = document.getElementById('cdQfLeftG');
       var leftStr = lfin && lfin.value != null ? String(lfin.value).trim() : '';
-      // 空欄＝摂取未確認（leftover なし → eaten_pct null）。0 入力＝完食(100%)。
+      // 空欄＝サーバで摂取0%。残りgで％算出。0 入力＝完食(100%)。
       if (leftStr !== '') {
         var leftG = parseFloat(leftStr);
         if (isNaN(leftG) || leftG < 0) {

@@ -972,6 +972,22 @@
       font-weight: 400;
     }
     .stool-row.stool-none { opacity: 0.5; }
+    /* 排便・排尿: 当日以外の行は文字色をグレー（チップの色分けは当日のみ） */
+    .stool-row.stool-row-past .stool-date,
+    .stool-row.stool-row-past .stool-time-slot,
+    .stool-row.stool-row-past .stool-meta {
+      color: #94a3b8 !important;
+    }
+    .stool-row.stool-row-past .stool-chip {
+      color: #94a3b8 !important;
+    }
+    .stool-row.stool-row-past .stool-chip.stool-normal,
+    .stool-row.stool-row-past .stool-chip.stool-warn,
+    .stool-row.stool-row-past .stool-chip.stool-baseline,
+    .stool-row.stool-row-past .stool-chip.stool-empty {
+      background: rgba(148,163,184,0.14) !important;
+    }
+    .stool-row.stool-none.stool-row-past { opacity: 1; }
     .stool-chip.med-chip {
       background: rgba(129,140,248,0.18); color: #818cf8;
       font-weight: 600;
@@ -1868,7 +1884,7 @@
   <script src="js/login-gate.js?v=213"></script>
   <script src="js/app.js?v=213"></script>
   <script src="js/nyagi-scroll-restore.js?v=217"></script>
-  <script src="js/cat-detail.js?v=258"></script>
+  <script src="js/cat-detail.js?v=259"></script>
   <script src="js/voice-console.js?v=213"></script>
 </body>
 </html>

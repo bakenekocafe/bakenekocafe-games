@@ -1623,7 +1623,7 @@ function closeCatDetailFoldSection(btn) {
       var isBaseline = status === '血便小';
       return '<span class="stool-chip ' + (isNormal ? 'stool-normal' : isBaseline ? 'stool-baseline' : 'stool-warn') + '">'
         + escapeHtml(status) + '</span>';
-    }, 3, 'stoolFold');
+    }, 3, 'stoolFold', true);
     html += '</div></div>';
     stoolArea.innerHTML = html;
   }
@@ -1694,13 +1694,15 @@ function closeCatDetailFoldSection(btn) {
     return map;
   }
 
-  function renderDailyRows(days, byDate, chipFn, visibleDays, foldId) {
+  function renderDailyRows(days, byDate, chipFn, visibleDays, foldId, grayPastExcretionRows) {
     var html = '';
     var folded = false;
+    var todayYmd = todayJstYmd();
     for (var di = 0; di < days.length; di++) {
       var day = days[di];
       var dayLabel = day.slice(5);
       var entries = byDate[day];
+      var pastClass = grayPastExcretionRows && day !== todayYmd ? ' stool-row-past' : '';
 
       if (visibleDays && foldId && di === visibleDays && !folded) {
         html += '<div id="' + foldId + '" class="fold-area" style="display:none;">';
@@ -1708,7 +1710,7 @@ function closeCatDetailFoldSection(btn) {
       }
 
       if (!entries) {
-        html += '<div class="stool-row stool-none">';
+        html += '<div class="stool-row stool-none' + pastClass + '">';
         html += '<span class="stool-date">' + escapeHtml(dayLabel) + '</span>';
         html += '<span class="stool-chip stool-empty">なし</span>';
         html += '</div>';
@@ -1723,7 +1725,7 @@ function closeCatDetailFoldSection(btn) {
         var recTime = r.recorded_time && r.recorded_time !== 'null' ? r.recorded_time : '';
         var createdTime = (r.created_at || '').slice(11, 16);
 
-        html += '<div class="stool-row">';
+        html += '<div class="stool-row' + pastClass + '">';
         html += '<span class="stool-date">' + escapeHtml(ei === 0 ? dayLabel : '') + '</span>';
         html += chipFn(r);
         if (timeSlot) html += '<span class="stool-time-slot">' + escapeHtml(timeSlot) + '</span>';

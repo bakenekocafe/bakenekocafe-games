@@ -18,6 +18,28 @@
   <script src="js/nyagi-cache-clear.js?v=209" defer></script>
   <link rel="stylesheet" href="voice-console.css?v=213">
   <style>
+    /* display:none の file は iOS 等で .click() が無効。label[for] 用に画面外へ退避 */
+    .nyagi-hidden-file-input {
+      position: fixed;
+      left: 0;
+      top: 0;
+      width: 0.01px;
+      height: 0.01px;
+      opacity: 0.01;
+      overflow: hidden;
+      clip: rect(0, 0, 0, 0);
+      margin: 0;
+      padding: 0;
+      border: 0;
+      pointer-events: none;
+    }
+    label.nyagi-ia-upload-btn {
+      cursor: pointer;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      margin: 0;
+    }
     .app-sticky-top .cat-back-bar {
       display: flex;
       align-items: center;
@@ -240,6 +262,101 @@
       margin-bottom: 10px;
       padding-left: 4px;
     }
+
+    /* 猫詳細: 各ブロック折りたたみ（デフォルト閉じる） */
+    .cat-detail-fold {
+      margin-bottom: 10px;
+      border-radius: 10px;
+      background: var(--surface, rgba(255,255,255,0.04));
+      border: 1px solid var(--border, rgba(255,255,255,0.08));
+      overflow: hidden;
+    }
+    .cat-detail-fold__toggle {
+      width: 100%;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 10px;
+      padding: 12px 14px;
+      margin: 0;
+      border: none;
+      background: rgba(255,255,255,0.07);
+      color: var(--text-main, #e2e8f0);
+      font-size: 15px;
+      font-weight: 700;
+      text-align: left;
+      cursor: pointer;
+      -webkit-tap-highlight-color: rgba(255,255,255,0.06);
+    }
+    .cat-detail-fold__toggle:hover {
+      background: rgba(255,255,255,0.1);
+    }
+    .cat-detail-fold__toggle:active { opacity: 0.92; }
+    .cat-detail-fold__toggle-main {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      min-width: 0;
+    }
+    .cat-detail-fold__hint {
+      flex-shrink: 0;
+      font-size: 11px;
+      font-weight: 600;
+      color: var(--accent, #38bdf8);
+      letter-spacing: 0.03em;
+    }
+    .cat-detail-fold:not(.cat-detail-fold--collapsed) .cat-detail-fold__hint {
+      display: none;
+    }
+    .cat-detail-fold__chev {
+      display: inline-block;
+      font-size: 11px;
+      color: var(--text-dim, #94a3b8);
+      transition: transform 0.15s ease;
+      flex-shrink: 0;
+      width: 14px;
+    }
+    .cat-detail-fold:not(.cat-detail-fold--collapsed) .cat-detail-fold__chev {
+      transform: rotate(90deg);
+    }
+    .cat-detail-fold__panel {
+      padding: 0 10px 12px 14px;
+    }
+    .cat-detail-fold--collapsed .cat-detail-fold__panel {
+      display: none !important;
+    }
+    .cat-detail-fold__panel .detail-section {
+      margin-bottom: 12px;
+    }
+    .cat-detail-fold__panel .detail-section:last-child {
+      margin-bottom: 0;
+    }
+    .cat-detail-fold__panel .detail-section > .detail-title:first-child {
+      display: none;
+    }
+    .cat-detail-fold__panel .detail-section > .section-header .detail-title {
+      display: none;
+    }
+    .cat-detail-fold__panel .intake-adoption-card > .section-header .detail-title {
+      display: block;
+    }
+    .cat-detail-fold__close {
+      display: block;
+      width: calc(100% + 24px);
+      margin: 10px -10px -12px -14px;
+      padding: 10px 14px;
+      box-sizing: border-box;
+      border: none;
+      border-top: 1px solid var(--border, rgba(255,255,255,0.08));
+      background: rgba(0,0,0,0.14);
+      color: var(--text-dim, #94a3b8);
+      font-size: 13px;
+      font-weight: 600;
+      cursor: pointer;
+      text-align: center;
+      -webkit-tap-highlight-color: rgba(255,255,255,0.06);
+    }
+    .cat-detail-fold__close:active { opacity: 0.88; }
 
     .info-grid {
       display: grid;
@@ -695,6 +812,12 @@
       cursor: default;
     }
     .care-today-item--readonly:active { opacity: 1; }
+    .care-today-item--undoable {
+      cursor: pointer;
+    }
+    .care-today-item--undoable:active {
+      opacity: 0.92;
+    }
     .care-today-cb-spacer {
       width: 22px;
       flex-shrink: 0;
@@ -963,21 +1086,75 @@
   <div id="catContent" style="display:none;">
     <div id="catHeaderArea"></div>
     <div id="alertBannerArea"></div>
-    <div id="scoreCardArea"></div>
-    <div id="basicInfoArea"></div>
-    <div id="catNotesArea"></div>
-    <div id="catTasksArea"></div>
-    <div id="healthRecordsArea"></div>
-    <div id="weightChartArea"></div>
-    <div id="calorieArea" style="scroll-margin-top: 16px;"></div>
-    <div id="feedingArea"></div>
-    <div id="careArea"></div>
-    <div id="stoolArea"></div>
-    <div id="urineArea"></div>
-    <div id="medicationScheduleArea"></div>
-    <div id="vetScheduleArea"></div>
-    <div id="clinicRecordsArea"></div>
-    <div id="actionsArea"></div>
+
+    <div class="cat-detail-fold cat-detail-fold--collapsed">
+      <button type="button" class="cat-detail-fold__toggle" aria-expanded="false"><span class="cat-detail-fold__toggle-main"><span class="cat-detail-fold__chev" aria-hidden="true">▶</span><span>🏥 健康スコア</span></span><span class="cat-detail-fold__hint" aria-hidden="true">タップで開く</span></button>
+      <div class="cat-detail-fold__panel"><div id="scoreCardArea"></div><button type="button" class="cat-detail-fold__close">▲ 閉じる</button></div>
+    </div>
+    <div class="cat-detail-fold cat-detail-fold--collapsed">
+      <button type="button" class="cat-detail-fold__toggle" aria-expanded="false"><span class="cat-detail-fold__toggle-main"><span class="cat-detail-fold__chev" aria-hidden="true">▶</span><span>📋 基本情報</span></span><span class="cat-detail-fold__hint" aria-hidden="true">タップで開く</span></button>
+      <div class="cat-detail-fold__panel"><div id="basicInfoArea"></div><button type="button" class="cat-detail-fold__close">▲ 閉じる</button></div>
+    </div>
+    <div class="cat-detail-fold cat-detail-fold--collapsed">
+      <button type="button" class="cat-detail-fold__toggle" aria-expanded="false"><span class="cat-detail-fold__toggle-main"><span class="cat-detail-fold__chev" aria-hidden="true">▶</span><span>📥 引き受け情報</span></span><span class="cat-detail-fold__hint" aria-hidden="true">タップで開く</span></button>
+      <div class="cat-detail-fold__panel"><div id="intakeInfoArea"></div><button type="button" class="cat-detail-fold__close">▲ 閉じる</button></div>
+    </div>
+    <div class="cat-detail-fold cat-detail-fold--collapsed">
+      <button type="button" class="cat-detail-fold__toggle" aria-expanded="false"><span class="cat-detail-fold__toggle-main"><span class="cat-detail-fold__chev" aria-hidden="true">▶</span><span>🏠 譲渡関連情報</span></span><span class="cat-detail-fold__hint" aria-hidden="true">タップで開く</span></button>
+      <div class="cat-detail-fold__panel"><div id="adoptionInfoArea"></div><button type="button" class="cat-detail-fold__close">▲ 閉じる</button></div>
+    </div>
+    <div class="cat-detail-fold cat-detail-fold--collapsed">
+      <button type="button" class="cat-detail-fold__toggle" aria-expanded="false"><span class="cat-detail-fold__toggle-main"><span class="cat-detail-fold__chev" aria-hidden="true">▶</span><span>📝 注意事項</span></span><span class="cat-detail-fold__hint" aria-hidden="true">タップで開く</span></button>
+      <div class="cat-detail-fold__panel"><div id="catNotesArea"></div><button type="button" class="cat-detail-fold__close">▲ 閉じる</button></div>
+    </div>
+    <div class="cat-detail-fold cat-detail-fold--collapsed">
+      <button type="button" class="cat-detail-fold__toggle" aria-expanded="false"><span class="cat-detail-fold__toggle-main"><span class="cat-detail-fold__chev" aria-hidden="true">▶</span><span>✅ この猫のタスク</span></span><span class="cat-detail-fold__hint" aria-hidden="true">タップで開く</span></button>
+      <div class="cat-detail-fold__panel"><div id="catTasksArea"></div><button type="button" class="cat-detail-fold__close">▲ 閉じる</button></div>
+    </div>
+    <div class="cat-detail-fold cat-detail-fold--collapsed">
+      <button type="button" class="cat-detail-fold__toggle" aria-expanded="false"><span class="cat-detail-fold__toggle-main"><span class="cat-detail-fold__chev" aria-hidden="true">▶</span><span>⚖️ 体重記録</span></span><span class="cat-detail-fold__hint" aria-hidden="true">タップで開く</span></button>
+      <div class="cat-detail-fold__panel"><div id="healthRecordsArea"></div><button type="button" class="cat-detail-fold__close">▲ 閉じる</button></div>
+    </div>
+    <div class="cat-detail-fold cat-detail-fold--collapsed">
+      <button type="button" class="cat-detail-fold__toggle" aria-expanded="false"><span class="cat-detail-fold__toggle-main"><span class="cat-detail-fold__chev" aria-hidden="true">▶</span><span>⚖️ 体重推移</span></span><span class="cat-detail-fold__hint" aria-hidden="true">タップで開く</span></button>
+      <div class="cat-detail-fold__panel"><div id="weightChartArea"></div><button type="button" class="cat-detail-fold__close">▲ 閉じる</button></div>
+    </div>
+    <div class="cat-detail-fold cat-detail-fold--collapsed">
+      <button type="button" class="cat-detail-fold__toggle" aria-expanded="false"><span class="cat-detail-fold__toggle-main"><span class="cat-detail-fold__chev" aria-hidden="true">▶</span><span>🔥 カロリー評価</span></span><span class="cat-detail-fold__hint" aria-hidden="true">タップで開く</span></button>
+      <div class="cat-detail-fold__panel"><div id="calorieArea" style="scroll-margin-top: 16px;"></div><button type="button" class="cat-detail-fold__close">▲ 閉じる</button></div>
+    </div>
+    <div class="cat-detail-fold cat-detail-fold--collapsed">
+      <button type="button" class="cat-detail-fold__toggle" aria-expanded="false"><span class="cat-detail-fold__toggle-main"><span class="cat-detail-fold__chev" aria-hidden="true">▶</span><span>🍽 給餌プラン</span></span><span class="cat-detail-fold__hint" aria-hidden="true">タップで開く</span></button>
+      <div class="cat-detail-fold__panel"><div id="feedingArea"></div><button type="button" class="cat-detail-fold__close">▲ 閉じる</button></div>
+    </div>
+    <div class="cat-detail-fold cat-detail-fold--collapsed">
+      <button type="button" class="cat-detail-fold__toggle" aria-expanded="false"><span class="cat-detail-fold__toggle-main"><span class="cat-detail-fold__chev" aria-hidden="true">▶</span><span>🪮 ケア実施状況</span></span><span class="cat-detail-fold__hint" aria-hidden="true">タップで開く</span></button>
+      <div class="cat-detail-fold__panel"><div id="careArea"></div><button type="button" class="cat-detail-fold__close">▲ 閉じる</button></div>
+    </div>
+    <div class="cat-detail-fold cat-detail-fold--collapsed">
+      <button type="button" class="cat-detail-fold__toggle" aria-expanded="false"><span class="cat-detail-fold__toggle-main"><span class="cat-detail-fold__chev" aria-hidden="true">▶</span><span>🚽 排便状況</span></span><span class="cat-detail-fold__hint" aria-hidden="true">タップで開く</span></button>
+      <div class="cat-detail-fold__panel"><div id="stoolArea"></div><button type="button" class="cat-detail-fold__close">▲ 閉じる</button></div>
+    </div>
+    <div class="cat-detail-fold cat-detail-fold--collapsed">
+      <button type="button" class="cat-detail-fold__toggle" aria-expanded="false"><span class="cat-detail-fold__toggle-main"><span class="cat-detail-fold__chev" aria-hidden="true">▶</span><span>💧 排尿状況</span></span><span class="cat-detail-fold__hint" aria-hidden="true">タップで開く</span></button>
+      <div class="cat-detail-fold__panel"><div id="urineArea"></div><button type="button" class="cat-detail-fold__close">▲ 閉じる</button></div>
+    </div>
+    <div class="cat-detail-fold cat-detail-fold--collapsed">
+      <button type="button" class="cat-detail-fold__toggle" aria-expanded="false"><span class="cat-detail-fold__toggle-main"><span class="cat-detail-fold__chev" aria-hidden="true">▶</span><span>💊 お薬管理</span></span><span class="cat-detail-fold__hint" aria-hidden="true">タップで開く</span></button>
+      <div class="cat-detail-fold__panel"><div id="medicationScheduleArea"></div><button type="button" class="cat-detail-fold__close">▲ 閉じる</button></div>
+    </div>
+    <div class="cat-detail-fold cat-detail-fold--collapsed">
+      <button type="button" class="cat-detail-fold__toggle" aria-expanded="false"><span class="cat-detail-fold__toggle-main"><span class="cat-detail-fold__chev" aria-hidden="true">▶</span><span>📅 病院予定</span></span><span class="cat-detail-fold__hint" aria-hidden="true">タップで開く</span></button>
+      <div class="cat-detail-fold__panel"><div id="vetScheduleArea"></div><button type="button" class="cat-detail-fold__close">▲ 閉じる</button></div>
+    </div>
+    <div class="cat-detail-fold cat-detail-fold--collapsed">
+      <button type="button" class="cat-detail-fold__toggle" aria-expanded="false"><span class="cat-detail-fold__toggle-main"><span class="cat-detail-fold__chev" aria-hidden="true">▶</span><span>🏥 病院記録</span></span><span class="cat-detail-fold__hint" aria-hidden="true">タップで開く</span></button>
+      <div class="cat-detail-fold__panel"><div id="clinicRecordsArea"></div><button type="button" class="cat-detail-fold__close">▲ 閉じる</button></div>
+    </div>
+    <div class="cat-detail-fold cat-detail-fold--collapsed">
+      <button type="button" class="cat-detail-fold__toggle" aria-expanded="false"><span class="cat-detail-fold__toggle-main"><span class="cat-detail-fold__chev" aria-hidden="true">▶</span><span>📋 未完了アクション</span></span><span class="cat-detail-fold__hint" aria-hidden="true">タップで開く</span></button>
+      <div class="cat-detail-fold__panel"><div id="actionsArea"></div><button type="button" class="cat-detail-fold__close">▲ 閉じる</button></div>
+    </div>
 
     <div class="footer-actions">
       <button id="reportLink" class="btn btn-primary" style="width:100%;" onclick="if(typeof switchMode==='function'){switchMode('full')}else{var fab=document.querySelector('.vc-fab');if(fab)fab.click();}">🎤 この猫について報告</button>
@@ -1164,6 +1341,26 @@
     </div>
   </div>
 
+  <!-- 引き受け・譲渡情報（cats.intake_info / adoption_info） -->
+  <div id="intakeAdoptionModal" class="modal-overlay">
+    <div class="modal-box" style="max-height:85vh;overflow-y:auto;">
+      <div class="modal-title">引き受け・譲渡（テキスト編集）</div>
+      <p style="font-size:12px;color:var(--text-dim);margin:0 0 10px;">共有メモの編集です。PDF・画像などの<strong>資料は、各パネルの「資料レコード」</strong>から追加してください（複数レコード・1レコードに複数ファイル可）。</p>
+      <div class="form-group">
+        <label class="form-label">📥 引き受け情報 <button type="button" class="inline-mic-btn" data-voice-for="iaIntake" onclick="startInlineVoice('iaIntake')">🎤</button></label>
+        <textarea id="iaIntake" class="form-textarea" placeholder="例: 保護経緯・引き取り元・入所時の状態など" style="min-height:100px;"></textarea>
+      </div>
+      <div class="form-group">
+        <label class="form-label">🏠 譲渡関連情報 <button type="button" class="inline-mic-btn" data-voice-for="iaAdoption" onclick="startInlineVoice('iaAdoption')">🎤</button></label>
+        <textarea id="iaAdoption" class="form-textarea" placeholder="例: トライアル・譲渡条件・連絡先・手続きメモなど" style="min-height:100px;"></textarea>
+      </div>
+      <div class="modal-actions">
+        <button class="btn btn-outline" onclick="closeIntakeAdoptionModal()">キャンセル</button>
+        <button class="btn btn-primary" onclick="submitIntakeAdoptionInfo()">保存</button>
+      </div>
+    </div>
+  </div>
+
   <!-- 体重記録モーダル -->
   <div id="healthRecordModal" class="modal-overlay">
     <div class="modal-box">
@@ -1184,7 +1381,8 @@
   <!-- 病院記録モーダル -->
   <div id="clinicRecordModal" class="modal-overlay">
     <div class="modal-box">
-      <div class="modal-title">🏥 病院記録を追加</div>
+      <input type="hidden" id="crEditId" value="">
+      <div class="modal-title" id="crModalTitle">🏥 病院記録を追加</div>
       <div class="form-group">
         <label class="form-label">種別</label>
         <select id="crType" class="form-select">
@@ -1195,6 +1393,8 @@
           <option value="emergency">緊急</option>
           <option value="test">検査</option>
           <option value="observation">経過観察</option>
+          <option value="medication_start">投薬開始</option>
+          <option value="medication_end">投薬終了</option>
         </select>
       </div>
       <div class="form-group">
@@ -1205,19 +1405,21 @@
         <label class="form-label">内容 <button type="button" class="inline-mic-btn" data-voice-for="crContent" onclick="startInlineVoice('crContent')">🎤</button></label>
         <textarea id="crContent" class="form-textarea" rows="5" placeholder="診察内容、処方、所見など自由に記入"></textarea>
       </div>
-      <div class="form-group" id="crNextDueGroup">
-        <label class="form-label">次回予定日（任意）</label>
+      <div class="form-group" id="crNextDueGroup" style="display:none;" aria-hidden="true">
+        <label class="form-label">次回予定日（病院記録では未使用・予定は「+ 予定追加」から）</label>
         <input type="date" id="crNextDue" class="form-input">
       </div>
       <div class="form-group">
-        <label class="form-label">📎 ファイル添付（任意）</label>
+        <label class="form-label">📎 ファイル添付（任意・複数可）</label>
+        <div id="crExistingFilesWrap" style="display:none;margin-bottom:8px;font-size:12px;"></div>
         <div class="file-attach-area" id="crFileArea">
-          <input type="file" id="crFileInput" accept=".pdf,image/*" style="display:none;" onchange="onClinicFileSelected(this)">
+          <input type="file" id="crFileInput" accept=".pdf,image/*" multiple style="display:none;" onchange="onClinicFileSelected(this)">
           <button type="button" class="btn btn-outline btn-sm" onclick="document.getElementById('crFileInput').click()">ファイルを選択</button>
           <span id="crFileName" class="file-attach-name"></span>
           <button type="button" id="crFileClear" class="file-attach-clear" style="display:none;" onclick="clearClinicFile()">✕</button>
         </div>
-        <div class="file-attach-hint">PDF・画像 / 5MB以下</div>
+        <div class="file-attach-hint">PDF・画像 / 各10MB以下。保存後にまとめてアップロードされます。</div>
+        <div id="crExistingFileHint" class="file-attach-hint" style="display:none;color:var(--text-dim);margin-top:6px;"></div>
       </div>
       <div class="modal-actions">
         <button class="btn btn-outline" onclick="closeClinicRecordModal()">キャンセル</button>
@@ -1372,6 +1574,18 @@
       <div class="modal-actions">
         <button class="btn btn-outline" onclick="closeLocationStatusModal()">キャンセル</button>
         <button class="btn btn-primary" onclick="submitLocationStatus()">保存</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- 基本情報（各項目）編集モーダル -->
+  <div id="catBasicFieldModal" class="modal-overlay">
+    <div class="modal-box">
+      <div class="modal-title" id="cbfModalTitle">編集</div>
+      <div id="cbfBody"></div>
+      <div class="modal-actions">
+        <button type="button" class="btn btn-outline" onclick="closeCatBasicFieldModal()">キャンセル</button>
+        <button type="button" class="btn btn-primary" id="cbfSaveBtn" onclick="submitCatBasicFieldModal()">保存</button>
       </div>
     </div>
   </div>
@@ -1605,8 +1819,20 @@
           </div>
           <div id="mpFreqMonthly" style="display:none;margin-top:6px;">
             <label class="form-label" style="font-size:11px;">毎月</label>
-            <input type="number" id="mpMonthDay" class="form-input" min="1" max="28" placeholder="日" style="width:80px;display:inline-block;">
-            <span style="font-size:12px;">日</span>
+            <select id="mpMonthDay" class="form-select" style="width:100px;display:inline-block;">
+              <option value="">選択</option>
+              <option value="1">1日</option><option value="2">2日</option><option value="3">3日</option>
+              <option value="4">4日</option><option value="5">5日</option><option value="6">6日</option>
+              <option value="7">7日</option><option value="8">8日</option><option value="9">9日</option>
+              <option value="10">10日</option><option value="11">11日</option><option value="12">12日</option>
+              <option value="13">13日</option><option value="14">14日</option><option value="15">15日</option>
+              <option value="16">16日</option><option value="17">17日</option><option value="18">18日</option>
+              <option value="19">19日</option><option value="20">20日</option><option value="21">21日</option>
+              <option value="22">22日</option><option value="23">23日</option><option value="24">24日</option>
+              <option value="25">25日</option><option value="26">26日</option><option value="27">27日</option>
+              <option value="28">28日</option><option value="29">29日</option><option value="30">30日</option>
+              <option value="31">31日</option><option value="last">末日</option>
+            </select>
           </div>
         </div>
         <div class="form-group">
@@ -1634,11 +1860,15 @@
     &copy; BAKENEKO GAMES
   </div>
 
+  <input type="file" id="iaRecordFileInput" class="nyagi-hidden-file-input" accept=".pdf,image/jpeg,image/png,image/gif,image/webp" multiple onchange="onIaRecordFileInputChange(this)">
+  <input type="file" id="clinicExtraFileInput" class="nyagi-hidden-file-input" accept=".pdf,image/jpeg,image/png,image/gif,image/webp" multiple onchange="onClinicExtraFilesSelected(this)">
+
   <script src="config.js?v=213"></script>
   <script src="js/nyagi-boot-overlay.js?v=213"></script>
   <script src="js/login-gate.js?v=213"></script>
   <script src="js/app.js?v=213"></script>
-  <script src="js/cat-detail.js?v=237"></script>
+  <script src="js/nyagi-scroll-restore.js?v=217"></script>
+  <script src="js/cat-detail.js?v=258"></script>
   <script src="js/voice-console.js?v=213"></script>
 </body>
 </html>

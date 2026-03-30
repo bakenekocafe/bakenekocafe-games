@@ -120,6 +120,10 @@
       if (!t || !t.closest) return;
       var a = t.closest('a[href]');
       if (!a) return;
+      // 猫一覧「猫ごと」はカード全体を <a> で囲み、内部の button/checkbox 等は JS で preventDefault する。
+      // 本リスナーは capture フェーズのため、その時点では defaultPrevented がまだ false。
+      // ここで show すると遷移せず「次層展開中…」だけ残り続ける（ケア5項目ボタン等）。
+      if (t.closest && t.closest('button, input, select, textarea, label')) return;
       if (e.defaultPrevented) return;
       if (a.getAttribute('target') === '_blank') return;
       if (a.getAttribute('download')) return;

@@ -208,6 +208,9 @@
     html += '<div id="dashTaskProgress"><div class="loading" style="padding:12px;font-size:12px;"><span class="spinner"></span> 読み込み中...</div></div>';
     html += '<a href="tasks.html" style="display:block;text-align:center;font-size:12px;color:var(--primary);margin-top:8px;text-decoration:none;">タスク一覧を見る →</a>';
 
+    html += renderFeedingIncompleteSection(m.feeding_incomplete);
+    html += renderMedIncompleteSection(m.medication_incomplete);
+
     // 5. 📋 未完了アクション
     var overdueActions = m.overdue_actions || [];
     var todayActions = m.today_actions || [];
@@ -317,6 +320,23 @@
     }
     html += '</div>';
     html += '<div class="dash-fold-body" data-fold-target="vetSchedule">';
+    var vetSheet = e.vet_schedule_sheet || null;
+    var locLabelForSheet = currentLocationId === 'all' ? '全部' : (LOC_LABELS[currentLocationId] || currentLocationId || '—');
+    html += '<div class="dash-vet-sheet-bar" style="margin-bottom:12px;padding:10px 12px;background:rgba(99,102,241,0.08);border-radius:8px;border:1px solid rgba(99,102,241,0.22);">';
+    html += '<div style="font-size:12px;font-weight:600;margin-bottom:6px;color:var(--text-main);">📎 一覧表・写真（ホワイトボード・印刷スケジュールなど）</div>';
+    html += '<div style="display:flex;flex-wrap:wrap;align-items:center;gap:8px;">';
+    html += '<input type="file" id="dashVetSheetInput" accept="application/pdf,.pdf,image/jpeg,image/png,image/gif,image/webp" style="display:none;">';
+    html += '<button type="button" class="btn btn-outline btn-sm" id="dashVetSheetPickBtn" style="font-size:12px;">ファイルを選択</button>';
+    if (vetSheet && vetSheet.name) {
+      html += '<span id="dashVetSheetName" class="dim" style="font-size:12px;flex:1;min-width:100px;word-break:break-word;">' + escapeHtml(vetSheet.name) + '</span>';
+      html += '<button type="button" class="btn btn-outline btn-sm" id="dashVetSheetOpenBtn" style="font-size:12px;">開く</button>';
+      html += '<button type="button" class="btn btn-outline btn-sm" id="dashVetSheetDelBtn" style="font-size:12px;color:#f87171;border-color:rgba(248,113,113,0.35);">削除</button>';
+    } else {
+      html += '<span class="dim" style="font-size:12px;flex:1;">未アップロード <small style="opacity:0.85;">（拠点: ' + escapeHtml(locLabelForSheet) + '）</small></span>';
+    }
+    html += '</div>';
+    html += '<p class="dim" style="font-size:10px;margin:6px 0 0;line-height:1.4;">表示中の拠点タブごとに1ファイル。PDF・画像 10MB以下。アップロードで差し替え。</p>';
+    html += '</div>';
     if (vetScheds.length === 0) {
       html += '<div style="padding:12px;background:var(--surface);border-radius:8px;text-align:center;color:var(--text-dim);font-size:13px;">登録されているスケジュールはありません</div>';
     } else {
@@ -391,7 +411,82 @@
     bindDashFolds();
     bindTodayRecordAnomaly();
     bindVetBookButtons();
+    bindVetScheduleSheet();
     loadTaskProgressBars();
+  }
+
+  function bindVetScheduleSheet() {
+    if (!credentials) return;
+    var input = document.getElementById('dashVetSheetInput');
+    var pick = document.getElementById('dashVetSheetPickBtn');
+    var openBtn = document.getElementById('dashVetSheetOpenBtn');
+    var delBtn = document.getElementById('dashVetSheetDelBtn');
+    if (!input || !pick) return;
+    pick.addEventListener('click', function () { input.click(); });
+    input.addEventListener('change', function () {
+      if (!input.files || !input.files[0]) return;
+      var f = input.files[0];
+      if (f.size > 10 * 1024 * 1024) {
+        alert('ファイルサイズが大きすぎます（10MB以下）');
+        input.value = '';
+        return;
+      }
+      var fd = new FormData();
+      fd.append('file', f);
+      var loc = currentLocationId || 'all';
+      pick.disabled = true;
+      var prevLabel = pick.textContent;
+      pick.textContent = 'アップロード中…';
+      fetch(_origin + '/api/ops/dashboard/vet-schedule-sheet?location=' + encodeURIComponent(loc), {
+        method: 'POST',
+        headers: { 'X-Admin-Key': credentials.adminKey, 'X-Staff-Id': credentials.staffId },
+        body: fd,
+        cache: 'no-store',
+      }).then(function (r) { return r.json(); })
+      .then(function (data) {
+        pick.disabled = false;
+        pick.textContent = prevLabel;
+        input.value = '';
+        if (data.error) { alert('エラー: ' + (data.message || data.error)); return; }
+        loadDashboard();
+      }).catch(function () {
+        pick.disabled = false;
+        pick.textContent = prevLabel;
+        alert('アップロードに失敗しました');
+      });
+    });
+    if (openBtn) {
+      openBtn.addEventListener('click', function () {
+        var loc = currentLocationId || 'all';
+        fetch(_origin + '/api/ops/dashboard/vet-schedule-sheet?location=' + encodeURIComponent(loc), {
+          method: 'GET',
+          headers: apiHeaders(),
+          cache: 'no-store',
+        }).then(function (r) {
+          if (!r.ok) throw new Error('http');
+          return r.blob();
+        }).then(function (blob) {
+          var u = URL.createObjectURL(blob);
+          window.open(u, '_blank', 'noopener');
+          setTimeout(function () { URL.revokeObjectURL(u); }, 120000);
+        }).catch(function () { alert('ファイルの取得に失敗しました'); });
+      });
+    }
+    if (delBtn) {
+      delBtn.addEventListener('click', function () {
+        if (!confirm('一覧表の添付を削除しますか？')) return;
+        var loc = currentLocationId || 'all';
+        fetch(_origin + '/api/ops/dashboard/vet-schedule-sheet?location=' + encodeURIComponent(loc), {
+          method: 'DELETE',
+          headers: apiHeaders(),
+          cache: 'no-store',
+        }).then(function (r) { return r.json(); })
+        .then(function (data) {
+          if (data.error) { alert('エラー: ' + (data.message || data.error)); return; }
+          loadDashboard();
+        }).catch(function () { alert('削除に失敗しました'); });
+      });
+    }
   }
 
   function bindTodayRecordAnomaly() {
@@ -505,10 +600,16 @@
     try { localStorage.setItem(DASH_FOLD_KEY, JSON.stringify(map)); } catch (_) {}
   }
 
-  /** true: 折りたたみ表示。キー未設定時は healthScore・病院スケジュールは開く */
-  function isDashFoldCollapsed(key, folds) {
+  /** true: 折りたたみ表示。キー未設定時は healthScore・病院スケジュールは開く。title に data-default-expanded / data-default-collapsed 可 */
+  function isDashFoldCollapsed(key, folds, titleEl) {
     if (Object.prototype.hasOwnProperty.call(folds, key)) {
       return !!folds[key];
+    }
+    if (titleEl && titleEl.getAttribute('data-default-collapsed') === '1') {
+      return true;
+    }
+    if (titleEl && titleEl.getAttribute('data-default-expanded') === '1') {
+      return false;
     }
     return !dashFoldDefaultExpanded(key);
   }
@@ -521,7 +622,7 @@
         var key = title.getAttribute('data-fold');
         var body = dashView.querySelector('[data-fold-target="' + key + '"]');
         if (!body) return;
-        if (isDashFoldCollapsed(key, folds)) {
+        if (isDashFoldCollapsed(key, folds, title)) {
           body.style.display = 'none';
           title.classList.add('folded');
         } else {
@@ -544,6 +645,104 @@
         });
       })(titles[i]);
     }
+  }
+
+  /** 献立ベースの「あげた／残し」未完了（朝API feeding_incomplete） */
+  function renderFeedingIncompleteSection(fi) {
+    if (!fi || !fi.plan_rows) return '';
+    var plan = fi.plan_rows;
+    var inc = fi.incomplete_rows || 0;
+    var comp = fi.complete_rows != null ? fi.complete_rows : plan - inc;
+    var pct = plan > 0 ? Math.round((comp / plan) * 100) : 100;
+    var ringR = 16;
+    var circ = 2 * Math.PI * ringR;
+    var dashOff = circ * (1 - pct / 100);
+    var hasIssue = inc > 0;
+
+    var titleNote = hasIssue
+      ? ' <small class="dim" style="font-weight:600;">献立 ' + inc + '/' + plan + ' 行未完了</small>'
+      : ' <small class="dim" style="font-weight:500;">完了</small>';
+
+    var html = '<div class="section-title dash-fold-title dash-feed-fold-title" data-fold="feedingIncomplete" data-default-expanded="' + (hasIssue ? '1' : '0') + '"' + (hasIssue ? '' : ' data-default-collapsed="1"') + '">';
+    html += '<span class="dash-feed-title-row">';
+    html += '<span class="dash-feed-title-text">🍚 あげた・残し 未完了' + titleNote + '</span>';
+    html += '<span class="dash-feed-ring-wrap" aria-hidden="true">';
+    html += '<svg class="dash-feed-ring-svg" width="40" height="40" viewBox="0 0 44 44">';
+    html += '<circle cx="22" cy="22" r="' + ringR + '" fill="none" stroke="rgba(255,255,255,0.1)" stroke-width="3.5"/>';
+    html += '<circle cx="22" cy="22" r="' + ringR + '" fill="none" stroke="' + (pct >= 100 ? '#4ade80' : pct >= 50 ? '#facc15' : '#fb923c') + '" stroke-width="3.5" stroke-linecap="round" transform="rotate(-90 22 22)" stroke-dasharray="' + circ.toFixed(2) + '" stroke-dashoffset="' + dashOff.toFixed(2) + '"/>';
+    html += '<text x="22" y="25" text-anchor="middle" class="dash-feed-ring-pct" font-size="10" font-weight="700" fill="currentColor">' + pct + '%</text>';
+    html += '</svg></span></span></div>';
+
+    html += '<div class="dash-fold-body" data-fold-target="feedingIncomplete">';
+    html += '<div class="card dash-feed-inc-card">';
+    if (!hasIssue) {
+      html += '<div class="dash-feed-allok">✅ 献立どおり 記入済み（未完了行なし）</div>';
+    } else {
+      html += '<div class="dash-feed-chip-grid">';
+      var chips = fi.cats || [];
+      var maxChips = 16;
+      for (var ci = 0; ci < chips.length && ci < maxChips; ci++) {
+        var c = chips[ci];
+        html += '<a href="cat.html?id=' + encodeURIComponent(c.id || '') + '#feedingArea" class="dash-feed-chip">' + escapeHtml(c.name || '') + '</a>';
+      }
+      var more = (chips.length > maxChips ? chips.length - maxChips : 0) + (fi.cats_overflow || 0);
+      if (more > 0) {
+        html += '<span class="dash-feed-chip dash-feed-chip--more">+' + more + '</span>';
+      }
+      html += '</div>';
+      html += '<div class="dash-feed-hint">タップで猫詳細の給餌へ（#feedingArea）</div>';
+    }
+    html += '</div></div>';
+    return html;
+  }
+
+  /** 投薬の未完了（朝API medication_incomplete） */
+  function renderMedIncompleteSection(mi) {
+    if (!mi || !mi.plan_rows) return '';
+    var plan = mi.plan_rows;
+    var inc = mi.incomplete_rows || 0;
+    var comp = mi.complete_rows != null ? mi.complete_rows : plan - inc;
+    var pct = plan > 0 ? Math.round((comp / plan) * 100) : 100;
+    var ringR = 16;
+    var circ = 2 * Math.PI * ringR;
+    var dashOff = circ * (1 - pct / 100);
+    var hasIssue = inc > 0;
+
+    var titleNote = hasIssue
+      ? ' <small class="dim" style="font-weight:600;">' + inc + '/' + plan + ' 行未完了</small>'
+      : ' <small class="dim" style="font-weight:500;">完了</small>';
+
+    var html = '<div class="section-title dash-fold-title dash-med-fold-title" data-fold="medIncomplete" data-default-expanded="' + (hasIssue ? '1' : '0') + '"' + (hasIssue ? '' : ' data-default-collapsed="1"') + '>';
+    html += '<span class="dash-med-title-row">';
+    html += '<span class="dash-med-title-text">💊 お薬 未完了' + titleNote + '</span>';
+    html += '<span class="dash-med-ring-wrap" aria-hidden="true">';
+    html += '<svg class="dash-med-ring-svg" width="40" height="40" viewBox="0 0 44 44">';
+    html += '<circle cx="22" cy="22" r="' + ringR + '" fill="none" stroke="rgba(255,255,255,0.1)" stroke-width="3.5"/>';
+    html += '<circle cx="22" cy="22" r="' + ringR + '" fill="none" stroke="' + (pct >= 100 ? '#4ade80' : pct >= 50 ? '#facc15' : '#fb923c') + '" stroke-width="3.5" stroke-linecap="round" transform="rotate(-90 22 22)" stroke-dasharray="' + circ.toFixed(2) + '" stroke-dashoffset="' + dashOff.toFixed(2) + '"/>';
+    html += '<text x="22" y="25" text-anchor="middle" class="dash-med-ring-pct" font-size="10" font-weight="700" fill="currentColor">' + pct + '%</text>';
+    html += '</svg></span></span></div>';
+
+    html += '<div class="dash-fold-body" data-fold-target="medIncomplete">';
+    html += '<div class="card dash-med-inc-card">';
+    if (!hasIssue) {
+      html += '<div class="dash-med-allok">✅ 全投薬 記録済み（未完了なし）</div>';
+    } else {
+      html += '<div class="dash-med-chip-grid">';
+      var chips = mi.cats || [];
+      var maxChips = 16;
+      for (var ci = 0; ci < chips.length && ci < maxChips; ci++) {
+        var c = chips[ci];
+        html += '<a href="cat.html?id=' + encodeURIComponent(c.id || '') + '#medicationArea" class="dash-med-chip">' + escapeHtml(c.name || '') + '</a>';
+      }
+      var more = (chips.length > maxChips ? chips.length - maxChips : 0) + (mi.cats_overflow || 0);
+      if (more > 0) {
+        html += '<span class="dash-med-chip dash-med-chip--more">+' + more + '</span>';
+      }
+      html += '</div>';
+      html += '<div class="dash-med-hint">タップで猫詳細の投薬へ（#medicationArea）</div>';
+    }
+    html += '</div></div>';
+    return html;
   }
 
   // ── はき戻しサマリー ──

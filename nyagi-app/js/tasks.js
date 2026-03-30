@@ -41,6 +41,39 @@
     };
   }
 
+  function nyagiCaptureScrollY() {
+    if (window.NyagiScrollRestore && typeof window.NyagiScrollRestore.capture === 'function') {
+      return window.NyagiScrollRestore.capture();
+    }
+    try {
+      var el = document.scrollingElement || document.documentElement;
+      return el.scrollTop;
+    } catch (_) {
+      return 0;
+    }
+  }
+
+  function nyagiRestoreScrollY(y) {
+    if (window.NyagiScrollRestore && typeof window.NyagiScrollRestore.restore === 'function') {
+      window.NyagiScrollRestore.restore(y);
+      return;
+    }
+    if (typeof y !== 'number' || isNaN(y) || y < 0) return;
+    function apply() {
+      try {
+        var el = document.scrollingElement || document.documentElement;
+        el.scrollTop = y;
+      } catch (_) {}
+    }
+    if (typeof window.requestAnimationFrame !== 'function') {
+      apply();
+      return;
+    }
+    window.requestAnimationFrame(function () {
+      window.requestAnimationFrame(apply);
+    });
+  }
+
   /** completed_at を日本時刻 HH:mm で表示（従来の UTC 文字列も Date 経由で補正） */
   function formatTaskCompletedAtJst(isoStr) {
     if (!isoStr) return '';
@@ -223,6 +256,8 @@
   };
 
   window.loadTasks = function () {
+    var savedScrollY = nyagiCaptureScrollY();
+
     var date = document.getElementById('filterDate').value || todayJstYmd();
     var status = document.getElementById('filterStatus').value;
 
@@ -240,6 +275,7 @@
       .then(function (data) {
         if (data.error) {
           document.getElementById('taskListArea').innerHTML = '<div class="empty-msg">エラー: ' + escapeHtml(data.message || data.error) + '</div>';
+          nyagiRestoreScrollY(savedScrollY);
           return;
         }
         renderAttrProgress(data.progress || {}, data.attribute_groups || []);
@@ -248,9 +284,11 @@
         } else {
           renderFlatTasks(data.tasks || []);
         }
+        nyagiRestoreScrollY(savedScrollY);
       })
       .catch(function () {
         document.getElementById('taskListArea').innerHTML = '<div class="empty-msg">読み込みに失敗しました</div>';
+        nyagiRestoreScrollY(savedScrollY);
       });
   };
 
@@ -1505,6 +1543,46 @@
       });
   };
 
+  function renderCloseDayExcretionBlock(exc) {
+    var el = document.getElementById('closeDayExcretionBlock');
+    if (!el) return;
+    if (!exc) {
+      el.innerHTML = '';
+      return;
+    }
+    function fmtMd(ymd) {
+      if (!ymd || ymd.length < 10) return '';
+      return parseInt(ymd.slice(5, 7), 10) + '/' + parseInt(ymd.slice(8, 10), 10);
+    }
+    function sectionHtml(title, emoji, gaps) {
+      var h = '<div style="margin-bottom:10px;padding:8px;background:var(--surface-alt);border-radius:8px;border-left:3px solid #fb923c;">';
+      h += '<div style="font-weight:700;margin-bottom:6px;">' + emoji + ' ' + title + '</div>';
+      var arr = gaps || [];
+      if (arr.length === 0) {
+        h += '<div style="color:#4ade80;font-size:12px;">該当なし</div>';
+      } else {
+        h += '<ul style="margin:0;padding-left:18px;line-height:1.55;">';
+        for (var i = 0; i < arr.length; i++) {
+          var g = arr[i];
+          h += '<li>';
+          h += escapeHtml(g.cat_name || '');
+          if (g.no_record) h += ' — <span style="color:#f87171;">記録なし</span>';
+          else {
+            h += ' — 最終 <span style="color:var(--text-dim);">' + escapeHtml(fmtMd(g.last_record_date)) + '</span> ';
+            h += '<strong style="color:#f97316;">経過' + (g.days_since_last != null ? g.days_since_last : '') + '日</strong>';
+          }
+          h += '</li>';
+        }
+        h += '</ul>';
+      }
+      h += '</div>';
+      return h;
+    }
+    el.innerHTML =
+      sectionHtml('排便（2日以上未記録）', '💩', exc.stool_gaps) +
+      sectionHtml('排尿（2日以上未記録）', '🚽', exc.urine_gaps);
+  }
+
   function renderCloseDayModal(data) {
     document.getElementById('closeDayLocationLabel').textContent = data.location_label + '  ' + data.date;
 
@@ -1512,6 +1590,8 @@
     var pct = s.total > 0 ? Math.round(s.done / s.total * 100) : 0;
     document.getElementById('closeDayStats').innerHTML =
       '✅ 完了: <strong>' + s.done + '/' + s.total + '</strong>（' + pct + '%）　⏳ 未完了: <strong>' + s.pending + '</strong>件';
+
+    renderCloseDayExcretionBlock(data.excretion_close_day);
 
     var listArea = document.getElementById('closeDayPendingList');
     if (data.pending_tasks.length === 0) {
@@ -1597,6 +1677,40 @@
         }
         if (fi.length > CLOSE_PREVIEW_MAX) lines.push('  … 他' + (fi.length - CLOSE_PREVIEW_MAX) + '件');
         if (fi.length === 0) lines.push('  献立に対する未記録・未確認はありません');
+      }
+      lines.push('');
+    }
+
+    function previewFmtMd(ymd) {
+      if (!ymd || ymd.length < 10) return '';
+      return parseInt(ymd.slice(5, 7), 10) + '/' + parseInt(ymd.slice(8, 10), 10);
+    }
+    var excPrev = closeDayData.excretion_close_day;
+    if (excPrev) {
+      lines.push('💩 排便（2日以上記録なし・遅れ）');
+      var sg3 = excPrev.stool_gaps || [];
+      if (sg3.length === 0) {
+        lines.push('  該当なし');
+      } else {
+        for (var sx = 0; sx < sg3.length && sx < CLOSE_PREVIEW_MAX; sx++) {
+          var gx = sg3[sx];
+          if (gx.no_record) lines.push('  • ' + gx.cat_name + ' — 記録なし');
+          else lines.push('  • ' + gx.cat_name + ' — 最終 ' + previewFmtMd(gx.last_record_date) + '（経過' + gx.days_since_last + '日）');
+        }
+        if (sg3.length > CLOSE_PREVIEW_MAX) lines.push('  … 他' + (sg3.length - CLOSE_PREVIEW_MAX) + '頭');
+      }
+      lines.push('');
+      lines.push('🚽 排尿（2日以上記録なし・遅れ）');
+      var ug3 = excPrev.urine_gaps || [];
+      if (ug3.length === 0) {
+        lines.push('  該当なし');
+      } else {
+        for (var ux = 0; ux < ug3.length && ux < CLOSE_PREVIEW_MAX; ux++) {
+          var vx = ug3[ux];
+          if (vx.no_record) lines.push('  • ' + vx.cat_name + ' — 記録なし');
+          else lines.push('  • ' + vx.cat_name + ' — 最終 ' + previewFmtMd(vx.last_record_date) + '（経過' + vx.days_since_last + '日）');
+        }
+        if (ug3.length > CLOSE_PREVIEW_MAX) lines.push('  … 他' + (ug3.length - CLOSE_PREVIEW_MAX) + '頭');
       }
       lines.push('');
     }

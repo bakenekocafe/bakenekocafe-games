@@ -43,6 +43,156 @@
       transform: rotate(180deg);
     }
 
+    /* 献立「あげた・残し」未完了（折りたたみ＋リング＋猫チップ） */
+    .dash-feed-fold-title {
+      flex-wrap: nowrap;
+      gap: 8px;
+    }
+    .dash-feed-title-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      flex: 1;
+      min-width: 0;
+      gap: 10px;
+    }
+    .dash-feed-title-text {
+      flex: 1;
+      min-width: 0;
+      line-height: 1.35;
+    }
+    .dash-feed-ring-wrap {
+      flex-shrink: 0;
+      color: var(--text-main, #e8e8ef);
+    }
+    .dash-feed-ring-svg {
+      display: block;
+      vertical-align: middle;
+    }
+    .dash-feed-ring-pct {
+      font-family: system-ui, -apple-system, sans-serif;
+    }
+    .dash-feed-inc-card {
+      padding: 12px 14px;
+    }
+    .dash-feed-allok {
+      text-align: center;
+      font-size: 13px;
+      color: #86efac;
+      padding: 6px 0;
+    }
+    .dash-feed-chip-grid {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      align-items: center;
+    }
+    .dash-feed-chip {
+      display: inline-block;
+      max-width: 100%;
+      padding: 6px 12px;
+      border-radius: 999px;
+      font-size: 12px;
+      font-weight: 600;
+      text-decoration: none;
+      color: var(--text-main, #f4f4f5);
+      background: rgba(99, 102, 241, 0.22);
+      border: 1px solid rgba(129, 140, 248, 0.35);
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+    .dash-feed-chip:active {
+      opacity: 0.85;
+    }
+    .dash-feed-chip--more {
+      cursor: default;
+      background: var(--surface-alt, rgba(255,255,255,0.06));
+      border-color: rgba(255,255,255,0.1);
+      color: var(--text-dim, #a1a1aa);
+    }
+    .dash-feed-hint {
+      margin-top: 10px;
+      font-size: 11px;
+      color: var(--text-dim, #a1a1aa);
+      text-align: center;
+    }
+
+    /* 投薬「お薬 未完了」（折りたたみ＋リング＋猫チップ） */
+    .dash-med-fold-title {
+      flex-wrap: nowrap;
+      gap: 8px;
+    }
+    .dash-med-title-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      flex: 1;
+      min-width: 0;
+      gap: 10px;
+    }
+    .dash-med-title-text {
+      flex: 1;
+      min-width: 0;
+      line-height: 1.35;
+    }
+    .dash-med-ring-wrap {
+      flex-shrink: 0;
+      color: var(--text-main, #e8e8ef);
+    }
+    .dash-med-ring-svg {
+      display: block;
+      vertical-align: middle;
+    }
+    .dash-med-ring-pct {
+      font-family: system-ui, -apple-system, sans-serif;
+    }
+    .dash-med-inc-card {
+      padding: 12px 14px;
+    }
+    .dash-med-allok {
+      text-align: center;
+      font-size: 13px;
+      color: #86efac;
+      padding: 6px 0;
+    }
+    .dash-med-chip-grid {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      align-items: center;
+    }
+    .dash-med-chip {
+      display: inline-block;
+      max-width: 100%;
+      padding: 6px 12px;
+      border-radius: 999px;
+      font-size: 12px;
+      font-weight: 600;
+      text-decoration: none;
+      color: var(--text-main, #f4f4f5);
+      background: rgba(168, 85, 247, 0.22);
+      border: 1px solid rgba(192, 132, 252, 0.35);
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+    .dash-med-chip:active {
+      opacity: 0.85;
+    }
+    .dash-med-chip--more {
+      cursor: default;
+      background: var(--surface-alt, rgba(255,255,255,0.06));
+      border-color: rgba(255,255,255,0.1);
+      color: var(--text-dim, #a1a1aa);
+    }
+    .dash-med-hint {
+      margin-top: 10px;
+      font-size: 11px;
+      color: var(--text-dim, #a1a1aa);
+      text-align: center;
+    }
+
     .alert-card {
       background: var(--surface);
       border-radius: 10px;
@@ -224,7 +374,7 @@
   <script src="js/nyagi-boot-overlay.js?v=213"></script>
   <script src="js/login-gate.js?v=213"></script>
   <script src="js/app.js?v=213"></script>
-  <script src="js/dashboard.js?v=209"></script>
+  <script src="js/dashboard.js?v=216"></script>
   <script src="js/voice-console.js?v=213"></script>
 </body>
 </html>

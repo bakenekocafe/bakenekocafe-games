@@ -192,7 +192,7 @@
     return h;
   }
 
-  function ovRenderPresetItemsSummary(items, totalKcal) {
+  function ovRenderPresetItemsSummary(items, totalKcal, presetIdForOneApply) {
     var morn = [];
     var eve = [];
     var other = [];
@@ -202,15 +202,23 @@
       else other.push(items[i]);
     }
     var h = '<div style="margin-top:4px;">';
+    function rowHtml(it) {
+      var line = '<div style="display:flex;align-items:flex-start;justify-content:space-between;gap:6px;padding:2px 0 2px 8px;">';
+      line += '<div style="min-width:0;flex:1;font-size:11px;color:var(--text-dim);">' + esc(it.food_name || '') + ' ' + it.amount_g + 'g';
+      if (it.notes && String(it.notes).trim()) {
+        line += '<div style="font-size:10px;color:var(--text-dim);padding:2px 0 0;line-height:1.35;white-space:pre-wrap;word-break:break-word;">📝 ' + esc(String(it.notes).trim()) + '</div>';
+      }
+      line += '</div>';
+      if (presetIdForOneApply && it.id != null) {
+        line += '<button type="button" class="btn btn-outline" style="font-size:9px;padding:2px 8px;flex-shrink:0;white-space:nowrap;" data-ov-apply-preset-item="' + escAttr(String(presetIdForOneApply) + ':' + String(it.id)) + '">1品</button>';
+      }
+      line += '</div>';
+      return line;
+    }
     function block(title, arr) {
       if (arr.length === 0) return '';
       var x = '<div style="font-size:10px;color:var(--accent,#fb923c);font-weight:600;margin-top:2px;">' + esc(title) + '</div>';
-      for (var m = 0; m < arr.length; m++) {
-        x += '<div style="font-size:11px;color:var(--text-dim);padding:1px 0 1px 10px;">' + esc(arr[m].food_name || '') + ' ' + arr[m].amount_g + 'g</div>';
-        if (arr[m].notes && String(arr[m].notes).trim()) {
-          x += '<div style="font-size:10px;color:var(--text-dim);padding:0 0 2px 14px;line-height:1.35;white-space:pre-wrap;word-break:break-word;">📝 ' + esc(String(arr[m].notes).trim()) + '</div>';
-        }
-      }
+      for (var m = 0; m < arr.length; m++) x += rowHtml(arr[m]);
       return x;
     }
     h += block('☀ 朝/昼', morn);
@@ -271,9 +279,9 @@
             innerHtml += '<div style="display:flex;justify-content:space-between;align-items:flex-start;gap:8px;">';
             innerHtml += '<div style="flex:1;min-width:0;"><div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;">' + ovPresetLocationBadgeHtml(ps.location_id) + '<b style="font-size:13px;">' + esc(ps.name) + '</b></div>';
             if (ps.description) innerHtml += '<div style="font-size:11px;color:var(--text-dim);margin-top:2px;line-height:1.4;white-space:pre-wrap;word-break:break-word;">' + esc(ps.description) + '</div>';
-            innerHtml += ovRenderPresetItemsSummary(ps.items || [], ps.total_kcal);
+            innerHtml += ovRenderPresetItemsSummary(ps.items || [], ps.total_kcal, ps.id);
             innerHtml += '</div>';
-            innerHtml += '<button type="button" class="btn btn-primary" style="font-size:11px;padding:4px 10px;flex-shrink:0;" data-ov-apply-preset="' + escAttr(String(ps.id)) + '">適用</button>';
+            innerHtml += '<button type="button" class="btn btn-primary" style="font-size:11px;padding:4px 10px;flex-shrink:0;" data-ov-apply-preset="' + escAttr(String(ps.id)) + '" title="プリセット内の全フードを献立に追加">全て適用</button>';
             innerHtml += '</div></div>';
           }
         }
@@ -719,16 +727,39 @@
       }).catch(function () { alert('保存に失敗しました'); });
   }
 
-  function ovUndoFedLog(logId) {
-    if (!logId) return;
-    if (!confirm('この給餌記録を取り消しますか？')) return;
-    fetch(feedingApiBase() + '/logs/' + encodeURIComponent(logId), { method: 'DELETE', headers: apiHeaders(), cache: 'no-store' })
-      .then(function (r) { return r.json(); })
-      .then(function (data) {
-        if (data.error) { alert('エラー: ' + (data.message || data.error)); return; }
+  /** カンマ区切りの feeding_logs.id を順に削除。1件のみは確認なし（✅タップ取り消し用）、複数は確認 */
+  function ovUndoFedLogs(idCsv) {
+    var ids = String(idCsv || '').split(',').map(function (x) { return parseInt(x.trim(), 10); }).filter(function (n) { return !isNaN(n); });
+    if (ids.length === 0) return;
+    if (ids.length > 1) {
+      if (!confirm('この献立の本日の「あげた」記録が ' + ids.length + ' 件あります。まとめて取り消しますか？')) return;
+    }
+    function deleteAt(i) {
+      if (i >= ids.length) {
         fetchData(0);
         if (_ovLoCatId) ovFillLeftoverModalBody(_ovLoCatId);
-      }).catch(function () { alert('取り消しに失敗しました'); });
+        return;
+      }
+      fetch(feedingApiBase() + '/logs/' + encodeURIComponent(ids[i]), { method: 'DELETE', headers: apiHeaders(), cache: 'no-store' })
+        .then(function (r) { return r.json(); })
+        .then(function (data) {
+          if (data.error) {
+            alert('エラー: ' + (data.message || data.error));
+            fetchData(0);
+            return;
+          }
+          deleteAt(i + 1);
+        }).catch(function () {
+          alert('取り消しに失敗しました');
+          fetchData(0);
+        });
+    }
+    setTimeout(function () { deleteAt(0); }, 0);
+  }
+
+  function ovUndoFedLog(logId) {
+    if (!logId) return;
+    ovUndoFedLogs(String(logId));
   }
 
   function ovDeletePlan(planId, catName) {
@@ -977,8 +1008,8 @@
     var undofedM = t.closest('.btn-ov-feed-undofed');
     if (undofedM) {
       ev.preventDefault();
-      var lidM = undofedM.getAttribute('data-log-id');
-      if (lidM) ovUndoFedLog(lidM);
+      var lidMCsv = undofedM.getAttribute('data-log-ids') || undofedM.getAttribute('data-log-id');
+      if (lidMCsv) ovUndoFedLogs(lidMCsv);
       return;
     }
     var savePlan = t.closest('.ov-lo-save-plan');
@@ -1197,10 +1228,33 @@
       ovFillPresetManageModal(ovGetStoredPresetLocation());
       return;
     }
+    var apOne = t.closest('[data-ov-apply-preset-item]');
+    if (apOne && _ovFeedCtx) {
+      ev.preventDefault();
+      var rawPair = apOne.getAttribute('data-ov-apply-preset-item') || '';
+      var parts = rawPair.split(':');
+      var itemId = parts.length >= 2 ? parseInt(parts[1], 10) : NaN;
+      if (isNaN(itemId)) return;
+      if (!confirm('この1品だけ献立に追加しますか？')) return;
+      fetch(feedingApiBase() + '/presets/' + encodeURIComponent(parts[0]) + '/apply', {
+        method: 'POST',
+        headers: apiHeaders(),
+        cache: 'no-store',
+        body: JSON.stringify({ cat_id: _ovFeedCtx.catId, preset_item_id: itemId }),
+      }).then(function (r) { return r.json(); })
+        .then(function (data) {
+          if (data.error) { alert('エラー: ' + (data.message || data.error)); return; }
+          alert('プリセット「' + (data.preset_name || '') + '」を適用しました（' + (data.applied || []).length + '品追加）');
+          ovClosePresetModal();
+          fetchData(0);
+        }).catch(function () { alert('適用に失敗しました'); });
+      return;
+    }
     var ap = t.closest('[data-ov-apply-preset]');
     if (ap && _ovFeedCtx) {
       ev.preventDefault();
       var pid = ap.getAttribute('data-ov-apply-preset');
+      if (!confirm('プリセット内の全フードを献立に追加しますか？')) return;
       fetch(feedingApiBase() + '/presets/' + encodeURIComponent(pid) + '/apply', {
         method: 'POST',
         headers: apiHeaders(),
@@ -1623,6 +1677,25 @@
       });
   }
 
+  function deleteCareRecord(recordId, chip) {
+    if (!recordId) return;
+    var prevText = chip ? chip.textContent : '';
+    if (chip) { chip.style.opacity = '0.4'; chip.style.pointerEvents = 'none'; }
+    fetch(apiOpsBase() + '/health/records/' + encodeURIComponent(recordId), {
+      method: 'DELETE',
+      headers: apiHeaders(),
+      cache: 'no-store',
+    }).then(function (r) { return r.json(); })
+      .then(function (data) {
+        if (chip) { chip.style.opacity = ''; chip.style.pointerEvents = ''; }
+        if (data.error) { alert('エラー: ' + (data.message || data.error)); return; }
+        fetchData(0);
+      }).catch(function () {
+        if (chip) { chip.style.opacity = ''; chip.style.pointerEvents = ''; }
+        alert('取り消しに失敗しました');
+      });
+  }
+
   function saveTaskAction(btn, action) {
     var id = btn.getAttribute('data-task-id');
     if (!id) return;
@@ -2004,12 +2077,20 @@
         if (elid) ovOpenEditLogModal(elid, elfn, elog, elep != null ? elep : '', elst);
         return;
       }
+      var ftap = ev.target.closest && ev.target.closest('.btn-ov-feed-tapundo');
+      if (ftap) {
+        ev.preventDefault();
+        ev.stopPropagation();
+        var idsTap = ftap.getAttribute('data-log-ids');
+        if (idsTap) ovUndoFedLogs(idsTap);
+        return;
+      }
       var fund = ev.target.closest && ev.target.closest('.btn-ov-feed-undofed');
       if (fund) {
         ev.preventDefault();
         ev.stopPropagation();
-        var lid = fund.getAttribute('data-log-id');
-        if (lid) ovUndoFedLog(lid);
+        var lidCsv = fund.getAttribute('data-log-ids') || fund.getAttribute('data-log-id');
+        if (lidCsv) ovUndoFedLogs(lidCsv);
         return;
       }
       var fdel = ev.target.closest && ev.target.closest('.btn-ov-feed-delplan');
@@ -2154,6 +2235,32 @@
         saveGroomingBundleCare(catIdB, formB, bundleCareBtn);
         return;
       }
+      var vomitSave = ev.target.closest && ev.target.closest('.btn-ov-vomit-save');
+      if (vomitSave) {
+        ev.preventDefault();
+        ev.stopPropagation();
+        ovSaveVomitRecord(vomitSave);
+        return;
+      }
+      var vomitDel = ev.target.closest && ev.target.closest('.btn-ov-vomit-del');
+      if (vomitDel) {
+        ev.preventDefault();
+        ev.stopPropagation();
+        var rid = vomitDel.getAttribute('data-record-id');
+        if (rid) ovDeleteVomitRecord(rid, vomitDel);
+        return;
+      }
+      var careChipItem = ev.target.closest && ev.target.closest('.care-chip-tap');
+      if (careChipItem) {
+        ev.preventDefault();
+        ev.stopPropagation();
+        var careRecIdI = careChipItem.getAttribute('data-care-id');
+        if (!careRecIdI) { alert('この記録にはIDが含まれていないため取り消しできません'); return; }
+        var careLabelI = careChipItem.textContent.trim();
+        if (!confirm('ケア「' + careLabelI + '」の記録を取り消しますか？')) return;
+        deleteCareRecord(careRecIdI, careChipItem);
+        return;
+      }
       var btn = ev.target.closest && ev.target.closest('.btn-ov-save');
       if (!btn) return;
       ev.preventDefault();
@@ -2170,7 +2277,13 @@
     });
     cardArea.addEventListener('change', function (ev) {
       var cb = ev.target;
-      if (!cb || cb.type !== 'checkbox' || !cb.classList || !cb.classList.contains('ov-med-log-cb')) return;
+      if (!cb) return;
+      if (cb.id === 'ovVomitCat') {
+        var catId = cb.value;
+        if (_vomitRecentCache) ovRenderVomitRecent(_vomitRecentCache, catId || null);
+        return;
+      }
+      if (cb.type !== 'checkbox' || !cb.classList || !cb.classList.contains('ov-med-log-cb')) return;
       if (cb.closest && cb.closest('.pcc-med-block')) return;
       var logId = cb.getAttribute('data-log-id');
       if (!logId) return;
@@ -2221,6 +2334,21 @@
       '<input type="date" class="ov-inline-date ov-inp-date" value="' + escAttr(todayJstYmd()) + '">' +
       '<button type="button" class="btn btn-primary btn-ov-save" data-kind="care">保存</button>' +
       '</div>';
+  }
+
+  /** 猫ごとカード用: 項目ごとと同じ個別ケア（項目・実施/スキップ・日付・保存） */
+  function buildCareIndividualFormForPcc(c) {
+    return '<div class="pcc-care-individual-wrap">' +
+      '<div class="dim" style="font-size:10px;margin:0 0 6px;font-weight:600;">個別に1件記録（爪切り・肉球など）</div>' +
+      '<div class="inline-form ov-care-inline-form pcc-care-inline" data-cat-id="' + escAttr(c.id) + '">' +
+      '<div class="pcc-care-inline-row">' +
+      '<select class="ov-inline-select ov-sel-care-type">' + OPT_CARE_TYPE + '</select>' +
+      '<select class="ov-inline-select ov-sel-care-done">' + OPT_CARE_DONE + '</select>' +
+      '</div>' +
+      '<div class="pcc-care-inline-row">' +
+      '<input type="date" class="ov-inline-date ov-inp-date" value="' + escAttr(todayJstYmd()) + '">' +
+      '<button type="button" class="btn btn-primary btn-ov-save" data-kind="care" style="font-size:11px;padding:6px 12px;white-space:nowrap;">保存</button>' +
+      '</div></div></div>';
   }
 
   var MODE_KEY = 'nyagi_cats_mode';
@@ -2280,6 +2408,8 @@
     if (btnPerCat) btnPerCat.addEventListener('click', function () { switchMode('perCat'); });
     if (btnPerItem) btnPerItem.addEventListener('click', function () { switchMode('perItem'); });
 
+    try { buildCatNav(); } catch (e) { console.error('buildCatNav error', e); }
+
     setTimeout(function () { loadLocations(); }, 250);
   }
 
@@ -2288,6 +2418,13 @@
   } else {
     setTimeout(init, 100);
   }
+
+  // 猫ナビ: init() が何らかの理由で失敗しても FAB を生成するフォールバック
+  setTimeout(function () {
+    if (!_cnFab) {
+      try { buildCatNav(); } catch (e) { console.error('[catNav fallback]', e); }
+    }
+  }, 4000);
 
   function switchMode(mode) {
     if (mode === currentMode) return;
@@ -2298,8 +2435,8 @@
   }
 
   function updateToggle() {
-    btnPerCat.className = currentMode === 'perCat' ? 'active' : '';
-    btnPerItem.className = currentMode === 'perItem' ? 'active' : '';
+    if (btnPerCat) btnPerCat.className = currentMode === 'perCat' ? 'active' : '';
+    if (btnPerItem) btnPerItem.className = currentMode === 'perItem' ? 'active' : '';
   }
 
   function loadLocations() {
@@ -2440,7 +2577,7 @@
     var html = '<div class="cat-grid">';
     for (var i = 0; i < catsData.length; i++) {
       var c = catsData[i];
-      html += '<a href="' + catLink(c.id) + '" class="per-cat-card">';
+      html += '<a href="' + catLink(c.id) + '" class="per-cat-card" data-cat-slug="' + escAttr(c.id) + '">';
 
       // ヘッダー: 名前 + ステータス + スコア
       html += '<div class="pcc-header">';
@@ -2573,7 +2710,7 @@
         html += '</div>';
       }
 
-      // ケア実施状況（1行カード）
+      // ケア実施状況（1行カード）— タップで取消
       var care = c.care_latest || [];
       if (care.length > 0) {
         html += '<div class="pcc-care">';
@@ -2581,7 +2718,8 @@
         for (var ci = 0; ci < care.length; ci++) {
           var done = care[ci].done;
           var cls = done ? 'care-done' : 'care-skip';
-          html += '<span class="care-chip ' + cls + '">' + esc(care[ci].type);
+          var careIdAttr = care[ci].id ? ' data-care-id="' + escAttr(String(care[ci].id)) + '"' : '';
+          html += '<span class="care-chip care-chip-tap ' + cls + '"' + careIdAttr + ' style="cursor:pointer;">' + esc(care[ci].type);
           if (done && care[ci].by) html += '<small>' + esc(care[ci].by) + '</small>';
           html += '</span>';
         }
@@ -2592,12 +2730,14 @@
       html += '<button type="button" class="btn btn-primary btn-pcc-care-bundle" data-cat-id="' + escAttr(String(c.id)) + '" style="width:100%;font-size:11px;padding:8px 10px;">🪮 ケア5項目まとめて記録</button>';
       html += '<div class="dim" style="font-size:9px;margin-top:4px;line-height:1.35;text-align:center;">ブラシ・アゴ・耳・お尻・目ヤニ（当日・未記録分のみ）</div>';
       html += '</div>';
+      html += buildCareIndividualFormForPcc(c);
 
       html += '</a>';
     }
     html += '</div>';
     cardArea.innerHTML = html;
     bindPerCatMedCheckboxes();
+    bindOverviewInlineHandlers();
   }
 
   var _perCatMedBound = false;
@@ -2608,7 +2748,9 @@
       if (!ev.target.closest) return;
       var inMedBlock = ev.target.closest('.pcc-med-block');
       var inCareBundle = ev.target.closest('.pcc-care-bundle-wrap');
-      if (!inMedBlock && !inCareBundle) return;
+      var inCareIndividual = ev.target.closest('.pcc-care-individual-wrap');
+      var inCareChip = ev.target.closest('.pcc-care');
+      if (!inMedBlock && !inCareBundle && !inCareIndividual && !inCareChip) return;
       var anchor = ev.target.closest('a.per-cat-card');
       if (anchor) { ev.preventDefault(); }
     });
@@ -2661,6 +2803,7 @@
     html += renderItemCard_Tasks();
     html += renderItemCard_Stool();
     html += renderItemCard_Urine();
+    html += renderItemCard_Vomit();
     html += renderItemCard_Weight();
     html += renderItemCard_Meds();
     html += renderItemCard_FeedingCheck();
@@ -2668,6 +2811,7 @@
     html += renderItemCard_Medical();
     cardArea.innerHTML = html;
     bindOverviewInlineHandlers();
+    ovFetchVomitRecent();
 
     var expanded = loadExpandedMap();
     var titles = cardArea.querySelectorAll('.item-card-title');
@@ -2698,13 +2842,13 @@
   }
 
   function itemRowReadonly(c, content) {
-    return '<a href="' + catLink(c.id) + '" class="item-row" style="display:flex;align-items:center;gap:8px;text-decoration:none;color:inherit;-webkit-tap-highlight-color:rgba(255,255,255,0.1);">' + content + '</a>';
+    return '<a href="' + catLink(c.id) + '" class="item-row" data-cat-slug="' + escAttr(c.id) + '" style="display:flex;align-items:center;gap:8px;text-decoration:none;color:inherit;-webkit-tap-highlight-color:rgba(255,255,255,0.1);">' + content + '</a>';
   }
 
   function itemRowEditable(c, valuesHtml, editHtml, linkHash) {
     var editBlock = editHtml ? '<div class="item-inline-edit">' + editHtml + '</div>' : '';
     var href = catLink(c.id, linkHash || '');
-    return '<div class="item-row item-row-editable">' +
+    return '<div class="item-row item-row-editable" data-cat-slug="' + escAttr(c.id) + '">' +
       '<a href="' + href + '" class="item-cat-name item-cat-link">' + alertDot(c.alert_level) + esc(c.name) + '</a>' +
       '<div class="item-values">' + valuesHtml + '</div>' +
       editBlock +
@@ -2815,6 +2959,134 @@
     }
     html += '</div></div>';
     return html;
+  }
+
+  // ── はき戻し記録カード ──
+
+  var _vomitRecentCache = null;
+
+  function renderItemCard_Vomit() {
+    var html = '<div class="item-card">';
+    html += '<div class="item-card-title">🤮 はき戻し記録</div>';
+    html += '<div class="item-card-body">';
+
+    html += '<div class="ov-vomit-form" id="ovVomitForm">';
+    html += '<div class="ov-vomit-row">';
+    html += '<select class="ov-inline-select ov-vomit-cat" id="ovVomitCat" style="flex:1;">';
+    html += '<option value="">猫を選択…</option>';
+    for (var i = 0; i < catsData.length; i++) {
+      html += '<option value="' + escAttr(catsData[i].id) + '">' + esc(catsData[i].name) + '</option>';
+    }
+    html += '</select>';
+    html += '<select class="ov-inline-select ov-vomit-count" id="ovVomitCount">';
+    html += '<option value="1">1回</option><option value="2">2回</option><option value="3">3回</option>';
+    html += '</select>';
+    html += '<input type="date" class="ov-inline-input ov-vomit-date" id="ovVomitDate" value="' + todayJstYmd() + '" style="width:120px;">';
+    html += '<button type="button" class="btn btn-primary btn-ov-vomit-save" id="btnOvVomitSave" style="white-space:nowrap;">記録</button>';
+    html += '</div>';
+    html += '<div class="ov-vomit-note-row">';
+    html += '<input type="text" class="ov-inline-input ov-vomit-note" id="ovVomitNote" placeholder="メモ（任意：泡状、食後など）" style="flex:1;">';
+    html += '</div>';
+    html += '</div>';
+
+    html += '<div class="ov-vomit-recent" id="ovVomitRecent">';
+    html += '<div class="dim" style="font-size:12px;padding:8px 0;">直近の記録を読み込み中…</div>';
+    html += '</div>';
+
+    html += '</div></div>';
+    return html;
+  }
+
+  function ovFetchVomitRecent() {
+    var url = apiOpsBase() + '/health/records?type=vomiting&limit=30';
+    fetch(url, { method: 'GET', headers: apiHeaders(), cache: 'no-store' })
+      .then(function (r) { return r.json(); })
+      .then(function (data) {
+        var recs = data.records || [];
+        _vomitRecentCache = recs;
+        ovRenderVomitRecent(recs, null);
+      })
+      .catch(function () {
+        var el = document.getElementById('ovVomitRecent');
+        if (el) el.innerHTML = '<div class="dim" style="font-size:12px;padding:4px 0;">取得失敗</div>';
+      });
+  }
+
+  function ovRenderVomitRecent(recs, filterCatId) {
+    var el = document.getElementById('ovVomitRecent');
+    if (!el) return;
+    var filtered = [];
+    for (var i = 0; i < recs.length; i++) {
+      if (!filterCatId || recs[i].cat_id === filterCatId) filtered.push(recs[i]);
+      if (filtered.length >= 5) break;
+    }
+    if (filtered.length === 0) {
+      el.innerHTML = '<div class="dim" style="font-size:12px;padding:4px 0;">' + (filterCatId ? 'この猫の記録なし' : '記録なし') + '</div>';
+      return;
+    }
+    var catNameMap = {};
+    for (var ci = 0; ci < catsData.length; ci++) catNameMap[catsData[ci].id] = catsData[ci].name;
+    var html = '<table class="ov-vomit-table"><thead><tr><th>日付</th><th>猫</th><th>回数</th><th>メモ</th><th></th></tr></thead><tbody>';
+    for (var j = 0; j < filtered.length; j++) {
+      var r = filtered[j];
+      var rd = (r.record_date || '').slice(5);
+      var cn = catNameMap[r.cat_id] || r.cat_id;
+      var cnt = '1回';
+      var vm = (r.value || '').match(/(\d+)\s*回/);
+      if (vm) cnt = vm[1] + '回';
+      else if (r.value) cnt = r.value;
+      var note = '';
+      if (r.details) {
+        try { var dp = JSON.parse(r.details); note = dp.note || dp.finding || r.details; } catch (_) { note = r.details; }
+      }
+      html += '<tr><td>' + esc(rd) + '</td><td>' + esc(cn) + '</td><td>' + esc(cnt) + '</td><td class="ov-vomit-note-cell">' + esc(note || '') + '</td>';
+      html += '<td><button type="button" class="btn-ov-vomit-del" data-record-id="' + r.id + '" title="削除">✕</button></td></tr>';
+    }
+    html += '</tbody></table>';
+    el.innerHTML = html;
+  }
+
+  function ovSaveVomitRecord(btn) {
+    var catSel = document.getElementById('ovVomitCat');
+    var countSel = document.getElementById('ovVomitCount');
+    var dateInp = document.getElementById('ovVomitDate');
+    var noteInp = document.getElementById('ovVomitNote');
+    var catId = catSel && catSel.value;
+    if (!catId) { alert('猫を選択してください'); return; }
+    var count = countSel ? countSel.value : '1';
+    var rd = dateInp ? dateInp.value : todayJstYmd();
+    if (!rd) { alert('日付を入力してください'); return; }
+    var noteText = noteInp ? noteInp.value.trim() : '';
+    var details = noteText ? JSON.stringify({ note: noteText }) : null;
+    postHealthRecord({
+      cat_id: catId,
+      record_type: 'vomiting',
+      record_date: rd,
+      recorded_time: nowJstHm(),
+      value: count + '回',
+      details: details,
+    }, btn);
+    if (noteInp) noteInp.value = '';
+  }
+
+  function ovDeleteVomitRecord(recordId, btn) {
+    if (!confirm('この記録を削除しますか？')) return;
+    var prevText = btn ? btn.textContent : '';
+    if (btn) { btn.disabled = true; btn.textContent = '…'; }
+    fetch(apiOpsBase() + '/health/records/' + encodeURIComponent(recordId), {
+      method: 'DELETE',
+      headers: apiHeaders(),
+      cache: 'no-store',
+    }).then(function (r) { return r.json(); })
+      .then(function (data) {
+        if (btn) { btn.disabled = false; btn.textContent = prevText; }
+        if (data.error) { alert('削除失敗: ' + (data.message || data.error)); return; }
+        fetchData(0);
+      })
+      .catch(function () {
+        if (btn) { btn.disabled = false; btn.textContent = prevText; }
+        alert('削除に失敗しました');
+      });
   }
 
   /** 項目ごと・体重カード: 本日（JST）計測済みを下に（未計測を上から順に操作しやすく） */
@@ -2958,7 +3230,7 @@
     var html = '<div class="item-card">';
     html += '<div class="item-card-title">🍚 ごはん <small class="dim">あげた・残し</small></div>';
     html += '<div class="item-card-body">';
-    html += '<div class="ov-feed-hint" style="font-size:11px;color:var(--text-dim);margin-bottom:6px;line-height:1.4;">献立の追加・編集・手動記録は「詳細」から。昨日の「あげた」記録の取消は「🥄残し」内から行えます。</div>';
+    html += '<div class="ov-feed-hint" style="font-size:11px;color:var(--text-dim);margin-bottom:6px;line-height:1.4;">献立の追加・編集・手動記録は「詳細」から。<strong>本日分は ✅ をタップ</strong>でも取り消せます。昨日の「あげた」取消は「🥄残し」内から行えます。</div>';
     var feedCats = orderCatsForFeedingCard();
     for (var i = 0; i < feedCats.length; i++) {
       var c = feedCats[i];
@@ -2980,16 +3252,21 @@
           var st = '';
           var pidStr = p.plan_id != null ? String(p.plan_id) : '';
           var logIdStr = p.log_id != null ? String(p.log_id) : '';
+          var logIdsCsv = (p.log_ids_csv != null && String(p.log_ids_csv).trim() !== '') ? String(p.log_ids_csv).trim() : logIdStr;
           var offeredGLogStr = p.offered_g_log != null ? String(p.offered_g_log) : '';
           var fedTm = p.fed_served_time ? ovFmtFedServedTime(p.fed_served_time) : '';
           if (p.fed_today) {
-            st = '<span class="feed-done">✅</span>';
+            if (logIdsCsv) {
+              st = '<button type="button" class="btn-ov-feed-tapundo" data-log-ids="' + escAttr(logIdsCsv) + '" title="もう一度タップで取り消し" style="font-size:18px;background:none;border:none;cursor:pointer;padding:0;line-height:1;color:#4ade80;">✅</button>';
+            } else {
+              st = '<span class="feed-done">✅</span>';
+            }
             if (fedTm) st += '<span class="dim" style="margin-left:3px;">🕐' + esc(fedTm) + '</span> ';
             if (p.eaten_pct_today != null && p.eaten_pct_today !== '') st += '<span class="dim">' + esc(String(p.eaten_pct_today)) + '%</span> ';
             else st += '<span class="dim" style="color:#fbbf24;">0%</span> ';
-            if (logIdStr) {
-              st += '<button type="button" class="btn btn-outline btn-ov-feed-editlog" data-log-id="' + escAttr(logIdStr) + '" data-food-name="' + escAttr(p.food_name || '') + '" data-offered-g="' + escAttr(offeredGLogStr || String(p.amount_g || '')) + '" data-eaten-pct="' + escAttr(p.eaten_pct_today != null && p.eaten_pct_today !== '' ? String(p.eaten_pct_today) : '') + '" data-served-time="' + escAttr(fedTm || '') + '">✏️</button> ';
-              st += '<button type="button" class="btn btn-outline btn-ov-feed-undofed" data-log-id="' + escAttr(logIdStr) + '">取消</button> ';
+            if (logIdsCsv) {
+              st += '<button type="button" class="btn btn-outline btn-ov-feed-editlog" data-log-id="' + escAttr(logIdStr || logIdsCsv.split(',')[0]) + '" data-food-name="' + escAttr(p.food_name || '') + '" data-offered-g="' + escAttr(offeredGLogStr || String(p.amount_g || '')) + '" data-eaten-pct="' + escAttr(p.eaten_pct_today != null && p.eaten_pct_today !== '' ? String(p.eaten_pct_today) : '') + '" data-served-time="' + escAttr(fedTm || '') + '">✏️</button> ';
+              st += '<button type="button" class="btn btn-outline btn-ov-feed-undofed" data-log-ids="' + escAttr(logIdsCsv) + '">取消</button> ';
             }
           } else if (pidStr) {
             st = '<button type="button" class="btn btn-primary btn-ov-feed-markfed" data-plan-id="' + escAttr(pidStr) + '" data-food-name="' + escAttr(p.food_name || '') + '" data-amount-g="' + escAttr(String(p.amount_g || '')) + '">あげた</button> ';
@@ -3018,7 +3295,7 @@
 
       var careVals = '';
       if (care.length === 0) careVals = '<span class="dim">なし</span>';
-      else { for (var j = 0; j < care.length; j++) { var cls = care[j].done ? 'care-done' : 'care-skip'; careVals += '<span class="care-chip ' + cls + '" style="font-size:11px;">' + esc(care[j].type) + (care[j].done && care[j].by ? '<small>' + esc(care[j].by) + '</small>' : '') + '</span>'; } }
+      else { for (var j = 0; j < care.length; j++) { var cls = care[j].done ? 'care-done' : 'care-skip'; var cIdAttr = care[j].id ? ' data-care-id="' + escAttr(String(care[j].id)) + '"' : ''; careVals += '<span class="care-chip care-chip-tap ' + cls + '"' + cIdAttr + ' style="font-size:11px;cursor:pointer;">' + esc(care[j].type) + (care[j].done && care[j].by ? '<small>' + esc(care[j].by) + '</small>' : '') + '</span>'; } }
       html += itemRowEditable(c, careVals, buildCareInlineEdit(c));
     }
     html += '</div></div>';
@@ -3191,6 +3468,215 @@
     var now = new Date();
     now.setHours(0, 0, 0, 0);
     return Math.ceil((target - now) / (24 * 60 * 60 * 1000));
+  }
+
+  // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  //  猫ナビ（フローティングパレット B-3）
+  // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+  var _cnFab = null;
+  var _cnPalette = null;
+  var _cnBackdrop = null;
+  var _cnActiveTab = 0;
+
+  function cnInjectStyles() {
+    if (document.getElementById('catNavStyleBlock')) return;
+    var s = document.createElement('style');
+    s.id = 'catNavStyleBlock';
+    s.textContent =
+      '.cat-nav-fab{position:fixed;bottom:calc(24px + env(safe-area-inset-bottom,0px));left:calc(20px + env(safe-area-inset-left,0px));width:52px;height:52px;border-radius:50%;border:none;background:linear-gradient(135deg,#a78bfa,#7c3aed);color:#fff;font-size:22px;box-shadow:0 4px 14px rgba(124,58,237,.45);z-index:900;cursor:pointer;transition:transform .15s,opacity .15s,background .2s;display:flex;align-items:center;justify-content:center}' +
+      '.cat-nav-fab:active{transform:scale(.92)}' +
+      '.cat-nav-fab.open{background:linear-gradient(135deg,#7c3aed,#5b21b6)}' +
+      '.cat-nav-backdrop{position:fixed;inset:0;z-index:899;background:rgba(0,0,0,.3);opacity:0;pointer-events:none;transition:opacity .2s}' +
+      '.cat-nav-backdrop.open{opacity:1;pointer-events:auto}' +
+      '.cat-nav-palette{position:fixed;top:50%;left:50%;transform:translate(-50%,-50%) scale(.95);width:min(320px,calc(100vw - 32px));max-height:65vh;background:var(--surface,#1e1e2e);border:1px solid rgba(255,255,255,.15);border-radius:14px;box-shadow:0 8px 32px rgba(0,0,0,.5);z-index:901;display:flex;flex-direction:column;opacity:0;pointer-events:none;transition:opacity .2s,transform .2s}' +
+      '.cat-nav-palette.open{opacity:1;transform:translate(-50%,-50%) scale(1);pointer-events:auto}' +
+      '.cat-nav-header{display:flex;align-items:center;justify-content:space-between;padding:10px 14px 8px;font-weight:700;font-size:14px;border-bottom:1px solid rgba(255,255,255,.08);flex-shrink:0}' +
+      '.cat-nav-close{background:none;border:none;color:var(--text-dim,#888);font-size:22px;cursor:pointer;padding:0 4px;line-height:1}' +
+      '.cat-nav-tabs{display:flex;gap:6px;padding:8px 12px;overflow-x:auto;-webkit-overflow-scrolling:touch;flex-shrink:0;border-bottom:1px solid rgba(255,255,255,.06)}' +
+      '.cat-nav-tabs::-webkit-scrollbar{display:none}' +
+      '.cat-nav-tab{flex-shrink:0;padding:5px 10px;border-radius:16px;border:1px solid rgba(255,255,255,.15);background:transparent;color:var(--text-dim,#888);font-size:11px;font-weight:600;cursor:pointer;white-space:nowrap;transition:background .15s,color .15s}' +
+      '.cat-nav-tab.active{background:var(--primary,#a78bfa);color:#fff;border-color:var(--primary,#a78bfa)}' +
+      '.cat-nav-list{flex:1;overflow-y:auto;-webkit-overflow-scrolling:touch;padding:6px 8px 10px}' +
+      '.cat-nav-item{display:block;width:100%;text-align:left;padding:9px 12px;border:none;background:transparent;color:var(--text-main,#e0e0e0);font-size:13px;font-weight:500;cursor:pointer;border-radius:8px;transition:background .12s}' +
+      '.cat-nav-item:active{background:rgba(167,139,250,.18)}' +
+      '@keyframes catNavHL{0%{box-shadow:0 0 0 3px rgba(167,139,250,.6)}100%{box-shadow:0 0 0 0 rgba(167,139,250,0)}}' +
+      '.cat-nav-highlight{animation:catNavHL 1.5s ease-out forwards;border-radius:8px}';
+    document.head.appendChild(s);
+  }
+
+  function buildCatNav() {
+    cnInjectStyles();
+    _cnFab = document.createElement('button');
+    _cnFab.className = 'cat-nav-fab';
+    _cnFab.setAttribute('aria-label', '猫ナビ');
+    _cnFab.textContent = '\uD83D\uDC3E';
+    _cnFab.addEventListener('click', cnToggle);
+    document.body.appendChild(_cnFab);
+
+    _cnBackdrop = document.createElement('div');
+    _cnBackdrop.className = 'cat-nav-backdrop';
+    _cnBackdrop.addEventListener('click', cnClose);
+    document.body.appendChild(_cnBackdrop);
+
+    _cnPalette = document.createElement('div');
+    _cnPalette.className = 'cat-nav-palette';
+    _cnPalette.innerHTML =
+      '<div class="cat-nav-header"><span>\uD83D\uDC3E \u732B\u30CA\u30D3</span>' +
+      '<button class="cat-nav-close" type="button">&times;</button></div>' +
+      '<div class="cat-nav-tabs" id="catNavTabs"></div>' +
+      '<div class="cat-nav-list" id="catNavList"></div>';
+    document.body.appendChild(_cnPalette);
+
+    _cnPalette.querySelector('.cat-nav-close').addEventListener('click', cnClose);
+
+    _cnPalette.addEventListener('click', function (ev) {
+      var tab = ev.target.closest && ev.target.closest('.cat-nav-tab');
+      if (tab) {
+        var idx = parseInt(tab.getAttribute('data-card-idx'), 10);
+        if (!isNaN(idx)) {
+          _cnActiveTab = idx;
+          var allT = _cnPalette.querySelectorAll('.cat-nav-tab');
+          for (var t = 0; t < allT.length; t++) {
+            allT[t].classList.toggle('active', parseInt(allT[t].getAttribute('data-card-idx'), 10) === idx);
+          }
+          cnPopulateList(idx);
+        }
+        return;
+      }
+      var item = ev.target.closest && ev.target.closest('.cat-nav-item');
+      if (item) {
+        var slug = item.getAttribute('data-cat-nav-slug');
+        var ci = parseInt(item.getAttribute('data-card-idx'), 10);
+        if (slug) cnScrollTo(slug, isNaN(ci) ? -1 : ci);
+      }
+    });
+  }
+
+  function cnToggle() {
+    if (_cnPalette && _cnPalette.classList.contains('open')) cnClose();
+    else cnOpen();
+  }
+
+  function cnOpen() {
+    if (!_cnPalette) return;
+    cnPopulate();
+    _cnPalette.classList.add('open');
+    _cnFab.classList.add('open');
+    _cnBackdrop.classList.add('open');
+  }
+
+  function cnClose() {
+    if (!_cnPalette) return;
+    _cnPalette.classList.remove('open');
+    _cnFab.classList.remove('open');
+    _cnBackdrop.classList.remove('open');
+  }
+
+  function cnPopulate() {
+    var tabsEl = document.getElementById('catNavTabs');
+    var listEl = document.getElementById('catNavList');
+    if (!tabsEl || !listEl) return;
+
+    if (currentMode === 'perCat') {
+      tabsEl.style.display = 'none';
+      var h = '';
+      for (var i = 0; i < catsData.length; i++) {
+        h += '<button type="button" class="cat-nav-item" data-cat-nav-slug="' +
+          escAttr(catsData[i].id) + '">' + speciesIcon(catsData[i].species) +
+          ' ' + esc(catsData[i].name) + '</button>';
+      }
+      listEl.innerHTML = h || '<div class="dim" style="padding:12px;font-size:12px;">\u732B\u306A\u3057</div>';
+      return;
+    }
+
+    tabsEl.style.display = '';
+    var titles = cardArea.querySelectorAll('.item-card-title');
+    var tabH = '';
+    for (var i = 0; i < titles.length; i++) {
+      var raw = titles[i].textContent || '';
+      var lbl = raw.replace(/[\u25B2\u25BC]/g, '').replace(/\u76F4\u8FD1.*/g, '')
+        .replace(/\u5404\u884C.*/g, '').replace(/\u672C\u65E5.*/g, '')
+        .replace(/\u3042\u3052\u305F.*/g, '').trim();
+      if (lbl.length > 8) lbl = lbl.slice(0, 8);
+      tabH += '<button type="button" class="cat-nav-tab' +
+        (i === _cnActiveTab ? ' active' : '') + '" data-card-idx="' + i + '">' +
+        esc(lbl) + '</button>';
+    }
+    tabsEl.innerHTML = tabH;
+    if (_cnActiveTab >= titles.length) _cnActiveTab = 0;
+    cnPopulateList(_cnActiveTab);
+  }
+
+  function cnPopulateList(cardIdx) {
+    var listEl = document.getElementById('catNavList');
+    if (!listEl) return;
+    var cards = cardArea.querySelectorAll('.item-card');
+    if (cardIdx >= cards.length) { listEl.innerHTML = ''; return; }
+
+    var rows = cards[cardIdx].querySelectorAll('[data-cat-slug]');
+    var h = '';
+    var seen = {};
+    for (var i = 0; i < rows.length; i++) {
+      var slug = rows[i].getAttribute('data-cat-slug');
+      if (!slug || seen[slug]) continue;
+      seen[slug] = true;
+      var nameEl = rows[i].querySelector('.item-cat-name');
+      var nm = nameEl ? nameEl.textContent.replace(/[\u25CF\u25CB\u25CE]/g, '').trim() : slug;
+      var sp = '\uD83D\uDC31';
+      for (var ci = 0; ci < catsData.length; ci++) {
+        if (catsData[ci].id === slug) { sp = speciesIcon(catsData[ci].species); break; }
+      }
+      h += '<button type="button" class="cat-nav-item" data-cat-nav-slug="' +
+        escAttr(slug) + '" data-card-idx="' + cardIdx + '">' +
+        sp + ' ' + esc(nm) + '</button>';
+    }
+    listEl.innerHTML = h || '<div class="dim" style="padding:12px;font-size:12px;text-align:center;">\u3053\u306E\u30AB\u30FC\u30C9\u306B\u732B\u306E\u884C\u306F\u3042\u308A\u307E\u305B\u3093</div>';
+  }
+
+  function cnScrollTo(catSlug, cardIdx) {
+    cnClose();
+
+    if (currentMode === 'perCat') {
+      var el = cardArea.querySelector('.per-cat-card[data-cat-slug="' + catSlug + '"]');
+      if (el) {
+        el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        cnHighlight(el);
+      }
+      return;
+    }
+
+    var cards = cardArea.querySelectorAll('.item-card');
+    if (cardIdx < 0 || cardIdx >= cards.length) return;
+    var card = cards[cardIdx];
+    var title = card.querySelector('.item-card-title');
+    var body = card.querySelector('.item-card-body');
+
+    var wasCollapsed = false;
+    if (title && body && body.classList.contains('hidden')) {
+      wasCollapsed = true;
+      body.classList.remove('hidden');
+      title.classList.remove('collapsed');
+      var map = loadExpandedMap();
+      if (!map || typeof map !== 'object') map = {};
+      map[cardIdx] = true;
+      saveExpandedMap(map);
+    }
+
+    var row = card.querySelector('[data-cat-slug="' + catSlug + '"]');
+    if (!row) return;
+
+    setTimeout(function () {
+      row.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      cnHighlight(row);
+    }, wasCollapsed ? 400 : 50);
+  }
+
+  function cnHighlight(el) {
+    el.classList.remove('cat-nav-highlight');
+    void el.offsetWidth;
+    el.classList.add('cat-nav-highlight');
+    setTimeout(function () { el.classList.remove('cat-nav-highlight'); }, 1800);
   }
 
 })();

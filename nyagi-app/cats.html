@@ -735,6 +735,36 @@
       background: rgba(248,113,113,0.15);
       color: #f87171;
     }
+    /* 猫ごと: 個別ケア（項目ごとと同じ選択肢） */
+    .pcc-care-individual-wrap {
+      margin-top: 8px;
+      padding-top: 8px;
+      border-top: 1px solid rgba(255,255,255,0.06);
+    }
+    .pcc-care-inline.inline-form {
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+      width: 100%;
+      box-sizing: border-box;
+    }
+    .pcc-care-inline-row {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 6px;
+      align-items: center;
+      width: 100%;
+    }
+    .pcc-care-inline .ov-inline-select {
+      flex: 1;
+      min-width: 0;
+      font-size: 12px;
+    }
+    .pcc-care-inline .ov-inline-date {
+      flex: 1;
+      min-width: 0;
+      font-size: 12px;
+    }
     .item-card-body .care-chip {
       max-width: 100%;
       box-sizing: border-box;
@@ -934,6 +964,190 @@
       padding: 10px 12px;
       font-size: 14px;
     }
+
+    /* はき戻し記録カード */
+    .ov-vomit-form { padding: 8px 0 4px; }
+    .ov-vomit-row {
+      display: flex;
+      gap: 6px;
+      align-items: center;
+      flex-wrap: wrap;
+    }
+    .ov-vomit-note-row {
+      display: flex;
+      gap: 6px;
+      margin-top: 6px;
+    }
+    .ov-vomit-count { width: 64px; flex-shrink: 0; }
+    .ov-vomit-date { flex-shrink: 0; }
+    .ov-vomit-table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 12px;
+      margin-top: 8px;
+    }
+    .ov-vomit-table th {
+      font-weight: 600;
+      font-size: 11px;
+      color: var(--text-dim);
+      text-align: left;
+      padding: 4px 6px;
+      border-bottom: 1px solid rgba(255,255,255,0.08);
+    }
+    .ov-vomit-table td {
+      padding: 5px 6px;
+      border-bottom: 1px solid rgba(255,255,255,0.04);
+      vertical-align: middle;
+    }
+    .ov-vomit-note-cell {
+      max-width: 100px;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+      color: var(--text-dim);
+    }
+    .btn-ov-vomit-del {
+      background: none;
+      border: none;
+      cursor: pointer;
+      font-size: 13px;
+      color: #f87171;
+      padding: 2px 4px;
+      opacity: 0.7;
+    }
+    .btn-ov-vomit-del:hover { opacity: 1; }
+    .ov-vomit-note { font-size: 13px; }
+
+    /* ── 猫ナビ（フローティングパレット） ── */
+    .cat-nav-fab {
+      position: fixed;
+      bottom: calc(24px + env(safe-area-inset-bottom, 0px));
+      left: calc(20px + env(safe-area-inset-left, 0px));
+      width: 52px;
+      height: 52px;
+      border-radius: 50%;
+      border: none;
+      background: linear-gradient(135deg, #a78bfa 0%, #7c3aed 100%);
+      color: #fff;
+      font-size: 22px;
+      box-shadow: 0 4px 14px rgba(124, 58, 237, 0.45);
+      z-index: 900;
+      cursor: pointer;
+      transition: transform 0.15s, opacity 0.15s, background 0.2s;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+    .cat-nav-fab:active { transform: scale(0.92); }
+    .cat-nav-fab.open { background: linear-gradient(135deg, #7c3aed 0%, #5b21b6 100%); }
+
+    .cat-nav-backdrop {
+      position: fixed;
+      inset: 0;
+      z-index: 899;
+      background: rgba(0,0,0,0.3);
+      opacity: 0;
+      pointer-events: none;
+      transition: opacity 0.2s;
+    }
+    .cat-nav-backdrop.open { opacity: 1; pointer-events: auto; }
+
+    .cat-nav-palette {
+      position: fixed;
+      bottom: calc(86px + env(safe-area-inset-bottom, 0px));
+      left: calc(16px + env(safe-area-inset-left, 0px));
+      width: min(300px, calc(100vw - 32px));
+      max-height: 55vh;
+      background: var(--surface, #1e1e2e);
+      border: 1px solid rgba(255,255,255,0.15);
+      border-radius: 14px;
+      box-shadow: 0 8px 32px rgba(0,0,0,0.5);
+      z-index: 901;
+      display: flex;
+      flex-direction: column;
+      opacity: 0;
+      transform: translateY(16px) scale(0.95);
+      pointer-events: none;
+      transition: opacity 0.2s, transform 0.2s;
+    }
+    .cat-nav-palette.open {
+      opacity: 1;
+      transform: translateY(0) scale(1);
+      pointer-events: auto;
+    }
+    .cat-nav-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 10px 14px 8px;
+      font-weight: 700;
+      font-size: 14px;
+      border-bottom: 1px solid rgba(255,255,255,0.08);
+      flex-shrink: 0;
+    }
+    .cat-nav-close {
+      background: none;
+      border: none;
+      color: var(--text-dim);
+      font-size: 22px;
+      cursor: pointer;
+      padding: 0 4px;
+      line-height: 1;
+    }
+    .cat-nav-tabs {
+      display: flex;
+      gap: 6px;
+      padding: 8px 12px;
+      overflow-x: auto;
+      -webkit-overflow-scrolling: touch;
+      flex-shrink: 0;
+      border-bottom: 1px solid rgba(255,255,255,0.06);
+    }
+    .cat-nav-tabs::-webkit-scrollbar { display: none; }
+    .cat-nav-tab {
+      flex-shrink: 0;
+      padding: 5px 10px;
+      border-radius: 16px;
+      border: 1px solid rgba(255,255,255,0.15);
+      background: transparent;
+      color: var(--text-dim);
+      font-size: 11px;
+      font-weight: 600;
+      cursor: pointer;
+      white-space: nowrap;
+      transition: background 0.15s, color 0.15s;
+    }
+    .cat-nav-tab.active {
+      background: var(--primary, #a78bfa);
+      color: #fff;
+      border-color: var(--primary, #a78bfa);
+    }
+    .cat-nav-list {
+      flex: 1;
+      overflow-y: auto;
+      -webkit-overflow-scrolling: touch;
+      padding: 6px 8px 10px;
+    }
+    .cat-nav-item {
+      display: block;
+      width: 100%;
+      text-align: left;
+      padding: 9px 12px;
+      border: none;
+      background: transparent;
+      color: var(--text-main, #e0e0e0);
+      font-size: 13px;
+      font-weight: 500;
+      cursor: pointer;
+      border-radius: 8px;
+      transition: background 0.12s;
+    }
+    .cat-nav-item:active { background: rgba(167, 139, 250, 0.18); }
+    @keyframes catNavHL {
+      0%   { box-shadow: 0 0 0 3px rgba(167,139,250,0.6); }
+      100% { box-shadow: 0 0 0 0 rgba(167,139,250,0); }
+    }
+    .cat-nav-highlight { animation: catNavHL 1.5s ease-out forwards; border-radius: 8px; }
   </style>
 </head>
 <body>
@@ -1120,10 +1334,10 @@
   </div>
 
   <script src="config.js?v=214"></script>
-  <script src="js/nyagi-boot-overlay.js?v=214"></script>
+  <script src="js/nyagi-boot-overlay.js?v=215"></script>
   <script src="js/login-gate.js?v=214"></script>
   <script src="js/app.js?v=214"></script>
-  <script src="js/cats-overview.js?v=262"></script>
+  <script src="js/cats-overview.js?v=274"></script>
   <script src="js/voice-console.js?v=214"></script>
 </body>
 </html>

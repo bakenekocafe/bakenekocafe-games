@@ -38,6 +38,13 @@
     return y !== todayJstYmd() ? ' ov-ex-row-past' : '';
   }
 
+  /** 摂取率が 0 以外（数値記録あり）→ 残し・ごはん行の % 表示をグレーに */
+  function ovFeedPctNonZero(ep) {
+    if (ep == null || ep === '') return false;
+    var n = Number(ep);
+    return !isNaN(n) && n !== 0;
+  }
+
   /** JST の HH:mm */
   function nowJstHm() {
     return new Date().toLocaleTimeString('en-GB', {
@@ -870,25 +877,27 @@
       prefillLeft = String(Math.round(log.offered_g * (100 - log.eaten_pct) / 100 * 10) / 10);
     }
 
-    var html = '<div style="background:rgba(0,0,0,.04);border-radius:8px;padding:8px 10px;margin-bottom:6px;">';
+    var isLoMuted = !!(log && ovFeedPctNonZero(log.eaten_pct));
+    var loCol = isLoMuted ? '#94a3b8' : '#4ade80';
+    var html = '<div style="background:rgba(0,0,0,.04);border-radius:8px;padding:8px 10px;margin-bottom:6px;' + (isLoMuted ? 'color:#94a3b8;' : '') + '">';
     html += '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px;">';
     html += '<span style="font-weight:600;font-size:13px;">' + esc(foodName) + '</span>';
-    if (offG) html += '<span class="dim" style="font-size:11px;">提供 ' + esc(String(offG)) + 'g</span>';
+    if (offG) html += '<span class="dim" style="font-size:11px;' + (isLoMuted ? 'color:#94a3b8;' : '') + '">提供 ' + esc(String(offG)) + 'g</span>';
     html += '</div>';
 
     if (log && log.eaten_pct !== null && log.eaten_pct !== undefined && log.eaten_pct < 100) {
       var leftG = Math.round(offG * (100 - log.eaten_pct) / 100 * 10) / 10;
       var ateG = Math.round(offG * log.eaten_pct / 100 * 10) / 10;
-      html += '<div style="font-size:11px;color:#4ade80;margin-bottom:4px;">✅ ' + log.eaten_pct + '% 食べた（' + ateG + 'g） / 残り ' + leftG + 'g</div>';
+      html += '<div style="font-size:11px;color:' + loCol + ';margin-bottom:4px;">✅ ' + log.eaten_pct + '% 食べた（' + ateG + 'g） / 残り ' + leftG + 'g</div>';
     } else if (log && log.eaten_pct === 100) {
-      html += '<div style="font-size:11px;color:#4ade80;margin-bottom:4px;">✅ 完食</div>';
+      html += '<div style="font-size:11px;color:' + loCol + ';margin-bottom:4px;">✅ 完食</div>';
     } else if (log && (log.eaten_pct === null || log.eaten_pct === undefined)) {
       html += '<div style="font-size:11px;color:#fbbf24;margin-bottom:4px;">摂取 0%（未確認）</div>';
     }
 
     html += '<div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;margin-top:4px;">';
-    html += '<label class="dim" style="font-size:11px;">残り</label>';
-    html += '<input type="number" id="' + escAttr(inputId) + '" class="form-input" style="width:64px;font-size:12px;padding:2px 4px;" min="0" step="0.1" placeholder="g"';
+    html += '<label class="dim" style="font-size:11px;' + (isLoMuted ? 'color:#94a3b8;' : '') + '">残り</label>';
+    html += '<input type="number" id="' + escAttr(inputId) + '" class="form-input" style="width:64px;font-size:12px;padding:2px 4px;' + (isLoMuted ? 'color:var(--text-main);' : '') + '" min="0" step="0.1" placeholder="g"';
     if (offG) html += ' max="' + escAttr(String(offG)) + '"';
     html += ' value="' + escAttr(prefillLeft) + '">';
 
@@ -934,7 +943,11 @@
       h += '<span class="ov-feed-slot">' + feedingMealSlotLabelJp(lg.meal_slot) + '</span>';
       h += '<span class="ov-feed-menu">' + esc(fn) + (offG ? ' <strong>' + esc(offG) + '</strong>' : '') + '</span>';
       h += '<span class="ov-feed-status">';
-      if (pct) h += '<span class="dim">' + esc(pct) + '</span> ';
+      if (pct) {
+        var epY = lg.eaten_pct != null && lg.eaten_pct !== '' ? Number(lg.eaten_pct) : NaN;
+        var pctGray = !isNaN(epY) && epY !== 0;
+        h += '<span class="dim" style="' + (pctGray ? 'color:#94a3b8 !important;' : '') + '">' + esc(pct) + '</span> ';
+      }
       if (st) h += '<span class="dim" style="margin-right:4px;">🕐' + esc(st) + '</span>';
       h += '<button type="button" class="btn btn-outline btn-ov-feed-undofed" data-log-id="' + escAttr(lid) + '">取消</button>';
       h += '</span></div>';
@@ -3279,8 +3292,13 @@
               st = '<span class="feed-done">✅</span>';
             }
             if (fedTm) st += '<span class="dim" style="margin-left:3px;">🕐' + esc(fedTm) + '</span> ';
-            if (p.eaten_pct_today != null && p.eaten_pct_today !== '') st += '<span class="dim">' + esc(String(p.eaten_pct_today)) + '%</span> ';
-            else st += '<span class="dim" style="color:#fbbf24;">0%</span> ';
+            if (p.eaten_pct_today != null && p.eaten_pct_today !== '') {
+              var epF = Number(p.eaten_pct_today);
+              var pctSty = (!isNaN(epF) && epF !== 0) ? 'color:#94a3b8 !important;' : '';
+              st += '<span class="dim" style="' + pctSty + '">' + esc(String(p.eaten_pct_today)) + '%</span> ';
+            } else {
+              st += '<span class="dim" style="color:#fbbf24;">0%</span> ';
+            }
             if (logIdsCsv) {
               st += '<button type="button" class="btn btn-outline btn-ov-feed-editlog" data-log-id="' + escAttr(logIdStr || logIdsCsv.split(',')[0]) + '" data-food-name="' + escAttr(p.food_name || '') + '" data-offered-g="' + escAttr(offeredGLogStr || String(p.amount_g || '')) + '" data-eaten-pct="' + escAttr(p.eaten_pct_today != null && p.eaten_pct_today !== '' ? String(p.eaten_pct_today) : '') + '" data-served-time="' + escAttr(fedTm || '') + '">✏️</button> ';
               st += '<button type="button" class="btn btn-outline btn-ov-feed-undofed" data-log-ids="' + escAttr(logIdsCsv) + '">取消</button> ';

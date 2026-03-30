@@ -2997,16 +2997,25 @@ function closeCatDetailFoldSection(btn) {
     h += '<div style="font-size:11px;color:var(--text-dim);margin-bottom:8px;line-height:1.4;">誤って「あげた」が残っているときは取消してください。夜分は上の「昨夜の夜ごはん」でも取消できます。</div>';
     for (var j = 0; j < rows.length; j++) {
       var l = rows[j];
-      h += '<div style="background:var(--surface);border-radius:8px;padding:8px 12px;margin-bottom:6px;display:flex;justify-content:space-between;align-items:center;gap:8px;">';
+      var yMuted = cdLeftoverPctIsNonZero(l.eaten_pct);
+      var yDim = yMuted ? '#94a3b8' : 'var(--text-dim)';
+      h += '<div style="background:var(--surface);border-radius:8px;padding:8px 12px;margin-bottom:6px;display:flex;justify-content:space-between;align-items:center;gap:8px;' + (yMuted ? 'color:#94a3b8;' : '') + '">';
       h += '<div style="font-size:13px;flex:1;min-width:0;">' + escapeHtml(slotLabel(l.meal_slot)) + ' · ' + escapeHtml(l.food_name || '—');
-      if (l.offered_g) h += ' <span style="color:var(--text-dim);">' + l.offered_g + 'g</span>';
-      if (l.eaten_pct !== null && l.eaten_pct !== undefined) h += ' <span style="color:var(--text-dim);">' + l.eaten_pct + '%</span>';
+      if (l.offered_g) h += ' <span style="color:' + yDim + ';">' + l.offered_g + 'g</span>';
+      if (l.eaten_pct !== null && l.eaten_pct !== undefined) h += ' <span style="color:' + yDim + ';">' + l.eaten_pct + '%</span>';
       h += '</div>';
       h += '<button type="button" class="btn-outline" style="font-size:11px;padding:4px 10px;flex-shrink:0;color:#f87171;" onclick="undoFed(' + l.id + ')">取消</button>';
       h += '</div>';
     }
     h += '</div>';
     return h;
+  }
+
+  /** 摂取率が 0 以外（数値として入力・記録されている）→ 残し記録まわりは文字をグレーに */
+  function cdLeftoverPctIsNonZero(ep) {
+    if (ep == null || ep === '') return false;
+    var n = Number(ep);
+    return !isNaN(n) && n !== 0;
   }
 
   function renderLeftoverInput(eveningPlans, eveningLogs) {
@@ -3047,37 +3056,39 @@ function closeCatDetailFoldSection(btn) {
       var foodName = (log && log.food_name) || (plan && plan.food_name) || '不明';
       var offG = (log && log.offered_g) || (plan && plan.amount_g) || 0;
 
-      h += '<div style="background:var(--surface);border-radius:8px;padding:10px 12px;margin-bottom:6px;">';
+      var isLoMuted = !!(log && cdLeftoverPctIsNonZero(log.eaten_pct));
+      var loOk = isLoMuted ? '#94a3b8' : '#4ade80';
+      h += '<div style="background:var(--surface);border-radius:8px;padding:10px 12px;margin-bottom:6px;' + (isLoMuted ? 'color:#94a3b8;' : '') + '">';
       h += '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;">';
       h += '<div style="font-size:13px;font-weight:600;">' + escapeHtml(foodName) + '</div>';
-      if (offG) h += '<span style="font-size:12px;color:var(--text-dim);">提供: ' + offG + 'g</span>';
+      if (offG) h += '<span style="font-size:12px;color:' + (isLoMuted ? '#94a3b8' : 'var(--text-dim)') + ';">提供: ' + offG + 'g</span>';
       h += '</div>';
 
       if (log && log.eaten_pct !== null && log.eaten_pct !== undefined && log.eaten_pct < 100) {
         var leftG = Math.round(offG * (100 - log.eaten_pct) / 100 * 10) / 10;
         var ateG = Math.round(offG * log.eaten_pct / 100 * 10) / 10;
         h += '<div style="display:flex;justify-content:space-between;align-items:center;">';
-        h += '<span style="font-size:12px;color:#4ade80;">✅ ' + log.eaten_pct + '% 食べた（' + ateG + 'g） / 残り ' + leftG + 'g</span>';
+        h += '<span style="font-size:12px;color:' + loOk + ';">✅ ' + log.eaten_pct + '% 食べた（' + ateG + 'g） / 残り ' + leftG + 'g</span>';
         h += '<span style="display:flex;gap:4px;flex-shrink:0;">';
-        h += '<button class="btn-edit-small" onclick="openLeftoverEdit(' + log.id + ',' + offG + ')" title="修正" style="font-size:11px;">✏️</button>';
+        h += '<button class="btn-edit-small" onclick="openLeftoverEdit(' + log.id + ',' + offG + ')" title="修正" style="font-size:11px;color:var(--text-main);">✏️</button>';
         h += '<button type="button" class="btn-edit-small" onclick="undoFed(' + log.id + ')" title="この記録を削除" style="font-size:11px;color:#f87171;">取消</button>';
         h += '</span></div>';
       } else if (log && log.eaten_pct === 100) {
         h += '<div style="display:flex;justify-content:space-between;align-items:center;">';
-        h += '<span style="font-size:12px;color:#4ade80;">✅ 完食</span>';
+        h += '<span style="font-size:12px;color:' + loOk + ';">✅ 完食</span>';
         h += '<span style="display:flex;gap:4px;flex-shrink:0;">';
-        h += '<button class="btn-edit-small" onclick="openLeftoverEdit(' + log.id + ',' + offG + ')" title="修正" style="font-size:11px;">✏️</button>';
+        h += '<button class="btn-edit-small" onclick="openLeftoverEdit(' + log.id + ',' + offG + ')" title="修正" style="font-size:11px;color:var(--text-main);">✏️</button>';
         h += '<button type="button" class="btn-edit-small" onclick="undoFed(' + log.id + ')" title="この記録を削除" style="font-size:11px;color:#f87171;">取消</button>';
         h += '</span></div>';
       } else if (log && (log.eaten_pct === null || log.eaten_pct === undefined)) {
         h += '<div style="font-size:11px;color:#fbbf24;margin-bottom:6px;">摂取 0%（未確認）</div>';
-        h += renderLeftoverControls(log.id, offG, 'log');
+        h += renderLeftoverControls(log.id, offG, 'log', false);
         h += '<div style="margin-top:6px;text-align:right;"><button type="button" class="btn-outline" style="font-size:11px;padding:4px 10px;color:#f87171;" onclick="undoFed(' + log.id + ')">記録を削除（取消）</button></div>';
       } else if (log) {
-        h += renderLeftoverControls(log.id, offG, 'log');
+        h += renderLeftoverControls(log.id, offG, 'log', isLoMuted);
         h += '<div style="margin-top:6px;text-align:right;"><button type="button" class="btn-outline" style="font-size:11px;padding:4px 10px;color:#f87171;" onclick="undoFed(' + log.id + ')">記録を削除（取消）</button></div>';
       } else if (plan) {
-        h += renderLeftoverControls(plan.id, offG, 'plan');
+        h += renderLeftoverControls(plan.id, offG, 'plan', false);
       }
       h += '</div>';
     }
@@ -3090,10 +3101,11 @@ function closeCatDetailFoldSection(btn) {
     return h;
   }
 
-  function renderLeftoverControls(id, offG, mode) {
+  function renderLeftoverControls(id, offG, mode, labelMuted) {
     var prefix = mode === 'plan' ? 'plan' : 'log';
+    var labCol = labelMuted ? '#94a3b8' : 'var(--text-dim)';
     var h = '<div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;">';
-    h += '<label style="font-size:12px;color:var(--text-dim);">残り:</label>';
+    h += '<label style="font-size:12px;color:' + labCol + ';">残り:</label>';
     h += '<input type="number" id="leftover-g-' + prefix + '-' + id + '" placeholder="g" min="0" step="0.1" style="width:60px;font-size:13px;padding:4px 6px;border:1px solid rgba(255,255,255,0.15);border-radius:6px;background:var(--surface-alt);color:var(--text-main);"';
     if (offG) h += ' max="' + offG + '"';
     h += '>';
@@ -3345,11 +3357,13 @@ function closeCatDetailFoldSection(btn) {
               html += '<div style="font-size:10px;color:var(--text-dim);margin-top:3px;line-height:1.35;padding:4px 6px;background:rgba(255,255,255,0.04);border-radius:4px;">📝 ' + escapeHtml(String(p.notes).trim()) + '</div>';
             }
             if (isFed && fedLog.eaten_pct !== null && fedLog.eaten_pct !== undefined && fedLog.eaten_pct < 100) {
-              html += '<div style="font-size:10px;color:#facc15;">食べた量: ' + fedLog.eaten_pct + '%</div>';
+              var cFed = cdLeftoverPctIsNonZero(fedLog.eaten_pct) ? '#94a3b8' : '#facc15';
+              html += '<div style="font-size:10px;color:' + cFed + ';">食べた量: ' + fedLog.eaten_pct + '%</div>';
             } else if (isFed && (fedLog.eaten_pct === null || fedLog.eaten_pct === undefined)) {
               html += '<div style="font-size:10px;color:#fbbf24;">食べた量: 0%（未確認・🍽で入力）</div>';
             } else if (isFed && fedLog.eaten_pct === 100) {
-              html += '<div style="font-size:10px;color:#4ade80;">食べた量: 100%（完食）</div>';
+              var c100 = cdLeftoverPctIsNonZero(100) ? '#94a3b8' : '#4ade80';
+              html += '<div style="font-size:10px;color:' + c100 + ';">食べた量: 100%（完食）</div>';
             }
             html += '</div>';
 
@@ -3394,7 +3408,7 @@ function closeCatDetailFoldSection(btn) {
         html += '</span>';
         html += '<span style="display:flex;align-items:center;gap:8px;">';
         if (l.eaten_pct !== null && l.eaten_pct !== undefined) {
-          var eatColor = l.eaten_pct >= 80 ? '#4ade80' : l.eaten_pct >= 50 ? '#facc15' : '#f87171';
+          var eatColor = cdLeftoverPctIsNonZero(l.eaten_pct) ? '#94a3b8' : (l.eaten_pct >= 80 ? '#4ade80' : l.eaten_pct >= 50 ? '#facc15' : '#f87171');
           html += '<span style="font-size:12px;color:' + eatColor + ';">' + l.eaten_pct + '%</span>';
         } else {
           html += '<span style="font-size:12px;color:#fbbf24;">0%</span>';
@@ -3457,7 +3471,7 @@ function closeCatDetailFoldSection(btn) {
     if (existingInput) return;
     var editDiv = document.createElement('div');
     editDiv.style.cssText = 'margin-top:6px;';
-    editDiv.innerHTML = renderLeftoverControls(logId, offeredG, 'log');
+    editDiv.innerHTML = renderLeftoverControls(logId, offeredG, 'log', false);
     row.appendChild(editDiv);
   };
 

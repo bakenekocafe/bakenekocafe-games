@@ -2904,9 +2904,10 @@
     var html = '';
     for (var i = 0; i < arr.length; i++) {
       var e = arr[i];
+      var pastSt = excretionPastRowClass(e.record_date);
       if (e.record_id) {
         var badgeSt = e.voice_input_id ? ' <small class="dim source-badge">音声</small>' : '';
-        html += '<div class="ov-ex-row" data-record-id="' + escAttr(String(e.record_id)) + '" data-hr-value="' + escAttr(e.value_raw == null ? '' : String(e.value_raw)) + '" data-hr-details="' + escAttr(e.details_slot == null ? '' : String(e.details_slot)) + '" data-hr-date="' + escAttr(e.record_date == null ? '' : String(e.record_date)) + '" data-hr-kind="stool">';
+        html += '<div class="ov-ex-row' + pastSt + '" data-record-id="' + escAttr(String(e.record_id)) + '" data-hr-value="' + escAttr(e.value_raw == null ? '' : String(e.value_raw)) + '" data-hr-details="' + escAttr(e.details_slot == null ? '' : String(e.details_slot)) + '" data-hr-date="' + escAttr(e.record_date == null ? '' : String(e.record_date)) + '" data-hr-kind="stool">';
         html += '<div class="ov-ex-display"><span class="ov-ex-text">' + esc(ovExcretionLineText(e)) + '</span>' + badgeSt;
         html += '<button type="button" class="btn btn-ov-hr-edit">編集</button>';
         html += '<button type="button" class="btn btn-ov-hr-del">削除</button></div>';

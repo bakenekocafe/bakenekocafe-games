@@ -23,6 +23,21 @@
     return new Date().toLocaleDateString('sv-SE', { timeZone: 'Asia/Tokyo' });
   }
 
+  /** 排泄 API の record_date を YYYY-MM-DD に正規化 */
+  function excretionRecordYmd(raw) {
+    if (raw == null || raw === '') return '';
+    var s = String(raw).trim();
+    if (s.length >= 10 && /^\d{4}-\d{2}-\d{2}/.test(s)) return s.slice(0, 10);
+    return '';
+  }
+
+  /** 当日以外の排便・排尿行（猫ごとカード内も項目ごとも共通） */
+  function excretionPastRowClass(recordDateRaw) {
+    var y = excretionRecordYmd(recordDateRaw);
+    if (!y) return '';
+    return y !== todayJstYmd() ? ' ov-ex-row-past' : '';
+  }
+
   /** JST の HH:mm */
   function nowJstHm() {
     return new Date().toLocaleTimeString('en-GB', {
@@ -2898,7 +2913,7 @@
         html += excretionEditBlockStool();
         html += '</div>';
       } else if (e.voice_input_id) {
-        html += '<div class="ov-ex-row ov-ex-voice-only" data-voice-input-id="' + escAttr(String(e.voice_input_id)) + '" data-hr-value="' + escAttr(e.value_raw == null ? '' : String(e.value_raw)) + '" data-hr-details="' + escAttr(e.details_slot == null ? '' : String(e.details_slot)) + '" data-hr-date="' + escAttr(e.record_date == null ? '' : String(e.record_date)) + '" data-hr-kind="stool">';
+        html += '<div class="ov-ex-row ov-ex-voice-only' + pastSt + '" data-voice-input-id="' + escAttr(String(e.voice_input_id)) + '" data-hr-value="' + escAttr(e.value_raw == null ? '' : String(e.value_raw)) + '" data-hr-details="' + escAttr(e.details_slot == null ? '' : String(e.details_slot)) + '" data-hr-date="' + escAttr(e.record_date == null ? '' : String(e.record_date)) + '" data-hr-kind="stool">';
         html += '<div class="ov-ex-display"><span class="ov-ex-text">' + esc(ovExcretionLineText(e)) + '</span> <small class="dim source-badge">音声</small>';
         html += '<button type="button" class="btn btn-ov-hr-edit">編集</button>';
         html += '<button type="button" class="btn btn-ov-hr-del">削除</button></div>';
@@ -2915,16 +2930,17 @@
     var html = '';
     for (var i = 0; i < arr.length; i++) {
       var e = arr[i];
+      var pastUr = excretionPastRowClass(e.record_date);
       if (e.record_id) {
         var badgeUr = e.voice_input_id ? ' <small class="dim source-badge">音声</small>' : '';
-        html += '<div class="ov-ex-row" data-record-id="' + escAttr(String(e.record_id)) + '" data-hr-value="' + escAttr(e.value_raw == null ? '' : String(e.value_raw)) + '" data-hr-details="' + escAttr(e.details_slot == null ? '' : String(e.details_slot)) + '" data-hr-date="' + escAttr(e.record_date == null ? '' : String(e.record_date)) + '" data-hr-kind="urine">';
+        html += '<div class="ov-ex-row' + pastUr + '" data-record-id="' + escAttr(String(e.record_id)) + '" data-hr-value="' + escAttr(e.value_raw == null ? '' : String(e.value_raw)) + '" data-hr-details="' + escAttr(e.details_slot == null ? '' : String(e.details_slot)) + '" data-hr-date="' + escAttr(e.record_date == null ? '' : String(e.record_date)) + '" data-hr-kind="urine">';
         html += '<div class="ov-ex-display"><span class="ov-ex-text">' + esc(ovExcretionLineText(e)) + '</span>' + badgeUr;
         html += '<button type="button" class="btn btn-ov-hr-edit">編集</button>';
         html += '<button type="button" class="btn btn-ov-hr-del">削除</button></div>';
         html += excretionEditBlockUrine();
         html += '</div>';
       } else if (e.voice_input_id) {
-        html += '<div class="ov-ex-row ov-ex-voice-only" data-voice-input-id="' + escAttr(String(e.voice_input_id)) + '" data-hr-value="' + escAttr(e.value_raw == null ? '' : String(e.value_raw)) + '" data-hr-details="' + escAttr(e.details_slot == null ? '' : String(e.details_slot)) + '" data-hr-date="' + escAttr(e.record_date == null ? '' : String(e.record_date)) + '" data-hr-kind="urine">';
+        html += '<div class="ov-ex-row ov-ex-voice-only' + pastUr + '" data-voice-input-id="' + escAttr(String(e.voice_input_id)) + '" data-hr-value="' + escAttr(e.value_raw == null ? '' : String(e.value_raw)) + '" data-hr-details="' + escAttr(e.details_slot == null ? '' : String(e.details_slot)) + '" data-hr-date="' + escAttr(e.record_date == null ? '' : String(e.record_date)) + '" data-hr-kind="urine">';
         html += '<div class="ov-ex-display"><span class="ov-ex-text">' + esc(ovExcretionLineText(e)) + '</span> <small class="dim source-badge">音声</small>';
         html += '<button type="button" class="btn btn-ov-hr-edit">編集</button>';
         html += '<button type="button" class="btn btn-ov-hr-del">削除</button></div>';

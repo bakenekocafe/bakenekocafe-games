@@ -577,6 +577,9 @@
       border-bottom: 1px dashed rgba(255,255,255,0.06);
     }
     .ov-ex-row:last-child { border-bottom: none; }
+    /* 排便・排尿: 当日以外の行は本文をグレー（cat.html 詳細の stool-row-past と同趣旨） */
+    .ov-ex-row.ov-ex-row-past .ov-ex-text { color: #94a3b8; }
+    .ov-ex-row.ov-ex-row-past .source-badge { color: #94a3b8 !important; opacity: 0.9; }
     .ov-ex-display {
       display: flex;
       flex-wrap: wrap;
@@ -1337,7 +1340,7 @@
   <script src="js/nyagi-boot-overlay.js?v=215"></script>
   <script src="js/login-gate.js?v=214"></script>
   <script src="js/app.js?v=214"></script>
-  <script src="js/cats-overview.js?v=274"></script>
+  <script src="js/cats-overview.js?v=275"></script>
   <script src="js/voice-console.js?v=214"></script>
 </body>
 </html>

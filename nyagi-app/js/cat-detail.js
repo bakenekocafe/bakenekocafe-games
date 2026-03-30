@@ -2998,8 +2998,8 @@ function closeCatDetailFoldSection(btn) {
     for (var j = 0; j < rows.length; j++) {
       var l = rows[j];
       var yMuted = cdLeftoverPctIsNonZero(l.eaten_pct);
-      var yDim = yMuted ? '#94a3b8' : 'var(--text-dim)';
-      h += '<div style="background:var(--surface);border-radius:8px;padding:8px 12px;margin-bottom:6px;display:flex;justify-content:space-between;align-items:center;gap:8px;' + (yMuted ? 'color:#94a3b8;' : '') + '">';
+      var yDim = yMuted ? '#6b7280' : 'var(--text-dim)';
+      h += '<div style="background:var(--surface);border-radius:8px;padding:8px 12px;margin-bottom:6px;display:flex;justify-content:space-between;align-items:center;gap:8px;' + (yMuted ? 'color:#6b7280;' : '') + '">';
       h += '<div style="font-size:13px;flex:1;min-width:0;">' + escapeHtml(slotLabel(l.meal_slot)) + ' · ' + escapeHtml(l.food_name || '—');
       if (l.offered_g) h += ' <span style="color:' + yDim + ';">' + l.offered_g + 'g</span>';
       if (l.eaten_pct !== null && l.eaten_pct !== undefined) h += ' <span style="color:' + yDim + ';">' + l.eaten_pct + '%</span>';
@@ -3057,11 +3057,12 @@ function closeCatDetailFoldSection(btn) {
       var offG = (log && log.offered_g) || (plan && plan.amount_g) || 0;
 
       var isLoMuted = !!(log && cdLeftoverPctIsNonZero(log.eaten_pct));
-      var loOk = isLoMuted ? '#94a3b8' : '#4ade80';
-      h += '<div style="background:var(--surface);border-radius:8px;padding:10px 12px;margin-bottom:6px;' + (isLoMuted ? 'color:#94a3b8;' : '') + '">';
+      var loMutedCol = '#6b7280';
+      var loOk = isLoMuted ? loMutedCol : '#4ade80';
+      h += '<div style="background:var(--surface);border-radius:8px;padding:10px 12px;margin-bottom:6px;' + (isLoMuted ? 'color:' + loMutedCol + ';' : '') + '">';
       h += '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;">';
       h += '<div style="font-size:13px;font-weight:600;">' + escapeHtml(foodName) + '</div>';
-      if (offG) h += '<span style="font-size:12px;color:' + (isLoMuted ? '#94a3b8' : 'var(--text-dim)') + ';">提供: ' + offG + 'g</span>';
+      if (offG) h += '<span style="font-size:12px;color:' + (isLoMuted ? loMutedCol : 'var(--text-dim)') + ';">提供: ' + offG + 'g</span>';
       h += '</div>';
 
       if (log && log.eaten_pct !== null && log.eaten_pct !== undefined && log.eaten_pct < 100) {
@@ -3103,7 +3104,7 @@ function closeCatDetailFoldSection(btn) {
 
   function renderLeftoverControls(id, offG, mode, labelMuted) {
     var prefix = mode === 'plan' ? 'plan' : 'log';
-    var labCol = labelMuted ? '#94a3b8' : 'var(--text-dim)';
+    var labCol = labelMuted ? '#6b7280' : 'var(--text-dim)';
     var h = '<div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;">';
     h += '<label style="font-size:12px;color:' + labCol + ';">残り:</label>';
     h += '<input type="number" id="leftover-g-' + prefix + '-' + id + '" placeholder="g" min="0" step="0.1" style="width:60px;font-size:13px;padding:4px 6px;border:1px solid rgba(255,255,255,0.15);border-radius:6px;background:var(--surface-alt);color:var(--text-main);"';
@@ -3333,13 +3334,14 @@ function closeCatDetailFoldSection(btn) {
             var typeTag = p.plan_type === 'preset' ? '<span style="font-size:9px;background:rgba(168,139,250,0.2);color:#c4b5fd;padding:1px 4px;border-radius:3px;margin-right:4px;">プリセット</span>' :
               p.plan_type === 'nyagi' ? '<span style="font-size:9px;background:rgba(74,222,128,0.2);color:#4ade80;padding:1px 4px;border-radius:3px;margin-right:4px;">NYAGI</span>' : '';
 
-            html += '<div style="display:flex;align-items:center;gap:6px;padding:4px 0;border-bottom:1px solid rgba(255,255,255,0.04);">';
+            var cdFeedRowMuted = isFed && fedLog && cdLeftoverPctIsNonZero(fedLog.eaten_pct);
+            html += '<div class="' + (cdFeedRowMuted ? 'cd-feed-plan-row--eaten-recorded ' : '') + '" style="display:flex;align-items:center;gap:6px;padding:4px 0;border-bottom:1px solid rgba(255,255,255,0.04);">';
 
             if (isFed) {
               var undoTitle = fedList.length > 1
                 ? '取り消し（同日の記録が' + fedList.length + '件あります。確認のうえまとめて削除）'
                 : 'もう一度タップで取り消し' + (fedLog.served_time ? '（' + String(fedLog.served_time) + '）' : '');
-              html += '<button type="button" onclick="undoFedMany(\'' + undoIdCsv + '\')" style="font-size:18px;background:none;border:none;cursor:pointer;padding:0;" title="' + escapeHtml(undoTitle) + '">✅' + (fedList.length > 1 ? '<span style="font-size:10px;vertical-align:super;">' + fedList.length + '</span>' : '') + '</button>';
+              html += '<button type="button" onclick="undoFedMany(\'' + undoIdCsv + '\')" style="font-size:18px;background:none;border:none;cursor:pointer;padding:0;' + (cdFeedRowMuted ? 'filter:grayscale(0.35);opacity:0.9;' : '') + '" title="' + escapeHtml(undoTitle) + '">✅' + (fedList.length > 1 ? '<span style="font-size:10px;vertical-align:super;">' + fedList.length + '</span>' : '') + '</button>';
             } else {
               html += '<button type="button" onclick=\'openQuickFedModal(' + p.id + ',' + JSON.stringify(String(p.food_name || '')) + ',' + (p.amount_g != null && !isNaN(Number(p.amount_g)) ? Number(p.amount_g) : 'null') + ')\' style="font-size:18px;background:none;border:none;cursor:pointer;padding:0;" title="あげた！">⬜</button>';
             }
@@ -3357,12 +3359,12 @@ function closeCatDetailFoldSection(btn) {
               html += '<div style="font-size:10px;color:var(--text-dim);margin-top:3px;line-height:1.35;padding:4px 6px;background:rgba(255,255,255,0.04);border-radius:4px;">📝 ' + escapeHtml(String(p.notes).trim()) + '</div>';
             }
             if (isFed && fedLog.eaten_pct !== null && fedLog.eaten_pct !== undefined && fedLog.eaten_pct < 100) {
-              var cFed = cdLeftoverPctIsNonZero(fedLog.eaten_pct) ? '#94a3b8' : '#facc15';
+              var cFed = cdLeftoverPctIsNonZero(fedLog.eaten_pct) ? '#6b7280' : '#facc15';
               html += '<div style="font-size:10px;color:' + cFed + ';">食べた量: ' + fedLog.eaten_pct + '%</div>';
             } else if (isFed && (fedLog.eaten_pct === null || fedLog.eaten_pct === undefined)) {
               html += '<div style="font-size:10px;color:#fbbf24;">食べた量: 0%（未確認・🍽で入力）</div>';
             } else if (isFed && fedLog.eaten_pct === 100) {
-              var c100 = cdLeftoverPctIsNonZero(100) ? '#94a3b8' : '#4ade80';
+              var c100 = cdLeftoverPctIsNonZero(100) ? '#6b7280' : '#4ade80';
               html += '<div style="font-size:10px;color:' + c100 + ';">食べた量: 100%（完食）</div>';
             }
             html += '</div>';
@@ -3408,7 +3410,7 @@ function closeCatDetailFoldSection(btn) {
         html += '</span>';
         html += '<span style="display:flex;align-items:center;gap:8px;">';
         if (l.eaten_pct !== null && l.eaten_pct !== undefined) {
-          var eatColor = cdLeftoverPctIsNonZero(l.eaten_pct) ? '#94a3b8' : (l.eaten_pct >= 80 ? '#4ade80' : l.eaten_pct >= 50 ? '#facc15' : '#f87171');
+          var eatColor = cdLeftoverPctIsNonZero(l.eaten_pct) ? '#6b7280' : (l.eaten_pct >= 80 ? '#4ade80' : l.eaten_pct >= 50 ? '#facc15' : '#f87171');
           html += '<span style="font-size:12px;color:' + eatColor + ';">' + l.eaten_pct + '%</span>';
         } else {
           html += '<span style="font-size:12px;color:#fbbf24;">0%</span>';

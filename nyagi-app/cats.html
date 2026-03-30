@@ -508,6 +508,15 @@
       padding-top: 5px;
     }
     .ov-feed-line:first-child { border-top: none; padding-top: 0; }
+    /* 摂取率が 0 以外で記録されている行：献立名・枠までグレー（％だけでは .dim と差が付かないため） */
+    .ov-feed-line.ov-feed-line--has-eaten-pct .ov-feed-slot,
+    .ov-feed-line.ov-feed-line--has-eaten-pct .ov-feed-menu {
+      color: #6b7280 !important;
+    }
+    .ov-feed-line.ov-feed-line--has-eaten-pct .ov-feed-status,
+    .ov-feed-line.ov-feed-line--has-eaten-pct .ov-feed-status .dim {
+      color: #6b7280 !important;
+    }
     .ov-feed-slot { font-weight: 700; min-width: 2.2em; color: rgba(255,255,255,0.88); flex-shrink: 0; }
     .ov-feed-menu { flex: 1 1 100px; min-width: 0; line-height: 1.35; font-size: 12px; }
     .ov-feed-status {
@@ -1340,7 +1349,7 @@
   <script src="js/nyagi-boot-overlay.js?v=215"></script>
   <script src="js/login-gate.js?v=214"></script>
   <script src="js/app.js?v=214"></script>
-  <script src="js/cats-overview.js?v=277"></script>
+  <script src="js/cats-overview.js?v=278"></script>
   <script src="js/voice-console.js?v=214"></script>
 </body>
 </html>

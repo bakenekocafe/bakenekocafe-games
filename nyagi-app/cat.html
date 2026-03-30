@@ -1007,6 +1007,10 @@
     }
     .fold-toggle:active { opacity: 0.6; }
 
+    /* 給餌プラン行：摂取率が 0 以外で記録済みのとき本文をグレー（0%未確認は通常） */
+    .cd-feed-plan-row--eaten-recorded { color: #6b7280; }
+    .cd-feed-plan-row--eaten-recorded .btn-edit-small { color: var(--text-main); }
+
     /* ── お薬タブ ── */
     .med-tabs {
       display: flex; gap: 0; margin-bottom: 12px;
@@ -1884,7 +1888,7 @@
   <script src="js/login-gate.js?v=213"></script>
   <script src="js/app.js?v=213"></script>
   <script src="js/nyagi-scroll-restore.js?v=217"></script>
-  <script src="js/cat-detail.js?v=261"></script>
+  <script src="js/cat-detail.js?v=262"></script>
   <script src="js/voice-console.js?v=213"></script>
 </body>
 </html>

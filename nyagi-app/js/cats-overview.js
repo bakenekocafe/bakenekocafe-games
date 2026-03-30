@@ -878,11 +878,11 @@
     }
 
     var isLoMuted = !!(log && ovFeedPctNonZero(log.eaten_pct));
-    var loCol = isLoMuted ? '#94a3b8' : '#4ade80';
-    var html = '<div style="background:rgba(0,0,0,.04);border-radius:8px;padding:8px 10px;margin-bottom:6px;' + (isLoMuted ? 'color:#94a3b8;' : '') + '">';
+    var loCol = isLoMuted ? '#6b7280' : '#4ade80';
+    var html = '<div style="background:rgba(0,0,0,.04);border-radius:8px;padding:8px 10px;margin-bottom:6px;' + (isLoMuted ? 'color:#6b7280;' : '') + '">';
     html += '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px;">';
     html += '<span style="font-weight:600;font-size:13px;">' + esc(foodName) + '</span>';
-    if (offG) html += '<span class="dim" style="font-size:11px;' + (isLoMuted ? 'color:#94a3b8;' : '') + '">提供 ' + esc(String(offG)) + 'g</span>';
+    if (offG) html += '<span class="dim" style="font-size:11px;' + (isLoMuted ? 'color:#6b7280;' : '') + '">提供 ' + esc(String(offG)) + 'g</span>';
     html += '</div>';
 
     if (log && log.eaten_pct !== null && log.eaten_pct !== undefined && log.eaten_pct < 100) {
@@ -896,7 +896,7 @@
     }
 
     html += '<div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;margin-top:4px;">';
-    html += '<label class="dim" style="font-size:11px;' + (isLoMuted ? 'color:#94a3b8;' : '') + '">残り</label>';
+    html += '<label class="dim" style="font-size:11px;' + (isLoMuted ? 'color:#6b7280;' : '') + '">残り</label>';
     html += '<input type="number" id="' + escAttr(inputId) + '" class="form-input" style="width:64px;font-size:12px;padding:2px 4px;' + (isLoMuted ? 'color:var(--text-main);' : '') + '" min="0" step="0.1" placeholder="g"';
     if (offG) html += ' max="' + escAttr(String(offG)) + '"';
     html += ' value="' + escAttr(prefillLeft) + '">';
@@ -946,7 +946,7 @@
       if (pct) {
         var epY = lg.eaten_pct != null && lg.eaten_pct !== '' ? Number(lg.eaten_pct) : NaN;
         var pctGray = !isNaN(epY) && epY !== 0;
-        h += '<span class="dim" style="' + (pctGray ? 'color:#94a3b8 !important;' : '') + '">' + esc(pct) + '</span> ';
+        h += '<span class="dim" style="' + (pctGray ? 'color:#6b7280 !important;' : '') + '">' + esc(pct) + '</span> ';
       }
       if (st) h += '<span class="dim" style="margin-right:4px;">🕐' + esc(st) + '</span>';
       h += '<button type="button" class="btn btn-outline btn-ov-feed-undofed" data-log-id="' + escAttr(lid) + '">取消</button>';
@@ -3293,9 +3293,7 @@
             }
             if (fedTm) st += '<span class="dim" style="margin-left:3px;">🕐' + esc(fedTm) + '</span> ';
             if (p.eaten_pct_today != null && p.eaten_pct_today !== '') {
-              var epF = Number(p.eaten_pct_today);
-              var pctSty = (!isNaN(epF) && epF !== 0) ? 'color:#94a3b8 !important;' : '';
-              st += '<span class="dim" style="' + pctSty + '">' + esc(String(p.eaten_pct_today)) + '%</span> ';
+              st += '<span class="dim">' + esc(String(p.eaten_pct_today)) + '%</span> ';
             } else {
               st += '<span class="dim" style="color:#fbbf24;">0%</span> ';
             }
@@ -3308,7 +3306,12 @@
           } else {
             st = '<span class="feed-pending">⬜</span> ';
           }
-          inner += '<div class="ov-feed-line"><span class="ov-feed-slot">' + feedingMealSlotLabelJp(p.meal_slot) + '</span><span class="ov-feed-menu">' + menu + '</span><span class="ov-feed-status">' + st + '</span></div>';
+          var linePctClass = '';
+          if (p.fed_today) {
+            var epRow = (p.eaten_pct_today != null && p.eaten_pct_today !== '') ? Number(p.eaten_pct_today) : NaN;
+            if (!isNaN(epRow) && epRow !== 0) linePctClass = ' ov-feed-line--has-eaten-pct';
+          }
+          inner += '<div class="ov-feed-line' + linePctClass + '"><span class="ov-feed-slot">' + feedingMealSlotLabelJp(p.meal_slot) + '</span><span class="ov-feed-menu">' + menu + '</span><span class="ov-feed-status">' + st + '</span></div>';
           if (p.notes && String(p.notes).trim()) {
             inner += '<div style="font-size:10px;color:var(--text-dim);margin:-2px 0 6px 0;padding:4px 8px 4px 28px;background:rgba(255,255,255,0.04);border-radius:4px;line-height:1.35;">📝 ' + esc(String(p.notes).trim()) + '</div>';
           }

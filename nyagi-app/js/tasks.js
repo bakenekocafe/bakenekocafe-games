@@ -1831,6 +1831,73 @@
       lines.push('');
     }
 
+    var clinPrev = closeDayData.clinic_close_day;
+    if (clinPrev) {
+      lines.push('🏥 病院・予定（今後14日以内の next_due）');
+      if (!clinPrev.active_cat_count) {
+        lines.push('  在籍対象の猫がありません');
+      } else {
+        var cws = clinPrev.window_label_start;
+        var cwe = clinPrev.window_label_end;
+        var cwr = '';
+        if (cws && cwe && String(cws).length >= 10 && String(cwe).length >= 10) {
+          cwr = previewFmtMd(cws) + '〜' + previewFmtMd(cwe);
+        }
+        var cup = clinPrev.upcoming || [];
+        if (cup.length === 0) {
+          lines.push('  ' + (cwr ? '（' + cwr + '）' : '') + ' 期間内の予定日登録なし');
+        } else {
+          lines.push('  予定 ' + (cwr || ''));
+          for (var ci = 0; ci < cup.length && ci < CLOSE_PREVIEW_MAX; ci++) {
+            var cu = cup[ci];
+            var cln = '  • ' + cu.cat_name + ' — ' + cu.type_label + ' ' + previewFmtMd(cu.next_due);
+            if (cu.days_from_close != null && cu.days_from_close >= 0) cln += '（あと' + cu.days_from_close + '日）';
+            if (!cu.booked_date || String(cu.booked_date).trim() === '') cln += ' ⚠予約枠未記入';
+            if (cu.value_short) cln += ' — ' + cu.value_short;
+            lines.push(cln);
+          }
+          if (cup.length > CLOSE_PREVIEW_MAX) lines.push('  … 他' + (cup.length - CLOSE_PREVIEW_MAX) + '件');
+          var uwc = clinPrev.upcoming_without_booking_count || 0;
+          if (uwc > 0) lines.push('  ※ booked_date 未記入: ' + uwc + '件');
+        }
+        var cnf = clinPrev.cats_without_future_due || [];
+        if (cnf.length > 0) {
+          lines.push('  本日以降の next_due 未登録の猫:');
+          for (var cj = 0; cj < cnf.length && cj < CLOSE_PREVIEW_MAX; cj++) {
+            lines.push('    • ' + cnf[cj].cat_name);
+          }
+          if (cnf.length > CLOSE_PREVIEW_MAX) lines.push('    … 他' + (cnf.length - CLOSE_PREVIEW_MAX) + '頭');
+        } else {
+          lines.push('  本日以降の next_due 未登録の猫: なし');
+        }
+        lines.push('  本日の病院記録:');
+        var crt = clinPrev.clinic_records_today || [];
+        if (crt.length === 0) {
+          lines.push('    なし');
+        } else {
+          for (var ck = 0; ck < crt.length && ck < CLOSE_PREVIEW_MAX; ck++) {
+            var cr = crt[ck];
+            var crl = '    • ' + cr.cat_name + ' — ' + cr.type_label + (cr.value_short ? ' — ' + cr.value_short : '');
+            if (cr.next_due) crl += ' /次回 ' + previewFmtMd(cr.next_due);
+            lines.push(crl);
+          }
+          if (crt.length > CLOSE_PREVIEW_MAX) lines.push('    … 他' + (crt.length - CLOSE_PREVIEW_MAX) + '件');
+        }
+        lines.push('  本日付け注意事項:');
+        var cnt = clinPrev.cat_notes_today || [];
+        if (cnt.length === 0) {
+          lines.push('    なし');
+        } else {
+          for (var cq = 0; cq < cnt.length && cq < CLOSE_PREVIEW_MAX; cq++) {
+            var cqn = cnt[cq];
+            lines.push('    • ' + cqn.cat_name + ' [' + (cqn.category || '') + '] ' + (cqn.note_short || ''));
+          }
+          if (cnt.length > CLOSE_PREVIEW_MAX) lines.push('    … 他' + (cnt.length - CLOSE_PREVIEW_MAX) + '件');
+        }
+      }
+      lines.push('');
+    }
+
     if (oev2.length > 0) {
       lines.push('📅 継続追跡中のイベント（スキップ対象外）:');
       for (var oi = 0; oi < oev2.length && oi < CLOSE_PREVIEW_MAX; oi++) {

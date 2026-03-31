@@ -1785,6 +1785,52 @@
       lines.push('');
     }
 
+    var vomPrev = closeDayData.vomiting_close_day;
+    if (vomPrev) {
+      lines.push('🤮 はき戻し（嘔吐・関連観察）');
+      var vpc = vomPrev.per_cat || [];
+      var vr = '';
+      if (vomPrev.week_start && vomPrev.week_end && String(vomPrev.week_start).length >= 10 && String(vomPrev.week_end).length >= 10) {
+        vr = previewFmtMd(vomPrev.week_start) + '〜' + previewFmtMd(vomPrev.week_end);
+      }
+      if (vpc.length === 0) {
+        lines.push('  直近7日間' + (vr ? '（' + vr + '）' : '') + '：記録なし');
+        lines.push('  本日の記録：なし');
+      } else {
+        lines.push('  直近7日間' + (vr ? '（' + vr + '）' : '') + ' 猫別・記録件数');
+        for (var vi = 0; vi < vpc.length && vi < CLOSE_PREVIEW_MAX; vi++) {
+          var vc = vpc[vi];
+          lines.push('  • ' + vc.cat_name + ': ' + vc.week_count + '件（' + vc.distinct_days + '日に記録）');
+        }
+        if (vpc.length > CLOSE_PREVIEW_MAX) lines.push('  … 他' + (vpc.length - CLOSE_PREVIEW_MAX) + '頭');
+        var vToday = [];
+        for (var vj = 0; vj < vpc.length; vj++) {
+          var vcat = vpc[vj];
+          if (vcat.today_count > 0) {
+            var vt = vcat.cat_name + '（' + vcat.today_count + '件）';
+            if (vcat.streak_ending_close >= 2) {
+              vt += ' — ' + vcat.streak_ending_close + '日連続（終了日まで）';
+              var vsd = vcat.streak_dates_ymd || [];
+              if (vsd.length >= 2) {
+                vt += ' ' + previewFmtMd(vsd[0]) + '〜' + previewFmtMd(vsd[vsd.length - 1]);
+              }
+            }
+            vToday.push(vt);
+          }
+        }
+        if (vToday.length > 0) {
+          lines.push('  本日はき戻し記録あり:');
+          for (var vk = 0; vk < vToday.length && vk < CLOSE_PREVIEW_MAX; vk++) {
+            lines.push('    • ' + vToday[vk]);
+          }
+          if (vToday.length > CLOSE_PREVIEW_MAX) lines.push('    … 他' + (vToday.length - CLOSE_PREVIEW_MAX) + '頭');
+        } else {
+          lines.push('  本日はき戻し記録あり: なし');
+        }
+      }
+      lines.push('');
+    }
+
     if (oev2.length > 0) {
       lines.push('📅 継続追跡中のイベント（スキップ対象外）:');
       for (var oi = 0; oi < oev2.length && oi < CLOSE_PREVIEW_MAX; oi++) {

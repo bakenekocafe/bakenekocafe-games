@@ -2460,7 +2460,6 @@
 
   var credentials = null;
   var catsData = [];
-  var locationTasksToday = { done: 0, total: 0, items: [] };
   var currentMode = 'perCat';
   var currentLocationId = null;
   var currentStatusId = null;
@@ -2745,7 +2744,6 @@
       .then(function (data) {
         if (seq !== _fetchSeq) return;
         catsData = data.cats || [];
-        locationTasksToday = data.location_tasks_today || { done: 0, total: 0, items: [] };
         render();
         _initialLoadDone = true;
         if (window.NyagiBootOverlay) window.NyagiBootOverlay.hideForce();
@@ -3072,14 +3070,6 @@
       '<a href="' + href + '" class="item-cat-name item-cat-link">' + alertDot(c.alert_level) + esc(c.name) + '</a>' +
       '<div class="item-values">' + valuesHtml + '</div>' +
       editBlock +
-      '</div>';
-  }
-
-  /** 猫未紐付けタスク（イベント準備・拠点共通など）用の1行 */
-  function itemRowLocationTasks(valuesHtml) {
-    return '<div class="item-row item-row-editable">' +
-      '<span class="item-cat-name" style="text-decoration:none;cursor:default;color:var(--text-dim);">📌 拠点共通</span>' +
-      '<div class="item-values">' + valuesHtml + '</div>' +
       '</div>';
   }
 
@@ -3546,27 +3536,8 @@
 
   function renderItemCard_Tasks() {
     var html = '<div class="item-card">';
-    html += '<div class="item-card-title">✅ タスク</div>';
+    html += '<div class="item-card-title">✅ 猫関連付けタスク</div>';
     html += '<div class="item-card-body">';
-    var lt = locationTasksToday || { done: 0, total: 0, items: [] };
-    var ltItems = lt.items || [];
-    if (lt.total > 0) {
-      var locTaskVals = '<span class="' + (lt.done >= lt.total ? 'score-color-green' : lt.done > 0 ? 'score-color-yellow' : 'score-color-red') + '" style="font-weight:700;">' + (lt.done >= lt.total ? '✅' : '⏳') + ' ' + lt.done + '/' + lt.total + '</span>';
-      locTaskVals += ' <small class="dim" style="font-weight:500;">（猫なし・イベント等）</small>';
-      for (var lj = 0; lj < ltItems.length; lj++) {
-        var lit = ltItems[lj];
-        var ltimeStr = '';
-        if (lit.due_time) {
-          var lds = String(lit.due_time);
-          ltimeStr = '<span class="dim" style="margin-right:4px;">' + esc(lds.length >= 5 ? lds.slice(0, 5) : lds) + '</span>';
-        }
-        locTaskVals += '<div class="ov-task-line"><div class="ov-task-head">' + ltimeStr + ovHtmlTaskScheduledIf(lit) + '<span class="ov-task-title">' + esc(lit.title) + '</span></div>' +
-          '<div class="ov-task-actions">' +
-          '<button type="button" class="btn btn-ov-task-done" data-task-id="' + escAttr(String(lit.id)) + '">完了</button>' +
-          '<button type="button" class="btn btn-ov-task-skip" data-task-id="' + escAttr(String(lit.id)) + '">スキップ</button></div></div>';
-      }
-      html += itemRowLocationTasks('<div class="item-values-medcol">' + locTaskVals + '</div>');
-    }
     for (var i = 0; i < catsData.length; i++) {
       var c = catsData[i];
       var tasks = c.tasks_today || { done: 0, total: 0, items: [] };

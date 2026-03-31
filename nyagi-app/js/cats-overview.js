@@ -3538,30 +3538,30 @@
     var html = '<div class="item-card">';
     html += '<div class="item-card-title">✅ 猫関連付けタスク</div>';
     html += '<div class="item-card-body">';
+    var anyCatWithTasks = false;
     for (var i = 0; i < catsData.length; i++) {
       var c = catsData[i];
       var tasks = c.tasks_today || { done: 0, total: 0, items: [] };
       var titems = tasks.items || [];
-
-      var taskVals = '';
-      if (tasks.total === 0) {
-        taskVals = '<span class="dim">なし</span>';
-      } else {
-        taskVals = '<span class="' + (tasks.done >= tasks.total ? 'score-color-green' : tasks.done > 0 ? 'score-color-yellow' : 'score-color-red') + '" style="font-weight:700;">' + (tasks.done >= tasks.total ? '✅' : '⏳') + ' ' + tasks.done + '/' + tasks.total + '</span>';
-        for (var j = 0; j < titems.length; j++) {
-          var it = titems[j];
-          var timeStr = '';
-          if (it.due_time) {
-            var ds = String(it.due_time);
-            timeStr = '<span class="dim" style="margin-right:4px;">' + esc(ds.length >= 5 ? ds.slice(0, 5) : ds) + '</span>';
-          }
-          taskVals += '<div class="ov-task-line"><div class="ov-task-head">' + timeStr + ovHtmlTaskScheduledIf(it) + '<span class="ov-task-title">' + esc(it.title) + '</span></div>' +
-            '<div class="ov-task-actions">' +
-            '<button type="button" class="btn btn-ov-task-done" data-task-id="' + escAttr(String(it.id)) + '">完了</button>' +
-            '<button type="button" class="btn btn-ov-task-skip" data-task-id="' + escAttr(String(it.id)) + '">スキップ</button></div></div>';
+      if ((tasks.total || 0) === 0 && (!titems || titems.length === 0)) continue;
+      anyCatWithTasks = true;
+      var taskVals = '<span class="' + (tasks.done >= tasks.total ? 'score-color-green' : tasks.done > 0 ? 'score-color-yellow' : 'score-color-red') + '" style="font-weight:700;">' + (tasks.done >= tasks.total ? '✅' : '⏳') + ' ' + tasks.done + '/' + tasks.total + '</span>';
+      for (var j = 0; j < titems.length; j++) {
+        var it = titems[j];
+        var timeStr = '';
+        if (it.due_time) {
+          var ds = String(it.due_time);
+          timeStr = '<span class="dim" style="margin-right:4px;">' + esc(ds.length >= 5 ? ds.slice(0, 5) : ds) + '</span>';
         }
+        taskVals += '<div class="ov-task-line"><div class="ov-task-head">' + timeStr + ovHtmlTaskScheduledIf(it) + '<span class="ov-task-title">' + esc(it.title) + '</span></div>' +
+          '<div class="ov-task-actions">' +
+          '<button type="button" class="btn btn-ov-task-done" data-task-id="' + escAttr(String(it.id)) + '">完了</button>' +
+          '<button type="button" class="btn btn-ov-task-skip" data-task-id="' + escAttr(String(it.id)) + '">スキップ</button></div></div>';
       }
       html += itemRowEditable(c, '<div class="item-values-medcol">' + taskVals + '</div>', '');
+    }
+    if (!anyCatWithTasks) {
+      html += '<div class="dim" style="padding:12px;text-align:center;">本日、表示する猫関連付けタスクがある猫はいません</div>';
     }
     html += '</div></div>';
     return html;

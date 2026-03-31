@@ -13,7 +13,7 @@
   <meta name="theme-color" content="#1a1a2e">
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-  <link rel="stylesheet" href="style.css?v=209">
+  <link rel="stylesheet" href="style.css?v=214">
   <script src="js/nyagi-fixed-header.js?v=209" defer></script>
   <script src="js/nyagi-cache-clear.js?v=209" defer></script>
   <link rel="stylesheet" href="voice-console.css?v=214">
@@ -1160,6 +1160,7 @@
       100% { box-shadow: 0 0 0 0 rgba(167,139,250,0); }
     }
     .cat-nav-highlight { animation: catNavHL 1.5s ease-out forwards; border-radius: 8px; }
+
   </style>
 </head>
 <body>
@@ -1189,6 +1190,9 @@
       <button id="btnPerCat" class="active">猫ごと</button>
       <button id="btnPerItem">項目ごと</button>
     </div>
+    <div style="margin:0 0 12px;">
+      <button type="button" class="btn btn-primary" id="btnOvNewCat" style="width:100%;">＋ 新しい猫を登録</button>
+    </div>
     <div id="cardArea"></div>
 
     <div class="footer-actions">
@@ -1200,6 +1204,38 @@
     &copy; BAKENEKO GAMES
   </div>
   </div><!-- .page-scroll -->
+
+  <!-- 新規猫登録 -->
+  <div id="ovNewCatModal" class="modal-overlay">
+    <div class="modal-box">
+      <div class="modal-title">🐾 新しい猫を登録</div>
+      <p class="dim" style="font-size:11px;line-height:1.45;margin:-8px 0 12px;">名前と所属を入れて保存すると、他の猫と同様に一覧・詳細で扱えます。内部IDは自動で採番されます。</p>
+      <div class="form-group">
+        <label class="form-label" for="ovNewCatName">名前 <span style="color:#f87171">*</span></label>
+        <input type="text" id="ovNewCatName" class="form-input" placeholder="例: みけ" maxlength="80" autocomplete="off">
+      </div>
+      <div class="form-group">
+        <label class="form-label" for="ovNewCatLocation">所属（拠点） <span style="color:#f87171">*</span></label>
+        <select id="ovNewCatLocation" class="form-select">
+          <option value="cafe">BAKENEKO CAFE</option>
+          <option value="nekomata">猫又療養所</option>
+          <option value="endo">遠藤宅</option>
+          <option value="azukari">預かり隊</option>
+        </select>
+      </div>
+      <div class="form-group">
+        <label class="form-label" for="ovNewCatSpecies">種別</label>
+        <select id="ovNewCatSpecies" class="form-select">
+          <option value="cat" selected>猫</option>
+          <option value="dog">犬</option>
+        </select>
+      </div>
+      <div class="modal-actions">
+        <button type="button" class="btn btn-outline" id="ovNewCatCancel">キャンセル</button>
+        <button type="button" class="btn btn-primary" id="ovNewCatSubmit">登録する</button>
+      </div>
+    </div>
+  </div>
 
   <!-- 給餌用モーダル（項目ごとカードから直接操作） -->
   <div id="ovPresetApplyModal" class="modal-overlay"></div>
@@ -1263,8 +1299,9 @@
         <input type="number" id="ovFlOfferedG" class="form-input" placeholder="例: 30" step="0.1" min="0">
       </div>
       <div class="form-group">
-        <label class="form-label">食べた割合 (%)</label>
-        <input type="number" id="ovFlEatenPct" class="form-input" placeholder="例: 90" min="0" max="100">
+        <label class="form-label">残した量 (g)</label>
+        <input type="number" id="ovFlLeftoverG" class="form-input" placeholder="例: 5" min="0" step="0.1">
+        <div class="form-hint" style="font-size:11px;color:var(--text-dim);margin-top:4px;line-height:1.4;">空欄＝摂取未入力。<b>0</b>＝完食。</div>
       </div>
       <div class="form-group">
         <label class="form-label">あげた時刻（JST）</label>
@@ -1319,8 +1356,8 @@
         <input type="number" id="ovElOfferedG" class="form-input" step="0.1" min="0">
       </div>
       <div class="form-group">
-        <label class="form-label">食べた割合 (%)</label>
-        <input type="number" id="ovElEatenPct" class="form-input" min="0" max="100" value="100">
+        <label class="form-label">残した量 (g)</label>
+        <input type="number" id="ovElLeftoverG" class="form-input" min="0" step="0.1" placeholder="0＝完食、空欄＝未入力">
       </div>
       <div class="form-group">
         <label class="form-label">あげた時刻（JST）</label>
@@ -1348,8 +1385,8 @@
   <script src="config.js?v=214"></script>
   <script src="js/nyagi-boot-overlay.js?v=215"></script>
   <script src="js/login-gate.js?v=214"></script>
-  <script src="js/app.js?v=214"></script>
-  <script src="js/cats-overview.js?v=278"></script>
+  <script src="js/app.js?v=218"></script>
+  <script src="js/cats-overview.js?v=292"></script>
   <script src="js/voice-console.js?v=214"></script>
 </body>
 </html>

@@ -13,7 +13,7 @@
   <meta name="theme-color" content="#1a1a2e">
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-  <link rel="stylesheet" href="style.css?v=209">
+  <link rel="stylesheet" href="style.css?v=214">
   <script src="js/nyagi-fixed-header.js?v=209" defer></script>
   <script src="js/nyagi-cache-clear.js?v=209" defer></script>
   <link rel="stylesheet" href="voice-console.css?v=213">
@@ -1079,6 +1079,7 @@
     .food-search-empty {
       padding: 12px 10px; font-size: 12px; color: var(--text-dim); text-align: center;
     }
+
   </style>
 </head>
 <body>
@@ -1216,8 +1217,9 @@
         <input type="number" id="flOfferedG" class="form-input" placeholder="例: 30" step="0.1" min="0" oninput="calcFeedingKcal()">
       </div>
       <div class="form-group">
-        <label class="form-label">食べた割合 (%)</label>
-        <input type="number" id="flEatenPct" class="form-input" placeholder="例: 90" min="0" max="100" oninput="calcFeedingKcal()">
+        <label class="form-label">残した量 (g)</label>
+        <input type="number" id="flLeftoverG" class="form-input" placeholder="例: 5" min="0" step="0.1" oninput="calcFeedingKcal()">
+        <div class="form-hint" style="font-size:11px;color:var(--text-dim);margin-top:4px;line-height:1.4;">空欄＝摂取未入力（従来どおり）。<b>0</b>＝完食。残りグラムを入れると摂取カロリーを自動計算します。</div>
       </div>
       <div id="flKcalPreview" style="font-size:12px;padding:6px 0;color:var(--accent);font-weight:700;display:none;"></div>
       <div class="form-group">
@@ -1886,9 +1888,9 @@
   <script src="config.js?v=213"></script>
   <script src="js/nyagi-boot-overlay.js?v=213"></script>
   <script src="js/login-gate.js?v=213"></script>
-  <script src="js/app.js?v=213"></script>
+  <script src="js/app.js?v=218"></script>
   <script src="js/nyagi-scroll-restore.js?v=217"></script>
-  <script src="js/cat-detail.js?v=262"></script>
+  <script src="js/cat-detail.js?v=273"></script>
   <script src="js/voice-console.js?v=213"></script>
 </body>
 </html>

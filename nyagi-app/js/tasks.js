@@ -21,6 +21,22 @@
     return new Date().toLocaleDateString('sv-SE', { timeZone: 'Asia/Tokyo' });
   }
 
+  /** input[type=date] 用 YYYY-MM-DD（無効・空なら JST 今日） */
+  function normalizeYmdForDateInput(raw) {
+    var s = String(raw || '').trim().slice(0, 10);
+    if (/^\d{4}-\d{2}-\d{2}$/.test(s)) return s;
+    return todayJstYmd();
+  }
+
+  /** 日付 input の値を YYYY-MM-DD または null（未入力） */
+  function optionalYmdFromInput(elementId) {
+    var el = document.getElementById(elementId);
+    if (!el) return null;
+    var s = String(el.value || '').trim().slice(0, 10);
+    if (/^\d{4}-\d{2}-\d{2}$/.test(s)) return s;
+    return null;
+  }
+
   function loadCredentials() {
     try {
       var stored = localStorage.getItem('nyagi_creds');
@@ -110,13 +126,12 @@
           if (!data || !data.staffId) { if (gateAlert) { gateAlert.textContent = 'パスワードが違います'; gateAlert.style.display = 'block'; } gateBtn.disabled = false; return; }
           var _cj = JSON.stringify({ adminKey: adminKey, staffId: data.staffId });
           if (window._nyagiSaveCreds) { window._nyagiSaveCreds(_cj); }
-          else { localStorage.setItem('nyagi_creds', _cj); }
+          else {           localStorage.setItem('nyagi_creds', _cj); }
           credentials = { adminKey: adminKey, staffId: data.staffId };
           loginGate.style.display = 'none';
           taskContent.style.display = 'block';
           var today = todayJstYmd();
           document.getElementById('filterDate').value = today;
-          document.getElementById('ntDueDate').value = today;
           loadCatList();
           loadStaffList();
           window.loadTasks();
@@ -193,7 +208,12 @@
     document.getElementById('tabMonitoring').classList.toggle('active', tab === 'monitoring');
     document.getElementById('tabTemplates').classList.toggle('active', tab === 'templates');
 
-    if (tab === 'templates') loadTemplates();
+    if (tab === 'templates') {
+      var fd = document.getElementById('filterDate');
+      var tg = document.getElementById('tmplGenerateDate');
+      if (tg && fd) tg.value = fd.value || todayJstYmd();
+      loadTemplates();
+    }
     if (tab === 'monitoring') loadMonitoringTasks();
     if (tab === 'projects') { currentProjectId = null; loadProjects(); }
   };
@@ -205,7 +225,9 @@
     ntTaskType.addEventListener('change', function () {
       var isMonitoring = this.value === 'monitoring';
       document.getElementById('ntExpiresGroup').style.display = isMonitoring ? 'block' : 'none';
-      document.getElementById('ntDateGroup').style.display = isMonitoring ? 'none' : 'block';
+      document.getElementById('ntDateGroup').style.display = 'block';
+      var ndg = document.getElementById('ntDeadlineGroup');
+      if (ndg) ndg.style.display = 'block';
       document.getElementById('ntTimeGroup').style.display = isMonitoring ? 'none' : 'block';
       var hint = document.getElementById('ntCatHint');
       if (hint) hint.style.display = isMonitoring ? 'block' : 'none';
@@ -391,11 +413,16 @@
     document.getElementById('taskListArea').innerHTML = html;
   }
 
-  /** イベントタスクで期限（暦日）が JST 今日より前なら期限切れバッジ用 */
+  /** イベントタスク: 一覧基準日から見た未解決経過日数（API event_days_open）または期限切れ表示 */
   function eventOverdueBadgeHtml(task) {
     if ((task.task_type || '') !== 'event') return '';
     if (task.status !== 'pending' && task.status !== 'in_progress') return '';
-    var dd = task.due_date ? String(task.due_date).slice(0, 10) : '';
+    var n = task.event_days_open;
+    if (n != null && Number(n) > 0) {
+      return '<span class="task-overdue-badge">未解決 ' + Number(n) + '日</span>';
+    }
+    var dRaw = task.deadline_date || task.due_date;
+    var dd = dRaw ? String(dRaw).slice(0, 10) : '';
     if (!dd || dd.length < 10) return '';
     if (dd >= todayJstYmd()) return '';
     return '<span class="task-overdue-badge">期限切れ</span>';
@@ -425,12 +452,22 @@
     return mo + '/' + d + '（' + w + '）';
   }
 
+  /** 指定実行日（scheduled_date）。値があるときだけ一覧に出す */
+  function taskScheduledDateMetaHtml(task) {
+    var sd = task.scheduled_date ? String(task.scheduled_date).slice(0, 10) : '';
+    if (sd.length !== 10 || sd.charAt(4) !== '-') return '';
+    var label = formatTaskDueDateForList(sd);
+    if (!label) return '';
+    return '<span class="task-due-date">実行 ' + escapeHtml(label) + '</span>';
+  }
+
   /**
    * 期限（暦日）の表示。ルーティンで一覧の日付と同じ場合は省略（日付はヘッダで分かるため）。
    * イベント・監視などは期限を必ず表示。
    */
   function taskDueDateMetaHtml(task) {
-    var dd = task.due_date ? String(task.due_date).slice(0, 10) : '';
+    var dline = task.deadline_date ? String(task.deadline_date).slice(0, 10) : '';
+    var dd = dline.length === 10 ? dline : (task.due_date ? String(task.due_date).slice(0, 10) : '');
     if (dd.length !== 10 || dd.charAt(4) !== '-') return '';
     var tt = task.task_type || 'routine';
     if (tt === 'routine' && dd === taskListFilterDateYmd()) return '';
@@ -464,6 +501,7 @@
       var prioLabel = { urgent: '緊急', high: '高', low: '低' }[task.priority] || task.priority;
       html += '<span class="task-priority-badge ' + task.priority + '">' + prioLabel + '</span>';
     }
+    html += taskScheduledDateMetaHtml(task);
     html += taskDueDateMetaHtml(task);
     if (task.due_time) html += '<span>' + escapeHtml(slotLabel(task.due_time)) + '</span>';
     if (task.assigned_name) html += '<span style="opacity:0.7;">担当: ' + escapeHtml(task.assigned_name) + '</span>';
@@ -794,7 +832,8 @@
     document.getElementById('ntCatId').value = '';
     document.getElementById('ntPriority').value = 'normal';
     document.getElementById('ntAttribute').value = 'cat_care';
-    document.getElementById('ntDueDate').value = document.getElementById('filterDate').value || todayJstYmd();
+    document.getElementById('ntScheduledDate').value = '';
+    document.getElementById('ntDeadlineDate').value = '';
     document.getElementById('ntDueTime').value = '';
     document.getElementById('ntExpiresAt').value = '';
     populateStaffSelect('ntAssignedTo');
@@ -806,7 +845,8 @@
         document.getElementById('ntTaskType').value = 'monitoring';
         document.getElementById('ntModalTitle').textContent = '+ 監視タスクを追加';
         document.getElementById('ntExpiresGroup').style.display = 'block';
-        document.getElementById('ntDateGroup').style.display = 'none';
+        document.getElementById('ntDateGroup').style.display = 'block';
+        if (document.getElementById('ntDeadlineGroup')) document.getElementById('ntDeadlineGroup').style.display = 'block';
         document.getElementById('ntTimeGroup').style.display = 'none';
         if (hint) hint.style.display = 'block';
       } else {
@@ -814,6 +854,7 @@
         document.getElementById('ntModalTitle').textContent = '+ タスクを追加';
         document.getElementById('ntExpiresGroup').style.display = 'none';
         document.getElementById('ntDateGroup').style.display = 'block';
+        if (document.getElementById('ntDeadlineGroup')) document.getElementById('ntDeadlineGroup').style.display = 'block';
         document.getElementById('ntTimeGroup').style.display = 'block';
         if (hint) hint.style.display = 'none';
       }
@@ -830,7 +871,8 @@
     if (!title) { alert('タイトルを入力してください'); return; }
 
     var taskType = document.getElementById('ntTaskType').value;
-    var dueDate = document.getElementById('ntDueDate').value || todayJstYmd();
+    var scheduledYmd = optionalYmdFromInput('ntScheduledDate');
+    var deadlineYmd = optionalYmdFromInput('ntDeadlineDate');
     var dueTime = document.getElementById('ntDueTime').value || null;
     var expiresAt = document.getElementById('ntExpiresAt').value || null;
     var catId = document.getElementById('ntCatId').value || null;
@@ -845,14 +887,13 @@
       task_type: taskType,
       cat_id: catId,
       assigned_to: assignedTo,
-      due_date: dueDate,
+      scheduled_date: scheduledYmd,
+      deadline_date: deadlineYmd,
       due_time: dueTime,
     };
 
     if (taskType === 'monitoring') {
       payload.expires_at = expiresAt;
-      // 日付欄は非表示のため、未入力・古い値が残っても当日 JST に寄せる（一覧の tasks_today と整合）
-      payload.due_date = document.getElementById('ntDueDate').value.trim() || todayJstYmd();
     }
 
     fetch(API_BASE + '/tasks', {
@@ -1174,11 +1215,16 @@
   // ── テンプレートから一括生成 ───────────────────────────────────────────────────
 
   window.generateFromTemplates = function () {
-    var date = document.getElementById('filterDate').value || todayJstYmd();
-    if (!confirm(date + ' のタスクをテンプレートから一括生成しますか？')) return;
+    var tgEl = document.getElementById('tmplGenerateDate');
+    var date = (tgEl && tgEl.value) ? String(tgEl.value).slice(0, 10) : (document.getElementById('filterDate').value || todayJstYmd());
+    var forceEvEl = document.getElementById('tmplForceEventDate');
+    var forceEvent = forceEvEl && forceEvEl.checked;
+    var msg = date + ' のタスクをテンプレートから一括生成しますか？';
+    if (forceEvent) msg += '\n（イベントテンプレは繰り返しルールを無視して指定日に生成します）';
+    if (!confirm(msg)) return;
 
     var loc = getSelectedLocation();
-    var genBody = { date: date };
+    var genBody = { date: date, force_event_on_date: forceEvent };
     if (loc === 'both') genBody.location_id = 'both';
     else if (loc) genBody.location_id = loc;
 
@@ -1588,16 +1634,36 @@
 
     var s = data.stats;
     var pct = s.total > 0 ? Math.round(s.done / s.total * 100) : 0;
+    var evOpen = (data.ongoing_event_tasks && data.ongoing_event_tasks.length) ? data.ongoing_event_tasks.length : 0;
     document.getElementById('closeDayStats').innerHTML =
-      '✅ 完了: <strong>' + s.done + '/' + s.total + '</strong>（' + pct + '%）　⏳ 未完了: <strong>' + s.pending + '</strong>件';
+      '✅ 完了: <strong>' + s.done + '/' + s.total + '</strong>（' + pct + '%）　⏳ 繰越対象の未完了: <strong>' + s.pending + '</strong>件' +
+      (evOpen ? '　📅 追跡中イベント: <strong>' + evOpen + '</strong>件' : '');
 
     renderCloseDayExcretionBlock(data.excretion_close_day);
 
     var listArea = document.getElementById('closeDayPendingList');
+    var parts = [];
+    var oev = data.ongoing_event_tasks || [];
+    if (oev.length > 0) {
+      var evHint = (data.event_tasks_note || 'イベントは業務終了でスキップされません。タスク画面から完了／スキップしてください。');
+      parts.push('<div style="font-size:11px;color:#d8b4fe;background:rgba(91,33,182,0.15);border-radius:8px;padding:10px;margin-bottom:10px;line-height:1.45;">' + escapeHtml(evHint) + '</div>');
+      parts.push('<div style="font-size:12px;font-weight:700;margin-bottom:6px;color:#c4b5fd;">📅 継続追跡中のイベント（今日までに期限・未解決）</div>');
+      parts.push('<ul style="margin:0 0 12px 0;padding-left:18px;line-height:1.5;font-size:12px;max-height:28vh;overflow-y:auto;">');
+      for (var ei = 0; ei < oev.length; ei++) {
+        var et = oev[ei];
+        var due = et.due_date ? String(et.due_date).slice(0, 10) : '';
+        var dueL = due.length === 10 ? (parseInt(due.slice(5, 7), 10) + '/' + parseInt(due.slice(8, 10), 10)) : '—';
+        var dn = et.event_days_open != null && et.event_days_open > 0 ? ' <strong style="color:#f97316;">未解決' + et.event_days_open + '日</strong>' : '';
+        parts.push('<li>' + escapeHtml(et.title || '') + ' <span style="color:var(--text-dim);">（期限 ' + escapeHtml(dueL) + '）</span>' + dn + '</li>');
+      }
+      parts.push('</ul>');
+    }
     if (data.pending_tasks.length === 0) {
-      listArea.innerHTML = '<div style="text-align:center;color:#4ade80;font-size:14px;padding:20px;">🎉 全タスク完了！</div>';
+      parts.push('<div style="text-align:center;color:#4ade80;font-size:14px;padding:16px 20px;">🎉 繰越が必要なルーティン未完了はありません</div>');
+      listArea.innerHTML = parts.join('');
     } else {
-      var html = '<div style="font-size:12px;color:var(--text-dim);margin-bottom:8px;">各タスクのスキップ理由を選択してください:</div>';
+      var html = parts.join('');
+      html += '<div style="font-size:12px;color:var(--text-dim);margin-bottom:8px;">以下は業務終了でスキップされ翌日に繰り越されます。スキップ理由を選択してください:</div>';
       for (var i = 0; i < data.pending_tasks.length; i++) {
         var t = data.pending_tasks[i];
         var streakHtml = (t.skip_streak > 0) ? '<span class="streak-warn">⚠ ' + t.skip_streak + '日連続</span>' : '';
@@ -1640,7 +1706,11 @@
     lines.push('');
     lines.push('✅ タスク完了状況');
     lines.push('  完了: ' + s.done + '/' + s.total + '（' + pct + '%）');
-    lines.push('  スキップ予定: ' + s.pending + '件（送信時に翌日へ繰越）');
+    lines.push('  スキップ予定（ルーティン等）: ' + s.pending + '件（送信時に翌日へ繰越）');
+    var oev2 = closeDayData.ongoing_event_tasks || [];
+    if (oev2.length > 0) {
+      lines.push('  ※ イベント ' + oev2.length + '件は業務終了では閉じず、タスク一覧で継続表示されます');
+    }
     lines.push('');
 
     var CLOSE_PREVIEW_MAX = 20;
@@ -1712,6 +1782,19 @@
         }
         if (ug3.length > CLOSE_PREVIEW_MAX) lines.push('  … 他' + (ug3.length - CLOSE_PREVIEW_MAX) + '頭');
       }
+      lines.push('');
+    }
+
+    if (oev2.length > 0) {
+      lines.push('📅 継続追跡中のイベント（スキップ対象外）:');
+      for (var oi = 0; oi < oev2.length && oi < CLOSE_PREVIEW_MAX; oi++) {
+        var ot = oev2[oi];
+        var od = ot.due_date ? String(ot.due_date).slice(0, 10) : '';
+        var odl = od.length === 10 ? previewFmtMd(od) : '—';
+        var ond = ot.event_days_open > 0 ? ' 未解決' + ot.event_days_open + '日' : '';
+        lines.push('  • ' + (ot.title || '') + ' — 期限 ' + odl + ond);
+      }
+      if (oev2.length > CLOSE_PREVIEW_MAX) lines.push('  … 他' + (oev2.length - CLOSE_PREVIEW_MAX) + '件');
       lines.push('');
     }
 
@@ -1811,7 +1894,8 @@
   if (credentials) {
     var today = todayJstYmd();
     document.getElementById('filterDate').value = today;
-    document.getElementById('ntDueDate').value = today;
+    var tg0 = document.getElementById('tmplGenerateDate');
+    if (tg0) tg0.value = today;
     loadCatList();
     loadStaffList();
     window.loadTasks();

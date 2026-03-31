@@ -61,7 +61,7 @@
         var templates = (data.templates || []);
         addLog('3. テンプレートAPI: ' + templates.length + '件取得 ✅');
 
-        return fetch(origin + '/api/ops/tasks?date=' + new Date().toISOString().slice(0,10), { headers: headers })
+        return fetch(origin + '/api/ops/tasks?date=' + encodeURIComponent(new Date().toLocaleDateString('sv-SE', { timeZone: 'Asia/Tokyo' })), { headers: headers })
           .then(function(r){ return r.json(); })
           .then(function(tdata){
             var tasks = tdata.tasks || [];

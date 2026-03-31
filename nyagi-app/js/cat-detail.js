@@ -141,9 +141,9 @@ function closeCatDetailFoldSection(btn) {
     var aCafe = activeLoc === 'cafe' ? 'background:rgba(251,191,36,0.25);border-color:rgba(251,191,36,0.55);color:#fbbf24;font-weight:700;' : 'background:var(--surface);border-color:rgba(255,255,255,0.12);color:var(--text-dim);';
     var aNeko = activeLoc === 'nekomata' ? 'background:rgba(248,113,113,0.18);border-color:rgba(248,113,113,0.45);color:#f87171;font-weight:700;' : 'background:var(--surface);border-color:rgba(255,255,255,0.12);color:var(--text-dim);';
     var h = '<div style="font-size:11px;color:var(--text-dim);margin:0 0 8px;font-weight:600;">🏷 表示拠点（タップで切替・一覧を絞り込み）</div>';
-    h += '<div style="display:flex;gap:8px;margin-bottom:14px;">';
-    h += '<button type="button" class="btn" style="flex:1;padding:10px 6px;font-size:11px;border:2px solid;border-radius:8px;' + aCafe + '" onclick="switchFedPresetLocation(&quot;cafe&quot;,&quot;' + context + '&quot;)">🐱 BAKENEKO CAFE</button>';
-    h += '<button type="button" class="btn" style="flex:1;padding:10px 6px;font-size:11px;border:2px solid;border-radius:8px;' + aNeko + '" onclick="switchFedPresetLocation(&quot;nekomata&quot;,&quot;' + context + '&quot;)">🏥 猫又療養所</button>';
+    h += '<div class="nyagi-preset-loc-row">';
+    h += '<button type="button" class="btn" style="padding:10px 6px;font-size:11px;border:2px solid;border-radius:8px;' + aCafe + '" onclick="switchFedPresetLocation(&quot;cafe&quot;,&quot;' + context + '&quot;)">🐱 BAKENEKO CAFE</button>';
+    h += '<button type="button" class="btn" style="padding:10px 6px;font-size:11px;border:2px solid;border-radius:8px;' + aNeko + '" onclick="switchFedPresetLocation(&quot;nekomata&quot;,&quot;' + context + '&quot;)">🏥 猫又療養所</button>';
     h += '</div>';
     return h;
   }
@@ -1023,6 +1023,13 @@ function closeCatDetailFoldSection(btn) {
     return d.toLocaleDateString('sv-SE', { timeZone: 'Asia/Tokyo' });
   }
 
+  /** JST 暦日 ymd から delta 日加算（負数で減算） */
+  function addDaysJstYmd(ymd, deltaDays) {
+    var d = new Date(ymd + 'T12:00:00+09:00');
+    d.setUTCDate(d.getUTCDate() + deltaDays);
+    return d.toLocaleDateString('sv-SE', { timeZone: 'Asia/Tokyo' });
+  }
+
   function careQuickMapKey(recordType, detailLabel) {
     return (recordType || '') + '|' + String(detailLabel || '');
   }
@@ -1821,7 +1828,7 @@ function closeCatDetailFoldSection(btn) {
 
   function renderClinicRecords(records) {
     var typeLabels = { vaccine: 'ワクチン', checkup: '健診', surgery: '手術', dental: '歯科', emergency: '緊急', test: '検査', observation: '経過観察', medication_start: '投薬開始', medication_end: '投薬終了' };
-    var todayStr = new Date().toISOString().slice(0, 10);
+    var todayStr = todayJstYmd();
 
     // ── 病院予定セクション ──
     var scheduled = [];
@@ -2057,7 +2064,7 @@ function closeCatDetailFoldSection(btn) {
     if (!medicationScheduleArea) return Promise.resolve();
     medicationScheduleArea.innerHTML = '<div class="detail-section"><div class="detail-title">💊 お薬管理</div><div class="loading" style="padding:16px;">読み込み中...</div></div>';
 
-    var date = selectedDate || _medLogDate || new Date().toISOString().slice(0, 10);
+    var date = selectedDate || _medLogDate || todayJstYmd();
     _medLogDate = date;
 
     return Promise.all([
@@ -2102,7 +2109,7 @@ function closeCatDetailFoldSection(btn) {
     html += '</div>';
 
     // 今日のサマリーバー
-    var todayStr2 = new Date().toISOString().slice(0, 10);
+    var todayStr2 = todayJstYmd();
     if (date === todayStr2 && logs.length > 0) {
       var doneCount = 0; var totalCount = logs.length;
       for (var lx = 0; lx < logs.length; lx++) { if (logs[lx].status === 'done') doneCount++; }
@@ -2133,7 +2140,7 @@ function closeCatDetailFoldSection(btn) {
         if (med.end_date) {
           html += ' 〜 <span style="color:#f87171;">' + escapeHtml(med.end_date) + '</span>';
           var endDt = new Date(med.end_date + 'T00:00:00Z');
-          var nowDt = new Date(new Date().toISOString().slice(0, 10) + 'T00:00:00Z');
+          var nowDt = new Date(todayJstYmd() + 'T12:00:00+09:00');
           var daysLeft = Math.round((endDt - nowDt) / 86400000);
           if (daysLeft >= 0 && daysLeft <= 7) html += ' <span style="background:#f87171;color:#fff;padding:0 4px;border-radius:3px;font-size:10px;">残' + daysLeft + '日</span>';
         } else {
@@ -2151,7 +2158,7 @@ function closeCatDetailFoldSection(btn) {
         var medLogs = logs.filter(function (l) { return l.medication_id === med.id; });
         if (medLogs.length > 0) {
           html += '<div class="med-log-list">';
-          var todayStr = new Date().toISOString().slice(0, 10);
+          var todayStr = todayJstYmd();
           var dateLabel = date === todayStr ? '本日の記録' : (date.slice(5).replace('-', '/') + ' の記録');
           html += '<div style="font-size:11px;color:var(--text-dim);margin-bottom:6px;">' + escapeHtml(dateLabel) + '</div>';
           for (var j = 0; j < medLogs.length; j++) {
@@ -2439,7 +2446,7 @@ function closeCatDetailFoldSection(btn) {
         document.getElementById('msFrequency').value = '毎日';
         onFrequencyChange();
         document.getElementById('msRoute').value = '経口';
-        document.getElementById('msStartDate').value = new Date().toISOString().slice(0, 10);
+        document.getElementById('msStartDate').value = todayJstYmd();
         document.getElementById('msEndDate').value = '';
         var endUndecided = document.getElementById('msEndDateUndecided');
         endUndecided.checked = true;
@@ -2568,7 +2575,7 @@ function closeCatDetailFoldSection(btn) {
 
   window.stopMedSchedule = function (medId) {
     if (!confirm('この投薬スケジュールを終了しますか？')) return;
-    var today = new Date().toISOString().slice(0, 10);
+    var today = todayJstYmd();
     fetch(API_BASE + '/health/medications/' + medId, {
       method: 'PUT',
       headers: apiHeaders(), cache: 'no-store',
@@ -2891,9 +2898,9 @@ function closeCatDetailFoldSection(btn) {
   }
 
   function countVomitRecords(healthRecs, todayStr) {
-    var now = new Date();
-    var d7 = new Date(now.getTime() - 7 * 86400000).toISOString().slice(0, 10);
-    var d30 = new Date(now.getTime() - 30 * 86400000).toISOString().slice(0, 10);
+    var anchor = (todayStr && todayStr.length >= 10) ? todayStr : todayJstYmd();
+    var d7 = addDaysJstYmd(anchor, -7);
+    var d30 = addDaysJstYmd(anchor, -30);
     var result = { today: 0, week: 0, total: 0, lastDate: '' };
     for (var i = 0; i < healthRecs.length; i++) {
       var r = healthRecs[i];
@@ -3762,14 +3769,12 @@ function closeCatDetailFoldSection(btn) {
           for (var i = 0; i < presets.length; i++) {
             var ps = presets[i];
             innerHtml += feedingPresetAlphaSectionHtml(loc, ps, lastAlphaApply);
-            innerHtml += '<div style="background:var(--surface);border-radius:8px;padding:10px 12px;margin-bottom:8px;">';
-            innerHtml += '<div style="display:flex;justify-content:space-between;align-items:flex-start;gap:8px;">';
-            innerHtml += '<div style="flex:1;min-width:0;"><div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;margin-bottom:2px;">' + presetLocationBadgeHtml(ps.location_id) + '<b style="font-size:13px;">' + escapeHtml(ps.name) + '</b></div>';
+            innerHtml += '<div class="nyagi-preset-card">';
+            innerHtml += '<div class="nyagi-preset-card__head">' + presetLocationBadgeHtml(ps.location_id) + '<b style="font-size:13px;"><span data-nyagi-preset-food="1">' + escapeHtml(nyagiPresetFoodNamePlain(ps.name)) + '</span></b></div>';
             if (ps.description) innerHtml += '<div style="font-size:11px;color:var(--text-dim);margin-top:2px;line-height:1.4;white-space:pre-wrap;word-break:break-word;">' + escapeHtml(ps.description) + '</div>';
-            innerHtml += _renderPresetItemsSummary(ps.items || [], ps.total_kcal, ps.id);
+            innerHtml += '<div class="nyagi-preset-card__items">' + _renderPresetItemsSummary(ps.items || [], ps.total_kcal, ps.id) + '</div>';
+            innerHtml += '<div class="nyagi-preset-card__foot"><button class="btn btn-primary" style="font-size:11px;padding:4px 10px;" onclick="applyPreset(' + ps.id + ',null)" title="プリセット内の全フードを献立に追加">全て適用</button></div>';
             innerHtml += '</div>';
-            innerHtml += '<button class="btn btn-primary" style="font-size:11px;padding:4px 10px;width:auto;min-width:0;flex-shrink:0;align-self:center;" onclick="applyPreset(' + ps.id + ',null)" title="プリセット内の全フードを献立に追加">全て適用</button>';
-            innerHtml += '</div></div>';
           }
         }
         innerHtml += '<div class="modal-actions"><button class="btn btn-outline" onclick="closePresetApplyModal()">閉じる</button></div>';
@@ -3827,11 +3832,11 @@ function closeCatDetailFoldSection(btn) {
           innerHtml += feedingPresetAlphaSectionHtml(loc, ps, lastAlphaAssign);
           var isActive = currentId === ps.id;
           innerHtml += '<div class="preset-assign-item' + (isActive ? ' active' : '') + '" onclick="assignPreset(' + ps.id + ')" style="cursor:pointer;padding:10px 12px;border-radius:8px;margin-bottom:4px;background:' + (isActive ? 'rgba(168,139,250,0.15)' : 'var(--surface)') + ';border:1px solid ' + (isActive ? 'var(--primary,#a78bfa)' : 'var(--border,rgba(255,255,255,0.08))') + ';">';
-          innerHtml += '<div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:6px;">';
-          innerHtml += '<div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;">' + presetLocationBadgeHtml(ps.location_id) + '<b style="font-size:13px;">' + escapeHtml(ps.name) + '</b></div>';
-          if (isActive) innerHtml += '<span style="font-size:11px;color:var(--primary,#a78bfa);font-weight:600;">✔ 現在</span>';
+          innerHtml += '<div style="display:flex;justify-content:space-between;align-items:flex-start;flex-wrap:wrap;gap:8px;width:100%;max-width:100%;box-sizing:border-box;">';
+          innerHtml += '<div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;flex:1;min-width:0;max-width:100%;">' + presetLocationBadgeHtml(ps.location_id) + '<b style="font-size:13px;"><span data-nyagi-preset-food="1">' + escapeHtml(nyagiPresetFoodNamePlain(ps.name)) + '</span></b></div>';
+          if (isActive) innerHtml += '<span style="font-size:11px;color:var(--primary,#a78bfa);font-weight:600;flex-shrink:0;">✔ 現在</span>';
           innerHtml += '</div>';
-          innerHtml += _renderPresetItemsSummary(ps.items || [], ps.total_kcal);
+          innerHtml += '<div class="nyagi-preset-card__items">' + _renderPresetItemsSummary(ps.items || [], ps.total_kcal) + '</div>';
           innerHtml += '</div>';
         }
         innerHtml += '</div>';
@@ -3939,7 +3944,7 @@ function closeCatDetailFoldSection(btn) {
           var ploc = ps.location_id === 'nekomata' ? 'nekomata' : 'cafe';
           h += '<div style="background:var(--surface);border-radius:8px;padding:10px 12px;margin-bottom:8px;">';
           h += '<div style="display:flex;justify-content:space-between;align-items:flex-start;gap:8px;">';
-          h += '<div style="flex:1;min-width:0;"><div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;margin-bottom:4px;">' + presetLocationBadgeHtml(ps.location_id) + '<b>' + escapeHtml(ps.name) + '</b></div>';
+          h += '<div style="flex:1;min-width:0;"><div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;margin-bottom:4px;">' + presetLocationBadgeHtml(ps.location_id) + '<b><span data-nyagi-preset-food="1">' + escapeHtml(nyagiPresetFoodNamePlain(ps.name)) + '</span></b></div>';
           h += '<div style="font-size:11px;color:var(--text-dim);">' + (ps.items || []).length + '品</div>';
           var psDescM = ps.description != null ? String(ps.description).trim() : '';
           h += '<div style="font-size:10px;color:var(--text-dim);margin:4px 0 0;line-height:1.35;white-space:pre-wrap;word-break:break-word;">';
@@ -4109,19 +4114,20 @@ function closeCatDetailFoldSection(btn) {
       for (var i = 0; i < items.length; i++) {
         var it = items[i];
         var kcal = Math.round((it.amount_g || 0) * (it.kcal_per_100g || 0) / 100);
-        h += '<div style="padding:6px 8px;background:var(--surface);border-radius:6px;margin-bottom:4px;">';
-        h += '<div style="display:flex;justify-content:space-between;align-items:flex-start;gap:6px;">';
-        h += '<div style="flex:1;min-width:0;font-size:12px;">' + escapeHtml(it.food_name || '') + ' <b>' + it.amount_g + 'g</b>';
+        h += '<div style="display:block;width:100%;max-width:100%;box-sizing:border-box;padding:8px;background:var(--surface);border-radius:6px;margin-bottom:6px;">';
+        h += '<div style="display:flex;align-items:flex-start;gap:6px;width:100%;">';
+        h += '<div style="flex:1;min-width:0;font-size:12px;line-height:1.4;word-break:normal;overflow-wrap:break-word;writing-mode:horizontal-tb;white-space:normal;" data-nyagi-preset-food="1">' + escapeHtml(nyagiPresetFoodNamePlain(it.food_name)) + ' <b>' + it.amount_g + 'g</b>';
         if (kcal) h += ' <span style="color:var(--text-dim);font-size:11px;">(' + kcal + 'kcal)</span>';
         if (it.scheduled_time) h += ' <span style="color:var(--text-dim);font-size:10px;">⏰' + escapeHtml(it.scheduled_time) + '</span>';
+        h += '</div>';
+        h += '<div style="flex-shrink:0;display:flex;gap:4px;">';
+        h += '<button type="button" class="btn-edit-small" style="font-size:11px;" onclick="openEditPresetItem(' + presetId + ',' + it.id + ')" title="量・メモなどを変更">✏️</button>';
+        h += '<button type="button" class="btn-edit-small" style="color:#f87171;font-size:11px;" onclick="deletePresetItem(' + presetId + ',' + it.id + ')">🗑</button>';
+        h += '</div></div>';
         if (it.notes && String(it.notes).trim()) {
           h += '<div style="font-size:10px;color:var(--text-dim);margin-top:4px;line-height:1.35;white-space:pre-wrap;word-break:break-word;">📝 ' + escapeHtml(String(it.notes).trim()) + '</div>';
         }
         h += '</div>';
-        h += '<div style="display:flex;gap:2px;flex-shrink:0;">';
-        h += '<button type="button" class="btn-edit-small" style="font-size:11px;" onclick="openEditPresetItem(' + presetId + ',' + it.id + ')" title="量・メモなどを変更">✏️</button>';
-        h += '<button type="button" class="btn-edit-small" style="color:#f87171;font-size:11px;" onclick="deletePresetItem(' + presetId + ',' + it.id + ')">🗑</button>';
-        h += '</div></div></div>';
       }
     }
     h += '<button class="btn btn-outline" style="font-size:11px;margin-top:4px;padding:4px 10px;" onclick="addPresetItemForSlot(' + presetId + ',\'' + slot + '\')">+ 追加</button>';
@@ -4374,7 +4380,9 @@ function closeCatDetailFoldSection(btn) {
     if (document.getElementById('flDate')) document.getElementById('flDate').value = log.log_date || todayJstYmd();
     if (document.getElementById('flSlot')) document.getElementById('flSlot').value = log.meal_slot || 'morning';
     if (document.getElementById('flOfferedG')) document.getElementById('flOfferedG').value = log.offered_g != null ? log.offered_g : '';
-    if (document.getElementById('flEatenPct')) document.getElementById('flEatenPct').value = log.eaten_pct != null ? log.eaten_pct : '';
+    if (document.getElementById('flLeftoverG')) {
+      document.getElementById('flLeftoverG').value = cdLeftoverGFromOfferedAndPct(log.offered_g, log.eaten_pct);
+    }
     if (document.getElementById('flNote')) document.getElementById('flNote').value = log.note || '';
     var flSt = document.getElementById('flServedTime');
     if (flSt) {
@@ -4422,38 +4430,47 @@ function closeCatDetailFoldSection(btn) {
     return labels[slot] || slot;
   }
 
+  function nyagiPresetFoodNamePlain(raw) {
+    var s = String(raw == null ? '' : raw);
+    s = s.replace(/[\r\n\x0B\x0C\u2028\u2029\u0085]+/g, ' ');
+    s = s.replace(/[\s\u00a0\u3000]+/g, ' ').trim();
+    return s;
+  }
+
   function _renderPresetItemsSummary(items, totalKcal, presetIdForOneApply) {
     var morn = [];
     var eve = [];
-    for (var i = 0; i < items.length; i++) {
+    var other = [];
+    for (var i = 0; i < (items || []).length; i++) {
       if (items[i].meal_slot === 'evening') { eve.push(items[i]); }
-      else { morn.push(items[i]); }
+      else if (items[i].meal_slot === 'morning' || items[i].meal_slot === 'afternoon') { morn.push(items[i]); }
+      else { other.push(items[i]); }
     }
     function rowHtml(it) {
-      var line = '<div style="display:flex;align-items:flex-start;justify-content:space-between;gap:6px;padding:2px 0 2px 8px;">';
-      line += '<div style="min-width:0;flex:1;font-size:11px;color:var(--text-dim);">' + escapeHtml(it.food_name || '') + ' ' + it.amount_g + 'g';
+      var notesHtml = '';
       if (it.notes && String(it.notes).trim()) {
-        line += '<span style="display:block;font-size:10px;color:var(--text-dim);opacity:0.9;margin-top:2px;">📝 ' + escapeHtml(String(it.notes).trim()) + '</span>';
+        notesHtml = '<div style="font-size:10px;color:var(--text-dim);padding:4px 0 0;line-height:1.35;white-space:pre-wrap;word-break:break-word;">📝 ' + escapeHtml(String(it.notes).trim()) + '</div>';
       }
-      line += '</div>';
+      var nameText = escapeHtml(nyagiPresetFoodNamePlain(it.food_name)) + ' ' + it.amount_g + 'g';
+      var line = '<div style="display:flex;align-items:flex-start;gap:8px;width:100%;max-width:100%;box-sizing:border-box;padding:5px 0 7px;border-bottom:1px solid rgba(255,255,255,0.06);">';
+      line += '<div style="flex:1;min-width:0;font-size:11px;line-height:1.5;color:var(--text-dim);word-break:normal;overflow-wrap:break-word;writing-mode:horizontal-tb;white-space:normal;" data-nyagi-preset-food="1">' + nameText + notesHtml + '</div>';
       if (presetIdForOneApply && it.id != null) {
-        line += '<button type="button" class="btn btn-outline" style="font-size:9px;padding:2px 8px;flex-shrink:0;white-space:nowrap;" onclick="applyPreset(' + presetIdForOneApply + ',' + it.id + ')" title="この1品だけ献立に追加">1品</button>';
+        line += '<div style="flex-shrink:0;"><button type="button" class="btn btn-outline" style="font-size:9px;padding:2px 8px;white-space:nowrap;width:auto !important;display:inline-block;" onclick="applyPreset(' + presetIdForOneApply + ',' + it.id + ')" title="この1品だけ献立に追加">1品</button></div>';
       }
       line += '</div>';
       return line;
     }
-    var h = '<div style="margin-top:4px;">';
-    if (morn.length > 0) {
-      h += '<div style="font-size:10px;color:var(--accent,#fb923c);font-weight:600;margin-top:2px;">☀️ 朝</div>';
-      for (var m = 0; m < morn.length; m++) h += rowHtml(morn[m]);
+    function block(title, arr) {
+      if (arr.length === 0) return '';
+      var x = '<div style="font-size:10px;color:var(--accent,#fb923c);font-weight:600;margin-top:6px;margin-bottom:2px;">' + escapeHtml(title) + '</div>';
+      for (var m = 0; m < arr.length; m++) x += rowHtml(arr[m]);
+      return x;
     }
-    if (eve.length > 0) {
-      h += '<div style="font-size:10px;color:var(--accent,#fb923c);font-weight:600;margin-top:2px;">🌙 夕</div>';
-      for (var e = 0; e < eve.length; e++) h += rowHtml(eve[e]);
-    }
-    if (items.length === 0) {
-      h += '<div style="font-size:11px;color:var(--text-dim);">未登録</div>';
-    }
+    var h = '<div style="display:block;width:100%;max-width:100%;box-sizing:border-box;margin-top:4px;">';
+    h += block('☀ 朝/昼', morn);
+    h += block('🌙 夕', eve);
+    h += block('その他', other);
+    if (!items || items.length === 0) h += '<div style="font-size:11px;color:var(--text-dim);">未登録</div>';
     if (totalKcal) h += '<div style="font-size:11px;color:var(--accent,#fb923c);margin-top:2px;">計 ' + totalKcal + ' kcal</div>';
     h += '</div>';
     return h;
@@ -4464,6 +4481,32 @@ function closeCatDetailFoldSection(btn) {
   var _feedingLogsCache = [];
   var _editingLogId = null;
 
+  /** 提供g＋摂取率 → 残りg（モーダル表示用） */
+  function cdLeftoverGFromOfferedAndPct(offeredG, eatenPct) {
+    if (offeredG == null || offeredG === '') return '';
+    var og = parseFloat(offeredG);
+    if (isNaN(og) || og <= 0) return '';
+    if (eatenPct == null || eatenPct === '') return '';
+    var ep = Number(eatenPct);
+    if (isNaN(ep)) return '';
+    return String(Math.round(og * (100 - ep) / 100 * 10) / 10);
+  }
+
+  /** 提供g＋残りg文字列 → 摂取率（API用）。空欄→null、超過→-1 */
+  function cdEatenPctFromOfferedAndLeftover(offeredG, leftoverGStr) {
+    if (leftoverGStr == null || String(leftoverGStr).trim() === '') return null;
+    var og = parseFloat(offeredG);
+    if (isNaN(og) || og <= 0) return null;
+    var lg = parseFloat(String(leftoverGStr).trim());
+    if (isNaN(lg) || lg < 0) return null;
+    if (lg > og) return -1;
+    if (lg === 0) return 100;
+    var pct = Math.round((og - lg) / og * 100);
+    if (pct < 0) pct = 0;
+    if (pct > 100) pct = 100;
+    return pct;
+  }
+
   window.openFeedingLogModal = function () {
     _editingLogId = null;
     var titleEl = document.querySelector('#feedingLogModal .modal-title');
@@ -4473,7 +4516,7 @@ function closeCatDetailFoldSection(btn) {
     document.getElementById('flKcalPreview').style.display = 'none';
     document.getElementById('flFoodInfo').textContent = '';
     document.getElementById('flOfferedG').value = '';
-    document.getElementById('flEatenPct').value = '';
+    document.getElementById('flLeftoverG').value = '';
     document.getElementById('flNote').value = '';
     if (document.getElementById('flServedTime')) document.getElementById('flServedTime').value = nowJstHm();
 
@@ -4878,7 +4921,7 @@ function closeCatDetailFoldSection(btn) {
   window.calcFeedingKcal = function () {
     var foodId = document.getElementById('flFoodId').value;
     var grams = parseFloat(document.getElementById('flOfferedG').value);
-    var pct = parseInt(document.getElementById('flEatenPct').value, 10);
+    var leftStr = document.getElementById('flLeftoverG') ? document.getElementById('flLeftoverG').value : '';
     var previewEl = document.getElementById('flKcalPreview');
     if (!foodId || isNaN(grams) || grams <= 0) { previewEl.style.display = 'none'; return; }
     var food = null;
@@ -4887,9 +4930,15 @@ function closeCatDetailFoldSection(btn) {
     }
     if (!food || !food.kcal_per_100g) { previewEl.style.display = 'none'; return; }
     var kcal = food.kcal_per_100g * grams / 100;
-    var eatenKcal = isNaN(pct) ? kcal : kcal * pct / 100;
+    var pctEff = cdEatenPctFromOfferedAndLeftover(grams, leftStr);
+    if (pctEff === -1) {
+      previewEl.textContent = '⚠️ 残した量が提供量を超えています';
+      previewEl.style.display = 'block';
+      return;
+    }
+    var eatenKcal = pctEff == null ? kcal : kcal * pctEff / 100;
     previewEl.textContent = '📊 提供: ' + Math.round(kcal) + ' kcal' +
-      (isNaN(pct) ? '' : ' → 摂取: ' + Math.round(eatenKcal) + ' kcal');
+      (pctEff == null ? '' : ' → 摂取: ' + Math.round(eatenKcal) + ' kcal（残し ' + String(leftStr).trim() + 'g）');
     previewEl.style.display = 'block';
   };
 
@@ -4902,19 +4951,28 @@ function closeCatDetailFoldSection(btn) {
   window.submitFeedingLog = function () {
     var mealSlot = document.getElementById('flSlot').value;
     var offeredG = document.getElementById('flOfferedG').value;
-    var eatenPct = document.getElementById('flEatenPct').value;
+    var leftoverRaw = document.getElementById('flLeftoverG') ? String(document.getElementById('flLeftoverG').value).trim() : '';
     var note = document.getElementById('flNote').value.trim();
     var logDate = document.getElementById('flDate').value;
     var foodId = document.getElementById('flFoodId').value;
 
     if (!mealSlot) { alert('食事区分を選択してください'); return; }
 
+    var eatenPctVal = null;
+    if (leftoverRaw !== '') {
+      var ogNum = offeredG ? parseFloat(offeredG) : NaN;
+      var pctCalc = cdEatenPctFromOfferedAndLeftover(ogNum, leftoverRaw);
+      if (pctCalc === -1) { alert('残した量が提供量を超えています'); return; }
+      if (pctCalc === null) { alert('あげた量 (g) を入力してから残した量を入力してください'); return; }
+      eatenPctVal = pctCalc;
+    }
+
     var kcalCalc = null;
     if (foodId && offeredG) {
       for (var fi = 0; fi < _feedFoodsList.length; fi++) {
         if (_feedFoodsList[fi].id === foodId && _feedFoodsList[fi].kcal_per_100g) {
           kcalCalc = _feedFoodsList[fi].kcal_per_100g * parseFloat(offeredG) / 100;
-          if (eatenPct !== '') kcalCalc = kcalCalc * parseInt(eatenPct, 10) / 100;
+          if (eatenPctVal != null) kcalCalc = kcalCalc * eatenPctVal / 100;
           kcalCalc = Math.round(kcalCalc);
           break;
         }
@@ -4929,7 +4987,7 @@ function closeCatDetailFoldSection(btn) {
       meal_slot: mealSlot,
       food_id: foodId || null,
       offered_g: offeredG ? parseFloat(offeredG) : null,
-      eaten_pct: eatenPct !== '' ? parseInt(eatenPct, 10) : null,
+      eaten_pct: eatenPctVal,
       kcal: kcalCalc,
       note: note || null,
       served_time: servedTime,
@@ -4963,8 +5021,7 @@ function closeCatDetailFoldSection(btn) {
   // ── 体重記録モーダル ─────────────────────────────────────────────────────────
 
   window.openHealthRecordModal = function () {
-    var now = new Date();
-    document.getElementById('hrDate').value = now.toISOString().slice(0, 10);
+    document.getElementById('hrDate').value = todayJstYmd();
     document.getElementById('hrValue').value = '';
     document.getElementById('healthRecordModal').classList.add('open');
     setTimeout(function () { document.getElementById('hrValue').focus(); }, 100);
@@ -4978,9 +5035,8 @@ function closeCatDetailFoldSection(btn) {
     var value = document.getElementById('hrValue').value.trim();
     if (!value) { alert('体重を入力してください'); return; }
 
-    var now = new Date();
-    var recordDate = now.toISOString().slice(0, 10);
-    var recordTime = now.toTimeString().slice(0, 5);
+    var recordDate = todayJstYmd();
+    var recordTime = nowJstHm();
 
     var body = {
       cat_id: catId,
@@ -5051,7 +5107,7 @@ function closeCatDetailFoldSection(btn) {
     var crHint = document.getElementById('crExistingFileHint');
     if (crHint) { crHint.style.display = 'none'; crHint.textContent = ''; }
     renderCrExistingFilesInModal(0, []);
-    var today = new Date().toISOString().slice(0, 10);
+    var today = todayJstYmd();
     document.getElementById('crDate').value = prefillDate || today;
     document.getElementById('crType').value = prefillType || 'checkup';
     document.getElementById('crContent').value = prefillNote != null ? String(prefillNote) : '';
@@ -5989,7 +6045,7 @@ function closeCatDetailFoldSection(btn) {
   // ── 排便記録モーダル ───────────────────────────────────────────────────────────
 
   window.openStoolModal = function () {
-    var today = new Date().toISOString().slice(0, 10);
+    var today = todayJstYmd();
     document.getElementById('stoolDate').value = today;
     document.getElementById('stoolStatus').value = '';
     document.getElementById('stoolDetails').value = '';
@@ -6146,7 +6202,7 @@ function closeCatDetailFoldSection(btn) {
   function _shouldDose(freq, dateStr, startDate) {
     if (!freq || freq === '毎日' || freq === '1日1回' || freq === '1日2回' || freq === '1日3回') return true;
     if (freq === '必要時') return false;
-    var d = new Date(dateStr + 'T00:00:00Z');
+    var d = new Date(dateStr + 'T12:00:00+09:00');
     if (freq === '月末のみ') {
       var lastDay = new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth() + 1, 0)).getUTCDate();
       return d.getUTCDate() === lastDay;
@@ -6167,7 +6223,9 @@ function closeCatDetailFoldSection(btn) {
       var monthLastDay = new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth() + 1, 0)).getUTCDate();
       return d.getUTCDate() === Math.min(targetDay, monthLastDay);
     }
-    var daysBetween = Math.round((d - new Date((startDate || dateStr) + 'T00:00:00Z')) / 86400000);
+    var t1 = new Date(dateStr + 'T12:00:00+09:00').getTime();
+    var t0 = new Date((startDate || dateStr) + 'T12:00:00+09:00').getTime();
+    var daysBetween = Math.round((t1 - t0) / 86400000);
     if (daysBetween < 0) return false;
     if (freq === '隔日' || freq === '隔日(A)') return daysBetween % 2 === 0;
     if (freq === '隔日(B)') return daysBetween % 2 === 1;
@@ -6182,10 +6240,9 @@ function closeCatDetailFoldSection(btn) {
   }
 
   function calcNextDoseDate(freq, startDate) {
-    var today = new Date();
+    var baseYmd = todayJstYmd();
     for (var i = 1; i <= 60; i++) {
-      var check = new Date(today.getTime() + i * 86400000);
-      var ds = check.toISOString().slice(0, 10);
+      var ds = addDaysJstYmd(baseYmd, i);
       if (_shouldDose(freq, ds, startDate || ds)) return ds;
     }
     return null;
@@ -7341,5 +7398,24 @@ function closeCatDetailFoldSection(btn) {
     _medActiveTab = nextMedTab || 'preset';
     loadMedicationSchedule();
   };
+
+  // 猫一覧に戻るフローティングボタン
+  (function buildBackFab() {
+    var style = document.createElement('style');
+    style.textContent =
+      '.cd-back-fab{position:fixed;bottom:calc(24px + env(safe-area-inset-bottom,0px));left:calc(20px + env(safe-area-inset-left,0px));width:52px;height:52px;border-radius:50%;border:none;background:linear-gradient(135deg,#a78bfa,#7c3aed);color:#fff;font-size:22px;box-shadow:0 4px 14px rgba(124,58,237,.45);z-index:900;cursor:pointer;transition:transform .15s,opacity .15s;display:flex;align-items:center;justify-content:center;}' +
+      '.cd-back-fab:active{transform:scale(.92);}';
+    document.head.appendChild(style);
+    var fab = document.createElement('button');
+    fab.className = 'cd-back-fab';
+    fab.setAttribute('aria-label', '猫一覧に戻る');
+    fab.textContent = '\uD83D\uDC3E';
+    fab.title = '猫一覧に戻る';
+    fab.addEventListener('click', function () {
+      history.back();
+      setTimeout(function () { window.location.href = 'cats.html'; }, 400);
+    });
+    document.body.appendChild(fab);
+  }());
 
 })();

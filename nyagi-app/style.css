@@ -609,3 +609,166 @@ textarea.transcript-edit:focus {
   0% { transform: translateX(-100%); background-position: 0% 50%; }
   100% { transform: translateX(250%); background-position: 100% 50%; }
 }
+
+/* ── プリセット専用モーダル（#presetApplyModal / #ovPresetApplyModal のみ）──
+   オーバーレイは display:flex のまま row だと子の min-width:auto で幅が潰れるため column + 中央寄せ。
+   カード内はテーブル横並びをやめ、ブロック積み + ボタンは下段（.btn{width:100%} と競合しない） */
+#presetApplyModal.modal-overlay.open,
+#ovPresetApplyModal.modal-overlay.open {
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: max(12px, env(safe-area-inset-top, 0px)) 12px max(12px, env(safe-area-inset-bottom, 0px));
+  box-sizing: border-box;
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+}
+#presetApplyModal.modal-overlay > .modal-box,
+#ovPresetApplyModal.modal-overlay > .modal-box {
+  flex: 0 0 auto;
+  width: min(400px, calc(100vw - 24px));
+  max-width: 100%;
+  min-width: min(300px, calc(100vw - 24px));
+  box-sizing: border-box;
+}
+#presetApplyModal [data-nyagi-preset-food="1"],
+#ovPresetApplyModal [data-nyagi-preset-food="1"] {
+  word-break: normal;
+  overflow-wrap: break-word;
+  writing-mode: horizontal-tb;
+  text-orientation: mixed;
+  white-space: normal;
+}
+.nyagi-preset-card {
+  display: block;
+  width: 100%;
+  max-width: 100%;
+  box-sizing: border-box;
+  background: var(--surface);
+  border-radius: 8px;
+  padding: 10px 12px;
+  margin-bottom: 8px;
+}
+.nyagi-preset-card__head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  margin-bottom: 4px;
+  width: 100%;
+  max-width: 100%;
+  box-sizing: border-box;
+}
+.nyagi-preset-card__items {
+  display: block;
+  width: 100%;
+  max-width: 100%;
+  box-sizing: border-box;
+  margin-top: 4px;
+}
+.nyagi-preset-summary {
+  display: block;
+  width: 100%;
+  max-width: 100%;
+  box-sizing: border-box;
+  margin-top: 4px;
+}
+.nyagi-preset-slot-title {
+  font-size: 10px;
+  color: var(--accent, #fb923c);
+  font-weight: 600;
+  margin-top: 6px;
+}
+.nyagi-preset-line {
+  display: block;
+  width: 100%;
+  max-width: 100%;
+  box-sizing: border-box;
+  padding: 6px 0 8px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+}
+.nyagi-preset-line:last-of-type {
+  border-bottom: none;
+}
+.nyagi-preset-line__text {
+  display: block;
+  width: 100%;
+  max-width: 100%;
+  box-sizing: border-box;
+  font-size: 11px;
+  line-height: 1.45;
+  color: var(--text-dim);
+  word-break: normal;
+  overflow-wrap: break-word;
+  writing-mode: horizontal-tb;
+  white-space: normal;
+}
+.nyagi-preset-line__actions,
+.nyagi-preset-card__foot {
+  display: block;
+  width: 100%;
+  max-width: 100%;
+  box-sizing: border-box;
+  text-align: right;
+  margin-top: 6px;
+}
+.nyagi-preset-card__foot {
+  margin-top: 10px;
+}
+#presetApplyModal .nyagi-preset-line__actions .btn,
+#presetApplyModal .nyagi-preset-card__foot .btn,
+#ovPresetApplyModal .nyagi-preset-line__actions .btn,
+#ovPresetApplyModal .nyagi-preset-card__foot .btn {
+  width: auto !important;
+  max-width: 100%;
+  box-sizing: border-box;
+}
+.nyagi-preset-loc-row {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 14px;
+  width: 100%;
+  max-width: 100%;
+  box-sizing: border-box;
+}
+#presetApplyModal .nyagi-preset-loc-row .btn,
+#ovPresetApplyModal .nyagi-preset-loc-row .btn {
+  width: auto !important;
+  flex: 1 1 0;
+  min-width: 0;
+  max-width: 100%;
+  box-sizing: border-box;
+}
+.nyagi-preset-item-edit {
+  display: block;
+  width: 100%;
+  max-width: 100%;
+  box-sizing: border-box;
+  padding: 8px;
+  background: var(--surface);
+  border-radius: 6px;
+  margin-bottom: 6px;
+}
+.nyagi-preset-item-edit__text {
+  display: block;
+  width: 100%;
+  max-width: 100%;
+  box-sizing: border-box;
+  font-size: 12px;
+  line-height: 1.4;
+  word-break: normal;
+  overflow-wrap: break-word;
+  writing-mode: horizontal-tb;
+}
+.nyagi-preset-item-edit__actions {
+  display: block;
+  width: 100%;
+  text-align: right;
+  margin-top: 6px;
+}
+#presetApplyModal .nyagi-preset-item-edit__actions .btn-edit-small,
+#ovPresetApplyModal .nyagi-preset-item-edit__actions .btn-edit-small {
+  width: auto !important;
+  display: inline-block;
+  vertical-align: middle;
+}

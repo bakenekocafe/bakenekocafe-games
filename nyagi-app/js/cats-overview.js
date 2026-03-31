@@ -45,6 +45,30 @@
     return !isNaN(n) && n !== 0;
   }
 
+  function ovLeftoverGFromOfferedPct(offeredG, eatenPct) {
+    if (offeredG == null || offeredG === '') return '';
+    var og = parseFloat(offeredG);
+    if (isNaN(og) || og <= 0) return '';
+    if (eatenPct == null || eatenPct === '') return '';
+    var ep = Number(eatenPct);
+    if (isNaN(ep)) return '';
+    return String(Math.round(og * (100 - ep) / 100 * 10) / 10);
+  }
+
+  function ovEatenPctFromOfferedLeftover(offeredG, leftoverGStr) {
+    if (leftoverGStr == null || String(leftoverGStr).trim() === '') return null;
+    var og = parseFloat(offeredG);
+    if (isNaN(og) || og <= 0) return null;
+    var lg = parseFloat(String(leftoverGStr).trim());
+    if (isNaN(lg) || lg < 0) return null;
+    if (lg > og) return -1;
+    if (lg === 0) return 100;
+    var pct = Math.round((og - lg) / og * 100);
+    if (pct < 0) pct = 0;
+    if (pct > 100) pct = 100;
+    return pct;
+  }
+
   /** JST の HH:mm */
   function nowJstHm() {
     return new Date().toLocaleTimeString('en-GB', {
@@ -76,6 +100,28 @@
   }
 
   /** YYYY-MM-DD → 表示用 M/D */
+  /** タスクの指定実行日用 M/D（曜） */
+  function ovFmtTaskYmdWithWday(ymdRaw) {
+    var ymd = String(ymdRaw || '').slice(0, 10);
+    if (ymd.length !== 10 || ymd.charAt(4) !== '-') return '';
+    var parts = ymd.split('-');
+    var y = parseInt(parts[0], 10);
+    var mo = parseInt(parts[1], 10);
+    var d = parseInt(parts[2], 10);
+    if (isNaN(y) || isNaN(mo) || isNaN(d)) return fmtExcretionMdYmd(ymd);
+    var dt = new Date(y, mo - 1, d);
+    var wdays = ['日', '月', '火', '水', '木', '金', '土'];
+    return mo + '/' + d + '（' + wdays[dt.getDay()] + '）';
+  }
+
+  function ovHtmlTaskScheduledIf(item) {
+    var sd = item.scheduled_date ? String(item.scheduled_date).slice(0, 10) : '';
+    if (sd.length !== 10) return '';
+    var lbl = ovFmtTaskYmdWithWday(sd);
+    if (!lbl) return '';
+    return '<span class="dim ov-task-scheduled" style="font-size:10px;margin-right:6px;white-space:nowrap;">実行 ' + esc(lbl) + '</span>';
+  }
+
   function fmtExcretionMdYmd(ymd) {
     if (!ymd || ymd.length < 10) return '';
     var m = parseInt(ymd.slice(5, 7), 10);
@@ -207,11 +253,19 @@
     var aCafe = activeLoc === 'cafe' ? 'background:rgba(251,191,36,0.25);border-color:rgba(251,191,36,0.55);color:#fbbf24;font-weight:700;' : 'background:var(--surface);border-color:rgba(255,255,255,0.12);color:var(--text-dim);';
     var aNeko = activeLoc === 'nekomata' ? 'background:rgba(248,113,113,0.18);border-color:rgba(248,113,113,0.45);color:#f87171;font-weight:700;' : 'background:var(--surface);border-color:rgba(255,255,255,0.12);color:var(--text-dim);';
     var h = '<div style="font-size:11px;color:var(--text-dim);margin:0 0 8px;font-weight:600;">🏷 表示拠点</div>';
-    h += '<div style="display:flex;gap:8px;margin-bottom:14px;">';
-    h += '<button type="button" class="btn" style="flex:1;padding:10px 6px;font-size:11px;border:2px solid;border-radius:8px;' + aCafe + '" data-ov-preset-loc="cafe" data-ov-preset-ctx="' + escAttr(context) + '">🐱 CAFE</button>';
-    h += '<button type="button" class="btn" style="flex:1;padding:10px 6px;font-size:11px;border:2px solid;border-radius:8px;' + aNeko + '" data-ov-preset-loc="nekomata" data-ov-preset-ctx="' + escAttr(context) + '">🏥 猫又</button>';
+    h += '<div class="nyagi-preset-loc-row">';
+    h += '<button type="button" class="btn" style="padding:10px 6px;font-size:11px;border:2px solid;border-radius:8px;' + aCafe + '" data-ov-preset-loc="cafe" data-ov-preset-ctx="' + escAttr(context) + '">🐱 CAFE</button>';
+    h += '<button type="button" class="btn" style="padding:10px 6px;font-size:11px;border:2px solid;border-radius:8px;' + aNeko + '" data-ov-preset-loc="nekomata" data-ov-preset-ctx="' + escAttr(context) + '">🏥 猫又</button>';
     h += '</div>';
     return h;
+  }
+
+  /** プリセット表示用: API 由来の改行・異常空白で「縦に1文字ずつ」に見えるのを防ぐ */
+  function nyagiPresetFoodNamePlain(raw) {
+    var s = String(raw == null ? '' : raw);
+    s = s.replace(/[\r\n\x0B\x0C\u2028\u2029\u0085]+/g, ' ');
+    s = s.replace(/[\s\u00a0\u3000]+/g, ' ').trim();
+    return s;
   }
 
   function ovRenderPresetItemsSummary(items, totalKcal, presetIdForOneApply) {
@@ -223,23 +277,24 @@
       else if (items[i].meal_slot === 'morning' || items[i].meal_slot === 'afternoon') morn.push(items[i]);
       else other.push(items[i]);
     }
-    var h = '<div style="margin-top:4px;">';
+    var h = '<div style="display:block;width:100%;max-width:100%;box-sizing:border-box;margin-top:4px;">';
     function rowHtml(it) {
-      var line = '<div style="display:flex;align-items:flex-start;justify-content:space-between;gap:6px;padding:2px 0 2px 8px;">';
-      line += '<div style="min-width:0;flex:1;font-size:11px;color:var(--text-dim);">' + esc(it.food_name || '') + ' ' + it.amount_g + 'g';
+      var notesHtml = '';
       if (it.notes && String(it.notes).trim()) {
-        line += '<div style="font-size:10px;color:var(--text-dim);padding:2px 0 0;line-height:1.35;white-space:pre-wrap;word-break:break-word;">📝 ' + esc(String(it.notes).trim()) + '</div>';
+        notesHtml = '<div style="font-size:10px;color:var(--text-dim);padding:4px 0 0;line-height:1.35;white-space:pre-wrap;word-break:break-word;">📝 ' + esc(String(it.notes).trim()) + '</div>';
       }
-      line += '</div>';
+      var nameText = esc(nyagiPresetFoodNamePlain(it.food_name)) + ' ' + it.amount_g + 'g';
+      var line = '<div style="display:flex;align-items:flex-start;gap:8px;width:100%;max-width:100%;box-sizing:border-box;padding:5px 0 7px;border-bottom:1px solid rgba(255,255,255,0.06);">';
+      line += '<div style="flex:1;min-width:0;font-size:11px;line-height:1.5;color:var(--text-dim);word-break:normal;overflow-wrap:break-word;writing-mode:horizontal-tb;white-space:normal;" data-nyagi-preset-food="1">' + nameText + notesHtml + '</div>';
       if (presetIdForOneApply && it.id != null) {
-        line += '<button type="button" class="btn btn-outline" style="font-size:9px;padding:2px 8px;flex-shrink:0;white-space:nowrap;" data-ov-apply-preset-item="' + escAttr(String(presetIdForOneApply) + ':' + String(it.id)) + '">1品</button>';
+        line += '<div style="flex-shrink:0;"><button type="button" class="btn btn-outline" style="font-size:9px;padding:2px 8px;white-space:nowrap;width:auto !important;display:inline-block;" data-ov-apply-preset-item="' + escAttr(String(presetIdForOneApply) + ':' + String(it.id)) + '">1品</button></div>';
       }
       line += '</div>';
       return line;
     }
     function block(title, arr) {
       if (arr.length === 0) return '';
-      var x = '<div style="font-size:10px;color:var(--accent,#fb923c);font-weight:600;margin-top:2px;">' + esc(title) + '</div>';
+      var x = '<div style="font-size:10px;color:var(--accent,#fb923c);font-weight:600;margin-top:6px;margin-bottom:2px;">' + esc(title) + '</div>';
       for (var m = 0; m < arr.length; m++) x += rowHtml(arr[m]);
       return x;
     }
@@ -297,14 +352,12 @@
           for (var i = 0; i < presets.length; i++) {
             var ps = presets[i];
             innerHtml += ovFeedingPresetAlphaSectionHtml(loc, ps, lastAlphaOvApply);
-            innerHtml += '<div style="background:var(--surface);border-radius:8px;padding:10px 12px;margin-bottom:8px;">';
-            innerHtml += '<div style="display:flex;justify-content:space-between;align-items:flex-start;gap:8px;">';
-            innerHtml += '<div style="flex:1;min-width:0;"><div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;">' + ovPresetLocationBadgeHtml(ps.location_id) + '<b style="font-size:13px;">' + esc(ps.name) + '</b></div>';
+            innerHtml += '<div class="nyagi-preset-card">';
+            innerHtml += '<div class="nyagi-preset-card__head">' + ovPresetLocationBadgeHtml(ps.location_id) + '<b style="font-size:13px;"><span data-nyagi-preset-food="1">' + esc(nyagiPresetFoodNamePlain(ps.name)) + '</span></b></div>';
             if (ps.description) innerHtml += '<div style="font-size:11px;color:var(--text-dim);margin-top:2px;line-height:1.4;white-space:pre-wrap;word-break:break-word;">' + esc(ps.description) + '</div>';
-            innerHtml += ovRenderPresetItemsSummary(ps.items || [], ps.total_kcal, ps.id);
+            innerHtml += '<div class="nyagi-preset-card__items">' + ovRenderPresetItemsSummary(ps.items || [], ps.total_kcal, ps.id) + '</div>';
+            innerHtml += '<div class="nyagi-preset-card__foot"><button type="button" class="btn btn-primary" style="font-size:11px;padding:4px 10px;" data-ov-apply-preset="' + escAttr(String(ps.id)) + '" title="プリセット内の全フードを献立に追加">全て適用</button></div>';
             innerHtml += '</div>';
-            innerHtml += '<button type="button" class="btn btn-primary" style="font-size:11px;padding:4px 10px;flex-shrink:0;" data-ov-apply-preset="' + escAttr(String(ps.id)) + '" title="プリセット内の全フードを献立に追加">全て適用</button>';
-            innerHtml += '</div></div>';
           }
         }
         innerHtml += '<div class="modal-actions"><button type="button" class="btn btn-outline" data-ov-close-preset="1">閉じる</button></div></div>';
@@ -547,7 +600,7 @@
     var sl = document.getElementById('ovFlSlot');
     if (sl) sl.value = presetSlot || 'morning';
     if (document.getElementById('ovFlOfferedG')) document.getElementById('ovFlOfferedG').value = '';
-    if (document.getElementById('ovFlEatenPct')) document.getElementById('ovFlEatenPct').value = '100';
+    if (document.getElementById('ovFlLeftoverG')) document.getElementById('ovFlLeftoverG').value = '';
     var flst = document.getElementById('ovFlServedTime');
     if (flst) flst.value = nowJstHm();
     ovFillFoodSelect('ovFlFoodId');
@@ -605,9 +658,16 @@
     var mealSlot = document.getElementById('ovFlSlot') && document.getElementById('ovFlSlot').value;
     var foodId = document.getElementById('ovFlFoodId') && document.getElementById('ovFlFoodId').value;
     var offeredG = document.getElementById('ovFlOfferedG') && document.getElementById('ovFlOfferedG').value;
-    var eatenPct = document.getElementById('ovFlEatenPct') && document.getElementById('ovFlEatenPct').value;
+    var leftoverStr = document.getElementById('ovFlLeftoverG') && String(document.getElementById('ovFlLeftoverG').value).trim();
     if (!logDate || !mealSlot) { alert('日付と食事区分は必須です'); return; }
     if (!foodId || !offeredG) { alert('フードとあげた量は必須です'); return; }
+    var eatenPct = null;
+    if (leftoverStr !== '') {
+      var pctO = ovEatenPctFromOfferedLeftover(parseFloat(offeredG), leftoverStr);
+      if (pctO === -1) { alert('残した量が提供量を超えています'); return; }
+      if (pctO === null) { alert('あげた量を確認してください'); return; }
+      eatenPct = pctO;
+    }
     var flst2 = document.getElementById('ovFlServedTime');
     var stFl = flst2 && flst2.value ? flst2.value : nowJstHm();
     fetch(feedingApiBase() + '/logs', {
@@ -620,7 +680,7 @@
         meal_slot: mealSlot,
         food_id: foodId,
         offered_g: parseFloat(offeredG),
-        eaten_pct: eatenPct !== '' && eatenPct != null ? parseFloat(eatenPct) : null,
+        eaten_pct: eatenPct,
         served_time: stFl,
       }),
     }).then(function (r) { return r.json(); })
@@ -709,9 +769,9 @@
     if (fn) fn.textContent = foodName || '—';
     var og = document.getElementById('ovElOfferedG');
     if (og) og.value = offeredG || '';
-    var ep = document.getElementById('ovElEatenPct');
-    if (ep) {
-      ep.value = eatenPct != null && String(eatenPct).trim() !== '' && String(eatenPct) !== 'undefined' ? String(eatenPct) : '';
+    var lgEl = document.getElementById('ovElLeftoverG');
+    if (lgEl) {
+      lgEl.value = ovLeftoverGFromOfferedPct(offeredG, eatenPct);
     }
     var elst = document.getElementById('ovElServedTime');
     if (elst) elst.value = ovFmtFedServedTime(servedTimeRaw) || nowJstHm();
@@ -728,14 +788,20 @@
   function ovSubmitEditLog() {
     if (!_ovElLogId) return;
     var og = document.getElementById('ovElOfferedG');
-    var ep = document.getElementById('ovElEatenPct');
+    var lgInp = document.getElementById('ovElLeftoverG');
     var offeredG = og && og.value ? parseFloat(og.value) : null;
-    var eatenPct = ep && ep.value !== '' ? parseFloat(ep.value) : null;
+    var leftoverStr = lgInp && lgInp.value != null ? String(lgInp.value).trim() : '';
+    var eatenPct = null;
+    if (leftoverStr !== '') {
+      var pctE = ovEatenPctFromOfferedLeftover(offeredG, leftoverStr);
+      if (pctE === -1) { alert('残した量が提供量を超えています'); return; }
+      if (pctE === null) { alert('あげた量を入力してください'); return; }
+      eatenPct = pctE;
+    }
     var elst2 = document.getElementById('ovElServedTime');
     var stEl = elst2 && elst2.value ? elst2.value : nowJstHm();
-    var payload = { served_time: stEl };
+    var payload = { served_time: stEl, eaten_pct: eatenPct };
     if (offeredG != null) payload.offered_g = offeredG;
-    if (eatenPct != null) payload.eaten_pct = eatenPct;
     fetch(feedingApiBase() + '/logs/' + encodeURIComponent(_ovElLogId), {
       method: 'PUT',
       headers: apiHeaders(),
@@ -1551,10 +1617,10 @@
         var h = '';
         for (var i = 0; i < items.length; i++) {
           var it = items[i];
-          h += '<div style="padding:8px;background:var(--surface);border-radius:6px;margin-bottom:6px;">';
-          h += '<div style="display:flex;justify-content:space-between;align-items:flex-start;gap:8px;">';
-          h += '<div style="font-size:12px;flex:1;min-width:0;">' + esc(it.food_name || '') + ' <b>' + it.amount_g + 'g</b> <span class="dim">' + esc(it.meal_slot || '') + '</span></div>';
-          h += '<div style="display:flex;gap:2px;flex-shrink:0;">';
+          h += '<div style="display:block;width:100%;max-width:100%;box-sizing:border-box;padding:8px;background:var(--surface);border-radius:6px;margin-bottom:6px;">';
+          h += '<div style="display:flex;align-items:flex-start;gap:6px;width:100%;">';
+          h += '<div style="flex:1;min-width:0;font-size:12px;line-height:1.4;word-break:normal;overflow-wrap:break-word;writing-mode:horizontal-tb;white-space:normal;" data-nyagi-preset-food="1">' + esc(nyagiPresetFoodNamePlain(it.food_name)) + ' <b>' + it.amount_g + 'g</b> <span class="dim">' + esc(it.meal_slot || '') + '</span></div>';
+          h += '<div style="flex-shrink:0;display:flex;gap:4px;">';
           h += '<button type="button" class="btn-edit-small" title="フード行メモ" data-ov-edit-preset-item-note="1" data-ov-preset-pid="' + escAttr(String(presetId)) + '" data-ov-item-id="' + escAttr(String(it.id)) + '">📎</button>';
           h += '<button type="button" class="btn-edit-small" style="color:#f87171;" data-ov-del-preset-item="' + escAttr(String(presetId)) + ':' + escAttr(String(it.id)) + '">🗑</button>';
           h += '</div></div>';
@@ -2419,6 +2485,92 @@
     };
   }
 
+  /** 新規猫の内部ID（DB 主キー）。衝突しにくいよう時刻＋乱数。 */
+  function nyagiNewCatGeneratedId() {
+    var r = Math.random().toString(36).replace(/[^a-z0-9]/g, '');
+    return 'cat_reg_' + Date.now() + '_' + (r.length >= 6 ? r.slice(0, 6) : r + 'xxxxxx').slice(0, 6);
+  }
+
+  function ovOpenNewCatModal() {
+    var m = document.getElementById('ovNewCatModal');
+    if (!m) return;
+    var nm = document.getElementById('ovNewCatName');
+    if (nm) nm.value = '';
+    var loc = document.getElementById('ovNewCatLocation');
+    if (loc) {
+      var saved = currentLocationId && currentLocationId !== 'all' ? currentLocationId : null;
+      if (saved && ['cafe', 'nekomata', 'endo', 'azukari'].indexOf(saved) !== -1) loc.value = saved;
+    }
+    var sp = document.getElementById('ovNewCatSpecies');
+    if (sp) sp.value = 'cat';
+    m.classList.add('open');
+    if (nm) setTimeout(function () { try { nm.focus(); } catch (_) {} }, 80);
+  }
+
+  function ovCloseNewCatModal() {
+    var m = document.getElementById('ovNewCatModal');
+    if (m) m.classList.remove('open');
+  }
+
+  function ovSubmitNewCat() {
+    var nameEl = document.getElementById('ovNewCatName');
+    var name = nameEl && String(nameEl.value || '').trim();
+    if (!name) {
+      alert('名前を入力してください');
+      return;
+    }
+    var locEl = document.getElementById('ovNewCatLocation');
+    var locationId = locEl ? locEl.value : 'cafe';
+    var spEl = document.getElementById('ovNewCatSpecies');
+    var species = (spEl && spEl.value === 'dog') ? 'dog' : 'cat';
+    var newId = nyagiNewCatGeneratedId();
+    var btn = document.getElementById('ovNewCatSubmit');
+    if (btn) {
+      btn.disabled = true;
+      btn.textContent = '登録中…';
+    }
+    function finishFail(msg) {
+      if (btn) {
+        btn.disabled = false;
+        btn.textContent = '登録する';
+      }
+      alert(msg || '登録に失敗しました');
+    }
+    fetch(apiOpsBase() + '/cats', {
+      method: 'POST',
+      headers: apiHeaders(),
+      cache: 'no-store',
+      body: JSON.stringify({
+        id: newId,
+        name: name,
+        location_id: locationId,
+        species: species,
+        status: 'in_care',
+      }),
+    }).then(function (r) {
+      return r.json().then(function (data) {
+        return { ok: r.ok, data: data };
+      }).catch(function () {
+        return { ok: false, data: { error: 'parse error' } };
+      });
+    }).then(function (res) {
+      if (res.ok && res.data && !res.data.error) {
+        ovCloseNewCatModal();
+        if (btn) {
+          btn.disabled = false;
+          btn.textContent = '登録する';
+        }
+        fetchData(0);
+        window.location.href = 'cat.html?id=' + encodeURIComponent(res.data.id || newId);
+        return;
+      }
+      var msg = (res.data && (res.data.message || res.data.error)) ? (res.data.message || res.data.error) : '登録に失敗しました';
+      finishFail(msg);
+    }).catch(function () {
+      finishFail('ネットワークエラー');
+    });
+  }
+
   function init() {
     credentials = loadCredentials();
     if (!credentials) {
@@ -2435,6 +2587,19 @@
 
     if (btnPerCat) btnPerCat.addEventListener('click', function () { switchMode('perCat'); });
     if (btnPerItem) btnPerItem.addEventListener('click', function () { switchMode('perItem'); });
+
+    var btnNewCat = document.getElementById('btnOvNewCat');
+    if (btnNewCat) btnNewCat.addEventListener('click', ovOpenNewCatModal);
+    var ovNcCancel = document.getElementById('ovNewCatCancel');
+    if (ovNcCancel) ovNcCancel.addEventListener('click', ovCloseNewCatModal);
+    var ovNcSubmit = document.getElementById('ovNewCatSubmit');
+    if (ovNcSubmit) ovNcSubmit.addEventListener('click', ovSubmitNewCat);
+    var ovNcModal = document.getElementById('ovNewCatModal');
+    if (ovNcModal) {
+      ovNcModal.addEventListener('click', function (ev) {
+        if (ev.target === ovNcModal) ovCloseNewCatModal();
+      });
+    }
 
     try { buildCatNav(); } catch (e) { console.error('buildCatNav error', e); }
 
@@ -2538,44 +2703,71 @@
     return q;
   }
 
+  var _refreshTimer = null;
+  var _initialLoadDone = false;
+  var _fetchSeq = 0;
+
+  /**
+   * fetchData(0)  — 保存後のバックグラウンドリフレッシュ（デバウンス 600ms、スピナーなし）
+   * fetchData()   — 初回ロード / 拠点・ステータス切替（即時、スピナー付き）
+   */
   function fetchData(retryCount) {
+    var isSaveRefresh = arguments.length > 0 && retryCount === 0 && _initialLoadDone;
     retryCount = retryCount || 0;
-    if (window.NyagiBootOverlay && retryCount === 0) window.NyagiBootOverlay.show('猫一覧ユニット同期中…');
-    cardArea.innerHTML = '<div class="loading">読み込み中...</div>';
+
+    if (isSaveRefresh) {
+      if (_refreshTimer) clearTimeout(_refreshTimer);
+      _refreshTimer = setTimeout(function () { _refreshTimer = null; _doFetch(0, true); }, 600);
+      return;
+    }
+    _doFetch(retryCount, false);
+  }
+
+  function _doFetch(retryCount, background) {
+    var seq = ++_fetchSeq;
+
+    if (!background) {
+      if (window.NyagiBootOverlay && retryCount === 0) window.NyagiBootOverlay.show('猫一覧ユニット同期中…');
+      cardArea.innerHTML = '<div class="loading">読み込み中...</div>';
+    }
+
     var ctrl = new AbortController();
     var timeoutId = setTimeout(function () { ctrl.abort(); }, 30000);
     fetch(getApiUrl() + locationQuery(), { headers: apiHeaders(), cache: 'no-store', signal: ctrl.signal })
       .then(function (r) {
         clearTimeout(timeoutId);
         return r.json().then(function (data) {
-          if (data.error) {
-            throw new Error(data.message || data.error || 'APIエラー');
-          }
-          if (!r.ok) {
-            throw new Error(data.message || 'HTTP ' + r.status);
-          }
+          if (data.error) throw new Error(data.message || data.error || 'APIエラー');
+          if (!r.ok) throw new Error(data.message || 'HTTP ' + r.status);
           return data;
         });
       })
       .then(function (data) {
+        if (seq !== _fetchSeq) return;
         catsData = data.cats || [];
         locationTasksToday = data.location_tasks_today || { done: 0, total: 0, items: [] };
         render();
+        _initialLoadDone = true;
         if (window.NyagiBootOverlay) window.NyagiBootOverlay.hideForce();
       })
       .catch(function (err) {
         clearTimeout(timeoutId);
+        if (seq !== _fetchSeq) return;
         var isNetworkErr = (err && (err.name === 'AbortError' || (err.message && (err.message.indexOf('Failed to fetch') !== -1 || err.message.indexOf('NetworkError') !== -1 || err.message.indexOf('Load failed') !== -1))));
         if (isNetworkErr && retryCount < 2) {
-          cardArea.innerHTML = '<div class="loading">読み込み中...（再試行 ' + (retryCount + 1) + '/2）</div>';
-          setTimeout(function () { fetchData(retryCount + 1); }, 1200);
+          if (!background) {
+            cardArea.innerHTML = '<div class="loading">読み込み中...（再試行 ' + (retryCount + 1) + '/2）</div>';
+          }
+          setTimeout(function () { _doFetch(retryCount + 1, background); }, 1200);
           return;
         }
         if (window.NyagiBootOverlay) window.NyagiBootOverlay.hideForce();
-        var msg = err.name === 'AbortError' ? 'タイムアウトしました' : (err && err.message ? err.message : 'データ取得に失敗しました');
-        var hint = (location.port !== '8001' && location.hostname === 'localhost') ? '<br><span style="font-size:11px;color:var(--text-dim);">※ http://localhost:8001/nyagi-app/ で開くと安定します</span>' : (isNetworkErr ? ' run-dev.ps1 で起動してください' : '');
-        cardArea.innerHTML = '<div class="empty-msg">' + esc(msg) + hint + '</div>' +
-          '<button class="btn btn-primary" style="margin-top:12px;display:block;margin-left:auto;margin-right:auto;" onclick="location.reload()">再試行</button>';
+        if (!background) {
+          var msg = err.name === 'AbortError' ? 'タイムアウトしました' : (err && err.message ? err.message : 'データ取得に失敗しました');
+          var hint = (location.port !== '8001' && location.hostname === 'localhost') ? '<br><span style="font-size:11px;color:var(--text-dim);">※ http://localhost:8001/nyagi-app/ で開くと安定します</span>' : (isNetworkErr ? ' run-dev.ps1 で起動してください' : '');
+          cardArea.innerHTML = '<div class="empty-msg">' + esc(msg) + hint + '</div>' +
+            '<button class="btn btn-primary" style="margin-top:12px;display:block;margin-left:auto;margin-right:auto;" onclick="location.reload()">再試行</button>';
+        }
         console.error('cats overview fetch error', err);
       });
   }
@@ -3368,7 +3560,7 @@
           var lds = String(lit.due_time);
           ltimeStr = '<span class="dim" style="margin-right:4px;">' + esc(lds.length >= 5 ? lds.slice(0, 5) : lds) + '</span>';
         }
-        locTaskVals += '<div class="ov-task-line"><div class="ov-task-head">' + ltimeStr + '<span class="ov-task-title">' + esc(lit.title) + '</span></div>' +
+        locTaskVals += '<div class="ov-task-line"><div class="ov-task-head">' + ltimeStr + ovHtmlTaskScheduledIf(lit) + '<span class="ov-task-title">' + esc(lit.title) + '</span></div>' +
           '<div class="ov-task-actions">' +
           '<button type="button" class="btn btn-ov-task-done" data-task-id="' + escAttr(String(lit.id)) + '">完了</button>' +
           '<button type="button" class="btn btn-ov-task-skip" data-task-id="' + escAttr(String(lit.id)) + '">スキップ</button></div></div>';
@@ -3392,7 +3584,7 @@
             var ds = String(it.due_time);
             timeStr = '<span class="dim" style="margin-right:4px;">' + esc(ds.length >= 5 ? ds.slice(0, 5) : ds) + '</span>';
           }
-          taskVals += '<div class="ov-task-line"><div class="ov-task-head">' + timeStr + '<span class="ov-task-title">' + esc(it.title) + '</span></div>' +
+          taskVals += '<div class="ov-task-line"><div class="ov-task-head">' + timeStr + ovHtmlTaskScheduledIf(it) + '<span class="ov-task-title">' + esc(it.title) + '</span></div>' +
             '<div class="ov-task-actions">' +
             '<button type="button" class="btn btn-ov-task-done" data-task-id="' + escAttr(String(it.id)) + '">完了</button>' +
             '<button type="button" class="btn btn-ov-task-skip" data-task-id="' + escAttr(String(it.id)) + '">スキップ</button></div></div>';
@@ -3446,7 +3638,7 @@
     var html = '<div class="item-card">';
     html += '<div class="item-card-title">🏥 医療（中長期）</div>';
     html += '<div class="item-card-body">';
-    var today = new Date().toISOString().slice(0, 10);
+    var today = todayJstYmd();
     for (var i = 0; i < catsData.length; i++) {
       var c = catsData[i];
       var medLongVals = '';

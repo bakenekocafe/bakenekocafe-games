@@ -13,6 +13,7 @@ var credentials = null;
 var allFoods = [];
 var currentFilter = 'all';
 var currentSpeciesFilter = 'all';
+var currentListTextFilter = '';
 var currentPreviewUrl = '';
 
 // ── 認証 ──────────────────────────────────────────────────────────────────────
@@ -383,10 +384,45 @@ function renderFoodList() {
       }
     }
 
+    if (currentListTextFilter) {
+      var listHay =
+        (f.name || '') +
+        ' ' +
+        (f.brand || '') +
+        ' ' +
+        (f.flavor || '') +
+        ' ' +
+        (f.purpose || '') +
+        ' ' +
+        (f.notes || '') +
+        ' ' +
+        (f.category || '') +
+        ' ' +
+        (f.id || '') +
+        ' ' +
+        foodTypeLabel(ft) +
+        ' ' +
+        (f.form || '');
+      if (typeof nyagiSearchTextMatchesQuery === 'function') {
+        if (!nyagiSearchTextMatchesQuery(listHay, currentListTextFilter)) continue;
+      } else {
+        var words = currentListTextFilter.replace(/\u3000/g, ' ').split(/\s+/).filter(function (w) { return w.length > 0; });
+        var lo = listHay.toLowerCase();
+        var ok = true;
+        for (var wi = 0; wi < words.length; wi++) {
+          if (lo.indexOf(words[wi].toLowerCase()) === -1) {
+            ok = false;
+            break;
+          }
+        }
+        if (!ok) continue;
+      }
+    }
+
     filtered.push(f);
   }
 
-  var hasFilter = currentFilter !== 'all' || currentSpeciesFilter !== 'all';
+  var hasFilter = currentFilter !== 'all' || currentSpeciesFilter !== 'all' || !!currentListTextFilter;
   count.textContent = '登録フード: ' + allFoods.length + '件' +
     (hasFilter ? ' (表示: ' + filtered.length + '件)' : '');
 
@@ -459,6 +495,12 @@ function filterSpecies(sp) {
   renderFoodList();
 }
 
+function filterFoodListByText() {
+  var el = document.getElementById('foodListFilterInput');
+  currentListTextFilter = el ? el.value.trim() : '';
+  renderFoodList();
+}
+
 // ── 詳細モーダル ───────────────────────────────────────────────────────────────
 
 function showDetail(foodId) {
@@ -498,12 +540,343 @@ function showDetail(foodId) {
     }
   }
 
+  html +=
+    '<div class="detail-dict">' +
+    '<div class="detail-dict-title">製品名辞書（表記ゆれ・別名）</div>' +
+    '<p class="detail-dict-hint">manual / alias は編集・削除できます。公式名（official）は優先度のみ変更できます。</p>' +
+    '<div id="foodDictMount"><div class="detail-dict-loading">読込中…</div></div>' +
+    '</div>';
+
   document.getElementById('modalBody').innerHTML = html;
   document.getElementById('detailModal').classList.add('open');
+
+  _detailFoodId = foodId;
+  _foodDictEditCtx = null;
+  loadFoodDictionary(foodId);
+}
+
+function loadFoodDictionary(foodId) {
+  var mount = document.getElementById('foodDictMount');
+  if (!mount) return;
+  mount.innerHTML = '<div class="detail-dict-loading">読込中…</div>';
+
+  fetch(API_BASE + '/foods/' + encodeURIComponent(foodId) + '/dictionary', {
+    method: 'GET',
+    headers: apiHeaders(),
+    cache: 'no-store',
+  })
+    .then(function (r) {
+      return r.json();
+    })
+    .then(function (data) {
+      if (data.error) {
+        mount.innerHTML =
+          '<div class="detail-dict-err">' + esc(data.message || data.error || '読込失敗') + '</div>';
+        return;
+      }
+      renderFoodDictionaryUI(foodId, data.entries || []);
+    })
+    .catch(function () {
+      mount.innerHTML = '<div class="detail-dict-err">通信エラー</div>';
+    });
+}
+
+/** base64 UTF-8（variant に日本語・記号が含まれる場合） */
+function btoaUnic(s) {
+  try {
+    return btoa(unescape(encodeURIComponent(String(s || ''))));
+  } catch (_) {
+    return '';
+  }
+}
+
+function b64DecUnic(b64) {
+  if (!b64) return '';
+  try {
+    return decodeURIComponent(escape(atob(b64)));
+  } catch (_) {
+    return '';
+  }
+}
+
+function renderFoodDictionaryUI(foodId, entries) {
+  var mount = document.getElementById('foodDictMount');
+  if (!mount) return;
+
+  var rows = '';
+  for (var i = 0; i < entries.length; i++) {
+    var e = entries[i];
+    var isOff = e.variant_type === 'official';
+    rows +=
+      '<div class="dict-row">' +
+      '<span class="dict-variant">' +
+      esc(e.variant || '') +
+      '</span>' +
+      '<span class="dict-badge">' +
+      esc(e.variant_type || '') +
+      '</span>' +
+      '<span class="dict-pri">pri ' +
+      esc(String(e.priority != null ? e.priority : '')) +
+      '</span>' +
+      '<span class="dict-actions">' +
+      '<button type="button" class="dict-btn js-dict-edit" data-food-id="' +
+      escAttr(foodId) +
+      '" data-variant-b64="' +
+      escAttr(btoaUnic(e.variant || '')) +
+      '" data-vtype-b64="' +
+      escAttr(btoaUnic(e.variant_type || '')) +
+      '" data-official="' +
+      (isOff ? '1' : '0') +
+      '" data-pri="' +
+      escAttr(String(e.priority != null ? e.priority : '')) +
+      '">編集</button>';
+
+    if (!isOff) {
+      rows +=
+        '<button type="button" class="dict-btn danger js-dict-del" data-food-id="' +
+        escAttr(foodId) +
+        '" data-variant-b64="' +
+        escAttr(btoaUnic(e.variant || '')) +
+        '" data-vtype-b64="' +
+        escAttr(btoaUnic(e.variant_type || '')) +
+        '">削除</button>';
+    }
+    rows += '</span></div>';
+  }
+
+  mount.innerHTML =
+    '<div class="dict-table">' +
+    rows +
+    '</div>' +
+    '<div class="dict-add">' +
+    '<span class="dict-add-label">追加</span>' +
+    '<input type="text" id="dictAddVariant" class="dict-input" placeholder="別名・表記ゆれ">' +
+    '<select id="dictAddType" class="dict-select">' +
+    '<option value="manual">manual</option>' +
+    '<option value="alias">alias</option>' +
+    '</select>' +
+    '<input type="number" id="dictAddPri" class="dict-input pri" placeholder="優先度" value="95" step="1">' +
+    '<button type="button" class="dict-btn primary js-dict-add-submit" data-food-id="' +
+    escAttr(foodId) +
+    '">追加</button>' +
+    '</div>' +
+    '<div id="dictEditPanel" class="dict-edit-panel" style="display:none;"></div>';
+
+  var editBtns = mount.querySelectorAll('.js-dict-edit');
+  for (var ei = 0; ei < editBtns.length; ei++) {
+    editBtns[ei].addEventListener('click', function (ev) {
+      var btn = ev.currentTarget;
+      openFoodDictEdit(
+        btn.getAttribute('data-food-id'),
+        b64DecUnic(btn.getAttribute('data-variant-b64') || ''),
+        b64DecUnic(btn.getAttribute('data-vtype-b64') || ''),
+        btn.getAttribute('data-official'),
+        btn.getAttribute('data-pri') || ''
+      );
+    });
+  }
+  var delBtns = mount.querySelectorAll('.js-dict-del');
+  for (var di = 0; di < delBtns.length; di++) {
+    delBtns[di].addEventListener('click', function (ev) {
+      var b = ev.currentTarget;
+      removeFoodDictEntry(
+        b.getAttribute('data-food-id'),
+        b64DecUnic(b.getAttribute('data-variant-b64') || ''),
+        b64DecUnic(b.getAttribute('data-vtype-b64') || '')
+      );
+    });
+  }
+  var addBtn = mount.querySelector('.js-dict-add-submit');
+  if (addBtn) {
+    addBtn.addEventListener('click', function () {
+      submitFoodDictAdd(addBtn.getAttribute('data-food-id'));
+    });
+  }
+}
+
+function openFoodDictEdit(foodId, variant, variantType, isOfficialFlag, priStr) {
+  var mount = document.getElementById('foodDictMount');
+  if (!mount) return;
+  var panel = document.getElementById('dictEditPanel');
+  if (!panel) return;
+
+  _foodDictEditCtx = {
+    foodId: foodId,
+    old_variant: variant,
+    old_variant_type: variantType,
+    official: isOfficialFlag === '1' || isOfficialFlag === 1,
+  };
+
+  if (_foodDictEditCtx.official) {
+    panel.style.display = 'block';
+    panel.innerHTML =
+      '<div class="dict-edit-title">公式名の優先度</div>' +
+      '<input type="number" id="dictEditPri" class="dict-input" value="' +
+      escAttr(priStr) +
+      '" step="1">' +
+      '<div class="dict-edit-actions">' +
+      '<button type="button" class="dict-btn primary" onclick="saveFoodDictEdit()">保存</button>' +
+      '<button type="button" class="dict-btn" onclick="cancelFoodDictEdit()">キャンセル</button>' +
+      '</div>';
+  } else {
+    panel.style.display = 'block';
+    panel.innerHTML =
+      '<div class="dict-edit-title">辞書行の編集</div>' +
+      '<label class="dict-edit-label">表記</label>' +
+      '<input type="text" id="dictEditVariant" class="dict-input full" value="' +
+      escAttr(variant) +
+      '">' +
+      '<label class="dict-edit-label">種別</label>' +
+      '<select id="dictEditType" class="dict-select">' +
+      '<option value="manual"' +
+      (variantType === 'manual' ? ' selected' : '') +
+      '>manual</option>' +
+      '<option value="alias"' +
+      (variantType === 'alias' ? ' selected' : '') +
+      '>alias</option>' +
+      '</select>' +
+      '<label class="dict-edit-label">優先度</label>' +
+      '<input type="number" id="dictEditPri2" class="dict-input" value="' +
+      escAttr(priStr) +
+      '" step="1">' +
+      '<div class="dict-edit-actions">' +
+      '<button type="button" class="dict-btn primary" onclick="saveFoodDictEdit()">保存</button>' +
+      '<button type="button" class="dict-btn" onclick="cancelFoodDictEdit()">キャンセル</button>' +
+      '</div>';
+  }
+  panel.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+}
+
+window.cancelFoodDictEdit = function () {
+  var panel = document.getElementById('dictEditPanel');
+  if (panel) {
+    panel.style.display = 'none';
+    panel.innerHTML = '';
+  }
+  _foodDictEditCtx = null;
+  if (_detailFoodId) loadFoodDictionary(_detailFoodId);
+};
+
+window.saveFoodDictEdit = function () {
+  if (!_foodDictEditCtx) return;
+  var ctx = _foodDictEditCtx;
+  var body = { old_variant: ctx.old_variant, old_variant_type: ctx.old_variant_type };
+
+  if (ctx.official) {
+    var p1 = document.getElementById('dictEditPri');
+    var np = p1 ? parseInt(p1.value, 10) : NaN;
+    if (isNaN(np)) {
+      showToast('優先度が不正です', 'warning');
+      return;
+    }
+    body.priority = np;
+  } else {
+    var vEl = document.getElementById('dictEditVariant');
+    var tEl = document.getElementById('dictEditType');
+    var p2 = document.getElementById('dictEditPri2');
+    var nv = vEl ? vEl.value.trim() : '';
+    if (!nv) {
+      showToast('表記は必須です', 'warning');
+      return;
+    }
+    body.variant = nv;
+    body.variant_type = tEl ? tEl.value : 'manual';
+    if (p2 && p2.value !== '') {
+      var pr = parseInt(p2.value, 10);
+      if (!isNaN(pr)) body.priority = pr;
+    }
+  }
+
+  fetch(API_BASE + '/foods/' + encodeURIComponent(ctx.foodId) + '/dictionary', {
+    method: 'PUT',
+    headers: apiHeaders(),
+    cache: 'no-store',
+    body: JSON.stringify(body),
+  })
+    .then(function (r) {
+      return r.json();
+    })
+    .then(function (data) {
+      if (data.error) {
+        showToast(data.message || data.error || '更新失敗', 'error');
+        return;
+      }
+      showToast('辞書を更新しました', 'success');
+      cancelFoodDictEdit();
+    })
+    .catch(function () {
+      showToast('通信エラー', 'error');
+    });
+};
+
+function submitFoodDictAdd(foodId) {
+  var vEl = document.getElementById('dictAddVariant');
+  var tEl = document.getElementById('dictAddType');
+  var pEl = document.getElementById('dictAddPri');
+  var variant = vEl ? vEl.value.trim() : '';
+  if (!variant) {
+    showToast('別名を入力してください', 'warning');
+    return;
+  }
+  var pri = pEl ? parseInt(pEl.value, 10) : 95;
+  if (isNaN(pri)) pri = 95;
+
+  fetch(API_BASE + '/foods/' + encodeURIComponent(foodId) + '/dictionary', {
+    method: 'POST',
+    headers: apiHeaders(),
+    cache: 'no-store',
+    body: JSON.stringify({
+      variant: variant,
+      variant_type: tEl ? tEl.value : 'manual',
+      priority: pri,
+    }),
+  })
+    .then(function (r) {
+      return r.json();
+    })
+    .then(function (data) {
+      if (data.error) {
+        showToast(data.message || data.error || '追加失敗', 'error');
+        return;
+      }
+      showToast('辞書に追加しました', 'success');
+      if (vEl) vEl.value = '';
+      loadFoodDictionary(foodId);
+    })
+    .catch(function () {
+      showToast('通信エラー', 'error');
+    });
+}
+
+function removeFoodDictEntry(foodId, variant, variantType) {
+  if (!confirm('この辞書行を削除しますか？')) return;
+
+  fetch(API_BASE + '/foods/' + encodeURIComponent(foodId) + '/dictionary', {
+    method: 'DELETE',
+    headers: apiHeaders(),
+    cache: 'no-store',
+    body: JSON.stringify({ variant: variant, variant_type: variantType }),
+  })
+    .then(function (r) {
+      return r.json();
+    })
+    .then(function (data) {
+      if (data.error) {
+        showToast(data.message || data.error || '削除失敗', 'error');
+        return;
+      }
+      showToast('削除しました', 'success');
+      loadFoodDictionary(foodId);
+    })
+    .catch(function () {
+      showToast('通信エラー', 'error');
+    });
 }
 
 function closeModal() {
   document.getElementById('detailModal').classList.remove('open');
+  _detailFoodId = null;
+  _foodDictEditCtx = null;
 }
 
 // ── トースト ───────────────────────────────────────────────────────────────────

@@ -1629,17 +1629,93 @@
       sectionHtml('排尿（2日以上未記録）', '🚽', exc.urine_gaps);
   }
 
+  function renderCloseDayWeightBlock(wloss) {
+    var el = document.getElementById('closeDayWeightBlock');
+    if (!el) return;
+    if (!wloss) {
+      el.innerHTML = '';
+      return;
+    }
+    var items = wloss.items || [];
+    var h = '<div style="margin-bottom:10px;padding:8px;background:var(--surface-alt);border-radius:8px;border-left:3px solid #38bdf8;">';
+    h += '<div style="font-weight:700;margin-bottom:6px;">⚖️ 体重低下（30日比・Slackレポートに含みます）</div>';
+    h += '<div style="font-size:11px;color:var(--text-dim);margin-bottom:8px;line-height:1.45;">' + escapeHtml(wloss.basis || '') + '</div>';
+    if (items.length === 0) {
+      h += '<div style="color:#4ade80;font-size:12px;">該当なし（約5%未満の減少、または栄養プロフィールなし）</div>';
+    } else {
+      h += '<ul style="margin:0;padding-left:18px;line-height:1.55;">';
+      for (var wi = 0; wi < items.length; wi++) {
+        var wit = items[wi];
+        var tag = wit.severity === 'critical' ? '急減' : wit.severity === 'severe' ? '顕著' : '注意';
+        var col = wit.severity === 'critical' ? '#f87171' : wit.severity === 'severe' ? '#f97316' : '#eab308';
+        var kgTxt = '';
+        var wa = wit.weight_30d_ago_kg;
+        var wb = wit.last_weight_kg;
+        if (wa != null && wb != null) {
+          kgTxt = '（' + wa + '→' + wb + 'kg）';
+        } else if (wb != null) {
+          kgTxt = '（現在 ' + wb + 'kg）';
+        }
+        h += '<li><strong>' + escapeHtml(wit.cat_name || '') + '</strong> <span style="color:' + col + ';font-weight:700;">' + wit.weight_trend_pct + '%</span> <span style="font-size:11px;color:var(--text-dim);">' + tag + '</span> ' + escapeHtml(kgTxt) + '</li>';
+      }
+      h += '</ul>';
+    }
+    h += '</div>';
+    el.innerHTML = h;
+  }
+
+  function renderCloseDayAppetiteBlock(appet) {
+    var el = document.getElementById('closeDayAppetiteBlock');
+    if (!el) return;
+    if (!appet) {
+      el.innerHTML = '';
+      return;
+    }
+    var aItems = appet.items || [];
+    var h = '<div style="margin-bottom:10px;padding:8px;background:var(--surface-alt);border-radius:8px;border-left:3px solid #f472b6;">';
+    h += '<div style="font-weight:700;margin-bottom:6px;">🍽️ 食欲スコア低下（健康スコア・Slackレポートに含みます）</div>';
+    h += '<div style="font-size:11px;color:var(--text-dim);margin-bottom:8px;line-height:1.45;">' + escapeHtml(appet.basis || '') + '</div>';
+    if (appet.reference_date) {
+      h += '<div style="font-size:11px;color:var(--text-dim);margin-bottom:8px;">業務終了日: ' + escapeHtml(String(appet.reference_date)) + '</div>';
+    }
+    if (aItems.length === 0) {
+      h += '<div style="color:#4ade80;font-size:12px;">該当なし（全頭75点以上、またはスコア未作成）</div>';
+    } else {
+      h += '<ul style="margin:0;padding-left:18px;line-height:1.55;">';
+      for (var ai = 0; ai < aItems.length; ai++) {
+        var ait = aItems[ai];
+        var atag = ait.severity === 'critical' ? '不振' : ait.severity === 'severe' ? '低下' : 'やや低下';
+        var acol = ait.severity === 'critical' ? '#f87171' : ait.severity === 'severe' ? '#f97316' : '#eab308';
+        var ad = ait.score_date ? String(ait.score_date).slice(0, 10) : '';
+        var adpart = ad ? ' <span style="font-size:11px;color:var(--text-dim);">' + escapeHtml(ad) + '</span>' : '';
+        var atot = ait.total_score != null ? ' 総合' + ait.total_score + '点' : '';
+        h += '<li><strong>' + escapeHtml(ait.cat_name || '') + '</strong> 食欲<span style="color:' + acol + ';font-weight:700;"> ' + ait.appetite_score + '点</span> <span style="font-size:11px;color:var(--text-dim);">' + atag + '</span>' + atot + adpart + '</li>';
+      }
+      h += '</ul>';
+    }
+    h += '</div>';
+    el.innerHTML = h;
+  }
+
   function renderCloseDayModal(data) {
     document.getElementById('closeDayLocationLabel').textContent = data.location_label + '  ' + data.date;
 
     var s = data.stats;
     var pct = s.total > 0 ? Math.round(s.done / s.total * 100) : 0;
+    var sbtForCount = data.skipped_before_tasks || [];
+    var skippedBeforeN = Math.max(s.skipped_before_close != null ? s.skipped_before_close : 0, sbtForCount.length);
+    var pendForStat = (data.pending_tasks || []).length;
+    var pendingDisp = Math.max(s.pending != null ? s.pending : 0, pendForStat);
     var evOpen = (data.ongoing_event_tasks && data.ongoing_event_tasks.length) ? data.ongoing_event_tasks.length : 0;
     document.getElementById('closeDayStats').innerHTML =
-      '✅ 完了: <strong>' + s.done + '/' + s.total + '</strong>（' + pct + '%）　⏳ 繰越対象の未完了: <strong>' + s.pending + '</strong>件' +
+      '✅ 完了: <strong>' + s.done + '/' + s.total + '</strong>（' + pct + '%）' +
+      (skippedBeforeN > 0 ? '　⏭️ 事前スキップ済: <strong>' + skippedBeforeN + '</strong>件' : '') +
+      '　⏳ 今回の繰越予定: <strong>' + pendingDisp + '</strong>件' +
       (evOpen ? '　📅 追跡中イベント: <strong>' + evOpen + '</strong>件' : '');
 
     renderCloseDayExcretionBlock(data.excretion_close_day);
+    renderCloseDayWeightBlock(data.weight_loss_close_day);
+    renderCloseDayAppetiteBlock(data.appetite_low_close_day);
 
     var listArea = document.getElementById('closeDayPendingList');
     var parts = [];
@@ -1658,14 +1734,27 @@
       }
       parts.push('</ul>');
     }
-    if (data.pending_tasks.length === 0) {
+    var sbt = data.skipped_before_tasks || [];
+    if (sbt.length > 0) {
+      parts.push('<div style="font-size:12px;font-weight:700;margin-bottom:6px;color:#94a3b8;">⏭️ 本日すでにスキップ済み（業務終了の自動スキップ対象外・Slackレポートに記載）</div>');
+      parts.push('<ul style="margin:0 0 12px 0;padding-left:18px;line-height:1.5;font-size:12px;max-height:22vh;overflow-y:auto;">');
+      for (var bi = 0; bi < sbt.length; bi++) {
+        var bt = sbt[bi];
+        var br = bt.skip_reason && String(bt.skip_reason).trim() ? String(bt.skip_reason).trim() : '（理由未記録）';
+        var bst = (bt.skip_streak > 0) ? ' <span class="streak-warn">⚠ ' + bt.skip_streak + '日連続</span>' : '';
+        parts.push('<li><strong>' + escapeHtml(bt.title || '') + '</strong>' + bst + '<br><span style="color:var(--text-dim);font-size:11px;">理由: ' + escapeHtml(br) + '</span></li>');
+      }
+      parts.push('</ul>');
+    }
+    var pendingList = data.pending_tasks || [];
+    if (pendingList.length === 0) {
       parts.push('<div style="text-align:center;color:#4ade80;font-size:14px;padding:16px 20px;">🎉 繰越が必要なルーティン未完了はありません</div>');
       listArea.innerHTML = parts.join('');
     } else {
       var html = parts.join('');
       html += '<div style="font-size:12px;color:var(--text-dim);margin-bottom:8px;">以下は業務終了でスキップされ翌日に繰り越されます。スキップ理由を選択してください:</div>';
-      for (var i = 0; i < data.pending_tasks.length; i++) {
-        var t = data.pending_tasks[i];
+      for (var i = 0; i < pendingList.length; i++) {
+        var t = pendingList[i];
         var streakHtml = (t.skip_streak > 0) ? '<span class="streak-warn">⚠ ' + t.skip_streak + '日連続</span>' : '';
         html += '<div class="close-day-task" data-task-id="' + t.id + '">';
         html += '<div class="close-day-task-title">' + escapeHtml(t.title) + streakHtml + '</div>';
@@ -1695,6 +1784,7 @@
 
   window.previewCloseDay = function () {
     var lines = [];
+    var CLOSE_PREVIEW_MAX = 20;
     var locationLabel = closeDayData.location_label;
     var s = closeDayData.stats;
     var pct = s.total > 0 ? Math.round(s.done / s.total * 100) : 0;
@@ -1705,15 +1795,27 @@
     lines.push('━━━━━━━━━━━━━━━━━━━━');
     lines.push('');
     lines.push('✅ タスク完了状況');
-    lines.push('  完了: ' + s.done + '/' + s.total + '（' + pct + '%）');
-    lines.push('  スキップ予定（ルーティン等）: ' + s.pending + '件（送信時に翌日へ繰越）');
+    lines.push('  完了: ' + s.done + '/' + s.total + '（' + pct + '%）※分母は事前スキップ除く当日ルーティン');
+    var sbClose = s.skipped_before_close != null ? s.skipped_before_close : 0;
+    var sbtPrev = closeDayData.skipped_before_tasks || [];
+    var sbHead = Math.max(sbClose, sbtPrev.length);
+    if (sbHead > 0) {
+      lines.push('  事前スキップ済: ' + sbHead + '件（レポートに項目名・理由付きで含みます）');
+      for (var bp = 0; bp < sbtPrev.length && bp < CLOSE_PREVIEW_MAX; bp++) {
+        var btp = sbtPrev[bp];
+        var brp = btp.skip_reason && String(btp.skip_reason).trim() ? String(btp.skip_reason).trim() : '（理由未記録）';
+        lines.push('    • ' + (btp.title || '') + ' — 理由: ' + brp);
+      }
+      if (sbtPrev.length > CLOSE_PREVIEW_MAX) lines.push('    … 他' + (sbtPrev.length - CLOSE_PREVIEW_MAX) + '件');
+    }
+    var pendN = (closeDayData.pending_tasks || []).length;
+    lines.push('  業務終了でスキップ予定（繰越）: ' + (pendN > 0 ? pendN : (s.pending != null ? s.pending : 0)) + '件');
     var oev2 = closeDayData.ongoing_event_tasks || [];
     if (oev2.length > 0) {
       lines.push('  ※ イベント ' + oev2.length + '件は業務終了では閉じず、タスク一覧で継続表示されます');
     }
     lines.push('');
 
-    var CLOSE_PREVIEW_MAX = 20;
     var medPrev = closeDayData.medication_close_day;
     if (medPrev) {
       lines.push('💊 本日の投薬（未完了）');
@@ -1898,6 +2000,51 @@
       lines.push('');
     }
 
+    var wPrev = closeDayData.weight_loss_close_day;
+    if (wPrev) {
+      lines.push('⚖️ 体重低下（30日比・栄養プロフィール）');
+      lines.push('  ' + (wPrev.basis || ''));
+      var wItems = wPrev.items || [];
+      if (wItems.length === 0) {
+        lines.push('  該当なし');
+      } else {
+        for (var wx = 0; wx < wItems.length && wx < CLOSE_PREVIEW_MAX; wx++) {
+          var wxit = wItems[wx];
+          var wtag = wxit.severity === 'critical' ? '【急減】' : wxit.severity === 'severe' ? '【顕著】' : '【注意】';
+          var wkg = '';
+          if (wxit.weight_30d_ago_kg != null && wxit.last_weight_kg != null) {
+            wkg = '（' + wxit.weight_30d_ago_kg + '→' + wxit.last_weight_kg + 'kg）';
+          } else if (wxit.last_weight_kg != null) {
+            wkg = '（現在 ' + wxit.last_weight_kg + 'kg）';
+          }
+          lines.push('  • ' + wxit.cat_name + ' — 30日比 ' + wxit.weight_trend_pct + '% ' + wkg + ' ' + wtag);
+        }
+        if (wItems.length > CLOSE_PREVIEW_MAX) lines.push('  … 他' + (wItems.length - CLOSE_PREVIEW_MAX) + '頭');
+      }
+      lines.push('');
+    }
+
+    var aPrev = closeDayData.appetite_low_close_day;
+    if (aPrev) {
+      lines.push('🍽️ 食欲スコア低下（健康スコア・食欲項目）');
+      lines.push('  ' + (aPrev.basis || ''));
+      var aItemsP = aPrev.items || [];
+      if (aItemsP.length === 0) {
+        lines.push('  該当なし');
+      } else {
+        for (var ax = 0; ax < aItemsP.length && ax < CLOSE_PREVIEW_MAX; ax++) {
+          var axit = aItemsP[ax];
+          var atg2 = axit.severity === 'critical' ? '【不振】' : axit.severity === 'severe' ? '【低下】' : '【やや低下】';
+          var adt = axit.score_date ? String(axit.score_date).slice(0, 10) : '';
+          var adp2 = adt ? ' スコア日 ' + adt : '';
+          var ato2 = axit.total_score != null ? ' 総合' + axit.total_score + '点' : '';
+          lines.push('  • ' + axit.cat_name + ' — 食欲 ' + axit.appetite_score + '点' + ato2 + adp2 + ' ' + atg2);
+        }
+        if (aItemsP.length > CLOSE_PREVIEW_MAX) lines.push('  … 他' + (aItemsP.length - CLOSE_PREVIEW_MAX) + '頭');
+      }
+      lines.push('');
+    }
+
     if (oev2.length > 0) {
       lines.push('📅 継続追跡中のイベント（スキップ対象外）:');
       for (var oi = 0; oi < oev2.length && oi < CLOSE_PREVIEW_MAX; oi++) {
@@ -1911,8 +2058,8 @@
       lines.push('');
     }
 
-    if (closeDayData.pending_tasks.length > 0) {
-      lines.push('⚠ スキップされるタスク:');
+    if ((closeDayData.pending_tasks || []).length > 0) {
+      lines.push('⚠ 業務終了ボタンでスキップされるタスク:');
       var taskEls = document.querySelectorAll('.close-day-task');
       for (var i = 0; i < taskEls.length; i++) {
         var taskEl = taskEls[i];

@@ -89,7 +89,8 @@ function renderList() {
   var grid = document.getElementById('medGrid');
   var count = document.getElementById('medCount');
   var filtered = [];
-  var text = currentTextFilter.toLowerCase();
+  var qRaw = currentTextFilter.trim();
+  var useText = qRaw.length > 0;
 
   for (var i = 0; i < allMedicines.length; i++) {
     var m = allMedicines[i];
@@ -97,16 +98,20 @@ function renderList() {
 
     if (currentSpeciesFilter !== 'all' && sp !== currentSpeciesFilter) continue;
 
-    if (text) {
-      var searchable = ((m.name || '') + ' ' + (m.generic_name || '') + ' ' + categoryLabel(m.category) + ' ' + (m.notes || '')).toLowerCase();
-      if (searchable.indexOf(text) === -1) continue;
+    if (useText) {
+      var searchable = (m.name || '') + ' ' + (m.generic_name || '') + ' ' + categoryLabel(m.category) + ' ' + (m.notes || '');
+      if (typeof nyagiSearchTextMatchesQuery === 'function') {
+        if (!nyagiSearchTextMatchesQuery(searchable, qRaw)) continue;
+      } else {
+        if (searchable.toLowerCase().indexOf(qRaw.toLowerCase()) === -1) continue;
+      }
     }
 
     filtered.push(m);
   }
 
   count.textContent = '登録薬: ' + allMedicines.length + '件' +
-    (currentSpeciesFilter !== 'all' || text ? ' (表示: ' + filtered.length + '件)' : '');
+    (currentSpeciesFilter !== 'all' || useText ? ' (表示: ' + filtered.length + '件)' : '');
 
   if (filtered.length === 0) {
     grid.innerHTML = '<div class="empty-msg">薬が登録されていません</div>';

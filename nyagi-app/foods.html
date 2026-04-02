@@ -379,6 +379,55 @@
       cursor: pointer;
     }
 
+    .detail-dict {
+      margin-top: 16px;
+      padding-top: 12px;
+      border-top: 1px solid var(--surface-alt);
+    }
+    .detail-dict-title { font-size: 13px; font-weight: 700; margin-bottom: 6px; }
+    .detail-dict-hint { font-size: 11px; color: var(--text-dim); margin: 0 0 10px 0; line-height: 1.4; }
+    .detail-dict-loading, .detail-dict-err { font-size: 12px; color: var(--text-dim); padding: 8px 0; }
+    .detail-dict-err { color: #f87171; }
+    .dict-table { display: flex; flex-direction: column; gap: 6px; margin-bottom: 12px; }
+    .dict-row {
+      display: flex; flex-wrap: wrap; align-items: center; gap: 6px 8px;
+      background: rgba(0,0,0,0.15); border-radius: 8px; padding: 8px 10px; font-size: 12px;
+    }
+    .dict-variant { flex: 1; min-width: 120px; font-weight: 600; word-break: break-word; }
+    .dict-badge {
+      font-size: 10px; padding: 2px 6px; border-radius: 4px;
+      background: var(--surface-alt); color: var(--text-dim);
+    }
+    .dict-pri { font-size: 11px; color: var(--text-dim); }
+    .dict-actions { display: flex; gap: 6px; margin-left: auto; }
+    .dict-btn {
+      border: none; border-radius: 6px; padding: 4px 10px; font-size: 11px;
+      cursor: pointer; background: var(--surface-alt); color: var(--text);
+    }
+    .dict-btn.primary { background: var(--primary); color: #fff; font-weight: 600; }
+    .dict-btn.danger { background: rgba(248,113,113,0.2); color: #f87171; }
+    .dict-add {
+      display: flex; flex-wrap: wrap; align-items: center; gap: 8px;
+      padding: 10px; background: rgba(0,0,0,0.12); border-radius: 8px;
+    }
+    .dict-add-label { font-size: 11px; color: var(--text-dim); width: 100%; }
+    .dict-input {
+      flex: 1; min-width: 100px; background: var(--surface); border: 1px solid var(--surface-alt);
+      border-radius: 6px; padding: 6px 8px; color: var(--text); font-size: 12px;
+    }
+    .dict-input.pri { max-width: 72px; flex: 0; min-width: 64px; }
+    .dict-select {
+      background: var(--surface); border: 1px solid var(--surface-alt);
+      border-radius: 6px; padding: 6px 8px; color: var(--text); font-size: 12px;
+    }
+    .dict-edit-panel {
+      margin-top: 12px; padding: 12px; background: rgba(96,165,250,0.08); border-radius: 8px;
+    }
+    .dict-edit-title { font-weight: 700; font-size: 12px; margin-bottom: 8px; }
+    .dict-edit-label { display: block; font-size: 10px; color: var(--text-dim); margin: 6px 0 2px; }
+    .dict-input.full { width: 100%; box-sizing: border-box; }
+    .dict-edit-actions { margin-top: 10px; display: flex; gap: 8px; }
+
     .loading { text-align: center; padding: 30px; color: var(--text-dim); font-size: 13px; }
     .empty-msg { text-align: center; padding: 30px; color: var(--text-dim); font-size: 13px; }
   </style>
@@ -521,6 +570,9 @@
       <button class="tab-btn" id="spCat" onclick="filterSpecies('cat')">🐱 猫用</button>
       <button class="tab-btn" id="spDog" onclick="filterSpecies('dog')">🐶 犬用</button>
     </div>
+    <div class="search-bar" style="margin-bottom:10px;">
+      <input type="text" id="foodListFilterInput" class="search-input" placeholder="一覧を絞り込み（空白区切り＝全部入りAND・部分一致／表記ゆれ）" autocomplete="off" oninput="filterFoodListByText()">
+    </div>
 
     <!-- 一覧 -->
     <div class="food-count" id="foodCount"></div>
@@ -552,8 +604,9 @@
   <script src="config.js?v=213"></script>
   <script src="js/nyagi-boot-overlay.js?v=213"></script>
   <script src="js/login-gate.js?v=213"></script>
-  <script src="js/app.js?v=218"></script>
-  <script src="js/foods.js?v=213"></script>
+  <script src="js/app.js?v=219"></script>
+  <script src="js/nyagi-search-normalize.js?v=1"></script>
+  <script src="js/foods.js?v=215"></script>
   <script src="js/voice-console.js?v=213"></script>
 </body>
 </html>

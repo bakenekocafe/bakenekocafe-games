@@ -410,6 +410,84 @@
     .item-card-body .item-values-medcol {
       overflow-x: hidden;
     }
+    /* 項目ごと・本日の投薬: 朝分 / 夜分を横並びカード */
+    .item-values-medcol.ov-med-item-mode {
+      gap: 8px;
+    }
+    .ov-med-item-sum {
+      width: 100%;
+    }
+    .ov-med-two-cols {
+      display: flex;
+      flex-direction: row;
+      align-items: stretch;
+      gap: 8px;
+      width: 100%;
+      min-width: 0;
+    }
+    .ov-med-slot-card {
+      flex: 1 1 0;
+      min-width: 0;
+      border: 1px solid rgba(255, 255, 255, 0.1);
+      border-radius: 10px;
+      padding: 8px 8px 10px;
+      background: rgba(255, 255, 255, 0.04);
+      box-sizing: border-box;
+    }
+    .ov-med-slot-am {
+      border-color: rgba(250, 204, 21, 0.22);
+      background: rgba(250, 204, 21, 0.06);
+    }
+    .ov-med-slot-pm {
+      border-color: rgba(129, 140, 248, 0.28);
+      background: rgba(129, 140, 248, 0.08);
+    }
+    .ov-med-slot-head {
+      font-size: 11px;
+      font-weight: 800;
+      margin-bottom: 6px;
+      color: var(--text-main, #e8e8f0);
+      letter-spacing: 0.02em;
+    }
+    .ov-med-slot-body {
+      display: flex;
+      flex-direction: column;
+      gap: 2px;
+    }
+    .ov-med-slot-body .ov-med-item-row {
+      margin: 2px 0;
+    }
+    .ov-feed-two-cols {
+      margin-top: 4px;
+    }
+    .ov-feed-slot-body > .ov-feed-line:first-of-type {
+      border-top: none;
+      padding-top: 0;
+    }
+    .ov-feed-other .ov-feed-line:first-of-type {
+      border-top: none;
+      padding-top: 0;
+    }
+    .ov-med-slot-other {
+      width: 100%;
+      margin-top: 4px;
+      padding: 8px 10px;
+      border-radius: 8px;
+      border: 1px dashed rgba(255, 255, 255, 0.12);
+      background: rgba(0, 0, 0, 0.12);
+      box-sizing: border-box;
+    }
+    .ov-med-slot-head-sub {
+      font-size: 10px;
+      font-weight: 700;
+      color: var(--text-dim, #999);
+      margin-bottom: 6px;
+    }
+    @media (max-width: 380px) {
+      .ov-med-two-cols {
+        flex-direction: column;
+      }
+    }
     .ov-task-line {
       display: flex;
       flex-wrap: wrap;
@@ -1030,137 +1108,6 @@
     .btn-ov-vomit-del:hover { opacity: 1; }
     .ov-vomit-note { font-size: 13px; }
 
-    /* ── 猫ナビ（フローティングパレット） ── */
-    .cat-nav-fab {
-      position: fixed;
-      bottom: calc(24px + env(safe-area-inset-bottom, 0px));
-      left: calc(20px + env(safe-area-inset-left, 0px));
-      width: 52px;
-      height: 52px;
-      border-radius: 50%;
-      border: none;
-      background: linear-gradient(135deg, #a78bfa 0%, #7c3aed 100%);
-      color: #fff;
-      font-size: 22px;
-      box-shadow: 0 4px 14px rgba(124, 58, 237, 0.45);
-      z-index: 900;
-      cursor: pointer;
-      transition: transform 0.15s, opacity 0.15s, background 0.2s;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-    }
-    .cat-nav-fab:active { transform: scale(0.92); }
-    .cat-nav-fab.open { background: linear-gradient(135deg, #7c3aed 0%, #5b21b6 100%); }
-
-    .cat-nav-backdrop {
-      position: fixed;
-      inset: 0;
-      z-index: 899;
-      background: rgba(0,0,0,0.3);
-      opacity: 0;
-      pointer-events: none;
-      transition: opacity 0.2s;
-    }
-    .cat-nav-backdrop.open { opacity: 1; pointer-events: auto; }
-
-    .cat-nav-palette {
-      position: fixed;
-      bottom: calc(86px + env(safe-area-inset-bottom, 0px));
-      left: calc(16px + env(safe-area-inset-left, 0px));
-      width: min(300px, calc(100vw - 32px));
-      max-height: 55vh;
-      background: var(--surface, #1e1e2e);
-      border: 1px solid rgba(255,255,255,0.15);
-      border-radius: 14px;
-      box-shadow: 0 8px 32px rgba(0,0,0,0.5);
-      z-index: 901;
-      display: flex;
-      flex-direction: column;
-      opacity: 0;
-      transform: translateY(16px) scale(0.95);
-      pointer-events: none;
-      transition: opacity 0.2s, transform 0.2s;
-    }
-    .cat-nav-palette.open {
-      opacity: 1;
-      transform: translateY(0) scale(1);
-      pointer-events: auto;
-    }
-    .cat-nav-header {
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      padding: 10px 14px 8px;
-      font-weight: 700;
-      font-size: 14px;
-      border-bottom: 1px solid rgba(255,255,255,0.08);
-      flex-shrink: 0;
-    }
-    .cat-nav-close {
-      background: none;
-      border: none;
-      color: var(--text-dim);
-      font-size: 22px;
-      cursor: pointer;
-      padding: 0 4px;
-      line-height: 1;
-    }
-    .cat-nav-tabs {
-      display: flex;
-      gap: 6px;
-      padding: 8px 12px;
-      overflow-x: auto;
-      -webkit-overflow-scrolling: touch;
-      flex-shrink: 0;
-      border-bottom: 1px solid rgba(255,255,255,0.06);
-    }
-    .cat-nav-tabs::-webkit-scrollbar { display: none; }
-    .cat-nav-tab {
-      flex-shrink: 0;
-      padding: 5px 10px;
-      border-radius: 16px;
-      border: 1px solid rgba(255,255,255,0.15);
-      background: transparent;
-      color: var(--text-dim);
-      font-size: 11px;
-      font-weight: 600;
-      cursor: pointer;
-      white-space: nowrap;
-      transition: background 0.15s, color 0.15s;
-    }
-    .cat-nav-tab.active {
-      background: var(--primary, #a78bfa);
-      color: #fff;
-      border-color: var(--primary, #a78bfa);
-    }
-    .cat-nav-list {
-      flex: 1;
-      overflow-y: auto;
-      -webkit-overflow-scrolling: touch;
-      padding: 6px 8px 10px;
-    }
-    .cat-nav-item {
-      display: block;
-      width: 100%;
-      text-align: left;
-      padding: 9px 12px;
-      border: none;
-      background: transparent;
-      color: var(--text-main, #e0e0e0);
-      font-size: 13px;
-      font-weight: 500;
-      cursor: pointer;
-      border-radius: 8px;
-      transition: background 0.12s;
-    }
-    .cat-nav-item:active { background: rgba(167, 139, 250, 0.18); }
-    @keyframes catNavHL {
-      0%   { box-shadow: 0 0 0 3px rgba(167,139,250,0.6); }
-      100% { box-shadow: 0 0 0 0 rgba(167,139,250,0); }
-    }
-    .cat-nav-highlight { animation: catNavHL 1.5s ease-out forwards; border-radius: 8px; }
-
   </style>
 </head>
 <body>
@@ -1382,11 +1329,13 @@
     </div>
   </div>
 
+  <!-- 猫ナビ見た目: cats-overview.js が body 末尾に #nyagi-cat-nav-runtime を注入（キャッシュ・PWA対策） -->
+
   <script src="config.js?v=214"></script>
   <script src="js/nyagi-boot-overlay.js?v=215"></script>
   <script src="js/login-gate.js?v=214"></script>
-  <script src="js/app.js?v=218"></script>
-  <script src="js/cats-overview.js?v=294"></script>
+  <script src="js/app.js?v=224"></script>
+  <script src="js/cats-overview.js?v=307"></script>
   <script src="js/voice-console.js?v=214"></script>
 </body>
 </html>

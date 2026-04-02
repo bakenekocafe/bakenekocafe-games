@@ -154,6 +154,35 @@ function closeCatDetailFoldSection(btn) {
     return u;
   }
 
+  /** プリセット管理カード内: 献立オンオフ（品数の直後に置き、長い説明文の下に隠れないようにする） */
+  function renderPresetManageMenuTogglesHtml(ps) {
+    var items = ps.items;
+    if (!Array.isArray(items)) items = [];
+    var h = '<div class="nyagi-preset-manage-menu" style="margin:10px 0;padding:10px;background:rgba(168,139,250,0.08);border-radius:8px;border:1px solid rgba(168,139,250,0.25);">';
+    h += '<div style="font-size:11px;font-weight:700;color:var(--text-main);margin-bottom:6px;">🍽 献立に載せる</div>';
+    h += '<div style="font-size:10px;color:var(--text-dim);line-height:1.4;margin-bottom:8px;">「外す」＝全適用・業務終了の自動入替の対象外（量・メモは ✏️）。</div>';
+    if (items.length === 0) {
+      h += '<div style="font-size:12px;color:var(--text-dim);">フード行がありません。 <button type="button" class="btn-edit-small" onclick="editPresetItems(' + ps.id + ')">✏️ 追加</button></div></div>';
+      return h;
+    }
+    for (var mi = 0; mi < items.length; mi++) {
+      var it = items[mi];
+      if (!it || it.id == null) continue;
+      var menuOff = it.menu_active !== undefined && it.menu_active !== null && Number(it.menu_active) === 0;
+      var slot = it.meal_slot || '';
+      var slotJa = slot === 'evening' ? '夕' : (slot === 'morning' || slot === 'afternoon' ? '朝/昼' : slot);
+      var toggAttr = String(ps.id) + '|' + String(it.id) + '|' + (menuOff ? '1' : '0') + '|manage';
+      h += '<div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;padding:8px 0;border-bottom:1px solid rgba(255,255,255,0.06);' + (menuOff ? 'opacity:0.88;' : '') + '">';
+      h += '<div style="flex:1;min-width:0;font-size:12px;line-height:1.35;" data-nyagi-preset-food="1">';
+      h += (menuOff ? '<span style="color:#f87171;font-size:10px;font-weight:700;margin-right:6px;">対象外</span>' : '<span style="color:#4ade80;font-size:10px;font-weight:700;margin-right:6px;">対象</span>');
+      h += escapeHtml(nyagiPresetFoodNamePlain(it.food_name)) + ' <b>' + it.amount_g + 'g</b> <span style="color:var(--text-dim);font-size:10px;">' + escapeHtml(slotJa) + '</span></div>';
+      h += '<button type="button" class="btn btn-outline" style="font-size:10px;padding:4px 10px;white-space:nowrap;" data-preset-menu-toggle="' + escapeHtml(toggAttr) + '">' + (menuOff ? '載せる' : '外す') + '</button>';
+      h += '</div>';
+    }
+    h += '</div>';
+    return h;
+  }
+
   // ── 認証 ──────────────────────────────────────────────────────────────────────
 
   function loadCredentials() {
@@ -331,6 +360,30 @@ function closeCatDetailFoldSection(btn) {
       if (toggleBtn) {
         ev.preventDefault();
         toggleCatDetailFold(toggleBtn);
+      }
+    });
+  })();
+
+  /** プリセット管理: 献立オンオフは委譲（インライン onclick より確実） */
+  (function bindPresetManageMenuToggleClicks() {
+    var modal = document.getElementById('presetApplyModal');
+    if (!modal || !modal.addEventListener) return;
+    modal.addEventListener('click', function (ev) {
+      var t = ev.target;
+      if (!t || !t.closest) return;
+      var btn = t.closest('[data-preset-menu-toggle]');
+      if (!btn || !modal.contains(btn)) return;
+      ev.preventDefault();
+      var raw = btn.getAttribute('data-preset-menu-toggle') || '';
+      var parts = raw.split('|');
+      if (parts.length < 4) return;
+      var pid = parseInt(parts[0], 10);
+      var iid = parseInt(parts[1], 10);
+      var nxt = parseInt(parts[2], 10);
+      var ret = parts[3];
+      if (isNaN(pid) || isNaN(iid) || isNaN(nxt)) return;
+      if (typeof window.togglePresetItemMenuActive === 'function') {
+        window.togglePresetItemMenuActive(pid, iid, nxt, ret);
       }
     });
   })();
@@ -882,6 +935,89 @@ function closeCatDetailFoldSection(btn) {
       return h;
     }
     h += '<div class="weight-canvas-wrap"><canvas id="appetiteIndexCanvas" height="150"></canvas></div>';
+    h += '</div>';
+    return h;
+  }
+
+  /** 残量確認済みログに基づく食いつきサマリ（モバイル・最大遡及日は API の period_days_max） */
+  function foodPreferenceSummaryBlockHtml(summary) {
+    var boxStyle =
+      'margin-bottom:14px;padding:10px 12px;background:rgba(34,197,94,0.08);border-radius:10px;border-left:3px solid rgba(34,197,94,0.45);';
+    if (!summary || !summary.has_data) {
+      return (
+        '<div class="nyagi-fp-wrap" style="' +
+        boxStyle +
+        '">' +
+        '<div class="detail-title" style="margin-bottom:4px;font-size:13px;">🍽 食いつき傾向</div>' +
+        '<div style="font-size:11px;color:var(--text-dim);line-height:1.45;">摂取率が記録された給餌ログが1件でもあれば表示されます（最大90日遡り）。「あげた」後に残し量を入力するか、音声で記録してください。</div>' +
+        '</div>'
+      );
+    }
+    var metaParts = [];
+    if (summary.weighted_avg_pct != null) {
+      metaParts.push('平均 <b>' + summary.weighted_avg_pct + '%</b>');
+    }
+    if (summary.spread_pct != null) {
+      metaParts.push('幅 <b>' + summary.spread_pct + 'pt</b>');
+    }
+    if (summary.tiers) {
+      metaParts.push('高' + summary.tiers.high + '·中' + summary.tiers.mid + '·低' + summary.tiers.low);
+    }
+    var maxD =
+      summary.period_days_max != null
+        ? summary.period_days_max
+        : summary.period_days != null
+          ? summary.period_days
+          : 90;
+    var span = summary.record_span_days;
+    var subTit = '最大' + maxD + '日遡りで集計';
+    if (span != null && span > 0 && maxD && span < maxD) {
+      subTit = '記録' + span + '暦日分（最大' + maxD + '日遡り）';
+    }
+    var h = '<div class="nyagi-fp-wrap" style="' + boxStyle + '">';
+    h += '<div class="detail-title" style="margin-bottom:4px;font-size:13px;">🍽 食いつき傾向（' + subTit + '）</div>';
+    h +=
+      '<div style="font-size:10px;color:var(--text-dim);margin-bottom:6px;line-height:1.45;">' +
+      '摂取率が記録された給餌ログのみ。' +
+      (summary.summary_line ? escapeHtml(summary.summary_line) : '') +
+      '</div>';
+    if (metaParts.length) {
+      h += '<div style="font-size:11px;color:var(--text-main);margin-bottom:8px;line-height:1.5;">' + metaParts.join('　') + '</div>';
+    }
+    var tops = summary.top_foods || [];
+    for (var i = 0; i < tops.length; i++) {
+      var tf = tops[i];
+      var d = tf.delta_vs_weighted_avg;
+      var dHtml = '';
+      if (d != null) {
+        if (d > 0) {
+          dHtml = '<span style="color:#4ade80;font-weight:700;">+' + d + 'pt</span>';
+        } else if (d < 0) {
+          dHtml = '<span style="color:#f87171;font-weight:700;">' + d + 'pt</span>';
+        } else {
+          dHtml = '<span class="dim">±0</span>';
+        }
+      }
+      var rel =
+        tf.reliability === 'low'
+          ? ' <span class="dim" style="font-size:9px;font-weight:500;">（参考·1回）</span>'
+          : tf.reliability === 'mid'
+            ? ' <span class="dim" style="font-size:9px;font-weight:500;">（2回）</span>'
+            : '';
+      h += '<div style="display:flex;align-items:flex-start;justify-content:space-between;gap:10px;padding:8px 0;border-top:1px solid rgba(255,255,255,0.07);">';
+      h += '<div style="flex:1;min-width:0;font-size:12px;line-height:1.35;font-weight:600;">' + escapeHtml(String(tf.name || '—')) + rel + '</div>';
+      h += '<div style="flex-shrink:0;text-align:right;">';
+      h +=
+        '<div style="font-size:17px;font-weight:800;line-height:1.1;">' +
+        (tf.avg_eaten_pct != null ? tf.avg_eaten_pct : '—') +
+        '<span style="font-size:11px;font-weight:600;">%</span></div>';
+      h += '<div style="font-size:10px;margin-top:3px;color:var(--text-dim);">';
+      if (dHtml) {
+        h += dHtml + ' · ';
+      }
+      h += (tf.times_served || 0) + '回</div>';
+      h += '</div></div>';
+    }
     h += '</div>';
     return h;
   }
@@ -2111,13 +2247,20 @@ function closeCatDetailFoldSection(btn) {
     // 今日のサマリーバー
     var todayStr2 = todayJstYmd();
     if (date === todayStr2 && logs.length > 0) {
-      var doneCount = 0; var totalCount = logs.length;
-      for (var lx = 0; lx < logs.length; lx++) { if (logs[lx].status === 'done') doneCount++; }
-      var allDone = doneCount === totalCount;
-      var barBg = allDone ? 'rgba(34,197,94,0.15)' : 'rgba(250,204,21,0.12)';
-      var barIcon = allDone ? '✅' : '⏳';
-      var barText = allDone ? '本日の投薬 すべて完了 (' + doneCount + '/' + totalCount + ')' : '本日の投薬 ' + doneCount + '/' + totalCount + ' 完了';
-      html += '<div style="background:' + barBg + ';padding:8px 12px;border-radius:8px;margin-bottom:10px;font-size:13px;font-weight:600;">' + barIcon + ' ' + barText + '</div>';
+      var doneCount = 0; var totalCount = 0;
+      for (var lx = 0; lx < logs.length; lx++) {
+        var lg = logs[lx];
+        if (lg.frequency != null && String(lg.frequency).trim() === '必要時') continue;
+        totalCount++;
+        if (lg.status === 'done') doneCount++;
+      }
+      if (totalCount > 0) {
+        var allDone = doneCount === totalCount;
+        var barBg = allDone ? 'rgba(34,197,94,0.15)' : 'rgba(250,204,21,0.12)';
+        var barIcon = allDone ? '✅' : '⏳';
+        var barText = allDone ? '本日の投薬 すべて完了 (' + doneCount + '/' + totalCount + ')' : '本日の投薬 ' + doneCount + '/' + totalCount + ' 完了';
+        html += '<div style="background:' + barBg + ';padding:8px 12px;border-radius:8px;margin-bottom:10px;font-size:13px;font-weight:600;">' + barIcon + ' ' + barText + '</div>';
+      }
     }
 
     if (medications.length === 0) {
@@ -2169,7 +2312,6 @@ function closeCatDetailFoldSection(btn) {
 
         html += '<div class="med-card-actions">';
         html += '<button class="btn-med-edit" onclick="openMedScheduleModal(' + med.id + ')">編集</button>';
-        html += '<button class="btn-med-stop" onclick="stopMedSchedule(' + med.id + ')">終了</button>';
         html += '<button class="btn-med-stop" style="color:#f87171;" onclick="deleteMedSchedule(' + med.id + ')">削除</button>';
         html += '</div></div>';
       }
@@ -2571,20 +2713,6 @@ function closeCatDetailFoldSection(btn) {
     } else {
       alert('薬を選択してください');
     }
-  };
-
-  window.stopMedSchedule = function (medId) {
-    if (!confirm('この投薬スケジュールを終了しますか？')) return;
-    var today = todayJstYmd();
-    fetch(API_BASE + '/health/medications/' + medId, {
-      method: 'PUT',
-      headers: apiHeaders(), cache: 'no-store',
-      body: JSON.stringify({ active: false, end_date: today }),
-    }).then(function (r) { return r.json(); })
-    .then(function (data) {
-      if (data.error) { alert('エラー: ' + (data.message || data.error)); return; }
-      loadMedicationSchedule();
-    }).catch(function () { alert('終了に失敗しました'); });
   };
 
   window.deleteMedSchedule = function (medId) {
@@ -3136,6 +3264,7 @@ function closeCatDetailFoldSection(btn) {
     var html = '<div class="detail-section">';
     var appetitePts = normalizeAppetiteHistoryToPoints(appetiteScoreHistory || []);
     html += appetiteIndexChartBlockHtml(appetitePts);
+    html += foodPreferenceSummaryBlockHtml(calc && calc.food_preference_summary ? calc.food_preference_summary : null);
 
     var eveningPlans = [];
     var allPlans = (calc && calc.plans) || [];
@@ -3236,6 +3365,12 @@ function closeCatDetailFoldSection(btn) {
       } else {
         html += '<br><span style="font-size:10px;color:var(--text-dim);">プリセット全体の説明・各フードのメモは未登録です</span>';
       }
+      html += '</div>';
+    }
+
+    if (calc && calc.feeding_preset_alert && calc.feeding_preset_alert.message) {
+      html += '<div style="background:rgba(248,113,113,0.12);border-left:3px solid #f87171;border-radius:8px;padding:10px 12px;margin-bottom:10px;font-size:12px;color:var(--text-main);">';
+      html += '<b style="color:#f87171;">⚠️ プリセット</b> ' + escapeHtml(String(calc.feeding_preset_alert.message));
       html += '</div>';
     }
 
@@ -3773,7 +3908,14 @@ function closeCatDetailFoldSection(btn) {
             innerHtml += '<div class="nyagi-preset-card__head">' + presetLocationBadgeHtml(ps.location_id) + '<b style="font-size:13px;"><span data-nyagi-preset-food="1">' + escapeHtml(nyagiPresetFoodNamePlain(ps.name)) + '</span></b></div>';
             if (ps.description) innerHtml += '<div style="font-size:11px;color:var(--text-dim);margin-top:2px;line-height:1.4;white-space:pre-wrap;word-break:break-word;">' + escapeHtml(ps.description) + '</div>';
             innerHtml += '<div class="nyagi-preset-card__items">' + _renderPresetItemsSummary(ps.items || [], ps.total_kcal, ps.id) + '</div>';
-            innerHtml += '<div class="nyagi-preset-card__foot"><button class="btn btn-primary" style="font-size:11px;padding:4px 10px;" onclick="applyPreset(' + ps.id + ',null)" title="プリセット内の全フードを献立に追加">全て適用</button></div>';
+            innerHtml += '<div class="nyagi-preset-card__foot">';
+            var takenOtherApply = ps.assigned_cat && String(ps.assigned_cat.id) !== String(catId);
+            if (takenOtherApply) {
+              innerHtml += '<span style="font-size:11px;color:#f87171;">他の猫（' + escapeHtml(String(ps.assigned_cat.name || '')) + '）に割当済みのため、全件適用できません</span>';
+            } else {
+              innerHtml += '<button class="btn btn-primary" style="font-size:11px;padding:4px 10px;" onclick="applyPreset(' + ps.id + ',null)" title="有効メニューだけで献立を入れ替えます（手動プランは解除されます）">全て適用</button>';
+            }
+            innerHtml += '</div>';
             innerHtml += '</div>';
           }
         }
@@ -3818,7 +3960,7 @@ function closeCatDetailFoldSection(btn) {
         var currentId = currentCatData && currentCatData.assigned_preset_id;
         var innerHtml = '<div class="modal-box" style="max-height:85vh;overflow-y:auto;">';
         innerHtml += '<div class="modal-title">🔗 プリセット紐づけ</div>';
-        innerHtml += '<p style="font-size:12px;color:var(--text-dim);margin:0 0 10px;">業務終了時にこのプリセットが自動で再適用されます。</p>';
+        innerHtml += '<p style="font-size:12px;color:var(--text-dim);margin:0 0 10px;">業務終了時、<b>有効メニュー</b>だけで献立が入れ替わります（紐づけのみの変更では献立はそのままです）。</p>';
         innerHtml += renderPresetLocationSwitcher(loc, 'assign');
 
         innerHtml += '<div style="margin-bottom:8px;">';
@@ -3830,12 +3972,19 @@ function closeCatDetailFoldSection(btn) {
         for (var i = 0; i < presets.length; i++) {
           var ps = presets[i];
           innerHtml += feedingPresetAlphaSectionHtml(loc, ps, lastAlphaAssign);
-          var isActive = currentId === ps.id;
-          innerHtml += '<div class="preset-assign-item' + (isActive ? ' active' : '') + '" onclick="assignPreset(' + ps.id + ')" style="cursor:pointer;padding:10px 12px;border-radius:8px;margin-bottom:4px;background:' + (isActive ? 'rgba(168,139,250,0.15)' : 'var(--surface)') + ';border:1px solid ' + (isActive ? 'var(--primary,#a78bfa)' : 'var(--border,rgba(255,255,255,0.08))') + ';">';
+          var isActive = currentId == ps.id;
+          var takenByOther = ps.assigned_cat && String(ps.assigned_cat.id) !== String(catId);
+          var rowClick = takenByOther ? '' : ' onclick="assignPreset(' + ps.id + ')"';
+          var rowCur = takenByOther ? 'not-allowed' : 'pointer';
+          var rowOp = takenByOther ? '0.72' : '1';
+          innerHtml += '<div class="preset-assign-item' + (isActive ? ' active' : '') + '"' + rowClick + ' style="cursor:' + rowCur + ';padding:10px 12px;border-radius:8px;margin-bottom:4px;opacity:' + rowOp + ';background:' + (isActive ? 'rgba(168,139,250,0.15)' : 'var(--surface)') + ';border:1px solid ' + (isActive ? 'var(--primary,#a78bfa)' : 'var(--border,rgba(255,255,255,0.08))') + ';">';
           innerHtml += '<div style="display:flex;justify-content:space-between;align-items:flex-start;flex-wrap:wrap;gap:8px;width:100%;max-width:100%;box-sizing:border-box;">';
           innerHtml += '<div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;flex:1;min-width:0;max-width:100%;">' + presetLocationBadgeHtml(ps.location_id) + '<b style="font-size:13px;"><span data-nyagi-preset-food="1">' + escapeHtml(nyagiPresetFoodNamePlain(ps.name)) + '</span></b></div>';
           if (isActive) innerHtml += '<span style="font-size:11px;color:var(--primary,#a78bfa);font-weight:600;flex-shrink:0;">✔ 現在</span>';
           innerHtml += '</div>';
+          if (takenByOther) {
+            innerHtml += '<div style="font-size:11px;color:#f87171;margin:4px 0 0;">他の猫（' + escapeHtml(String(ps.assigned_cat.name || '')) + '）に割当済みです</div>';
+          }
           innerHtml += '<div class="nyagi-preset-card__items">' + _renderPresetItemsSummary(ps.items || [], ps.total_kcal) + '</div>';
           innerHtml += '</div>';
         }
@@ -3861,8 +4010,19 @@ function closeCatDetailFoldSection(btn) {
       method: 'PUT',
       headers: apiHeaders(), cache: 'no-store',
       body: JSON.stringify({ assigned_preset_id: presetId }),
-    }).then(function (r) { return r.json(); })
-    .then(function (data) {
+    }).then(function (r) {
+      return r.json().then(function (data) {
+        return { ok: r.ok, status: r.status, data: data };
+      });
+    })
+    .then(function (res) {
+      var data = res.data;
+      if (!res.ok) {
+        var msg = (data && (data.message || data.error)) || '保存に失敗しました';
+        if (res.status === 409) msg = (data && data.message) || 'プリセットがすでに割り当てられています';
+        alert('エラー: ' + msg);
+        return;
+      }
       if (data.error) { alert('エラー: ' + (data.message || data.error)); return; }
       if (currentCatData) {
         currentCatData.assigned_preset_id = presetId;
@@ -3886,17 +4046,30 @@ function closeCatDetailFoldSection(btn) {
   window.applyPreset = function (presetId, presetItemId) {
     var oneOnly = presetItemId != null && presetItemId !== '' && String(presetItemId) !== 'null';
     var msg = oneOnly
-      ? 'この1品だけ献立に追加しますか？'
-      : 'プリセット内の全フードを献立に追加しますか？（紐づけプリセットも更新されます）';
+      ? 'この1品だけ献立に追加しますか？（この猫にこのプリセットが紐づいている必要があります）'
+      : '有効メニューだけで献立を全面入れ替えしますか？\n・手動で足したプランも含め、現在の献立はすべて解除されます\n・この猫の紐づけプリセットもこのプリセットに更新されます';
     if (!confirm(msg)) return;
     var body = { cat_id: catId };
     if (oneOnly) body.preset_item_id = parseInt(presetItemId, 10);
     fetch(API_BASE + '/feeding/presets/' + presetId + '/apply', {
       method: 'POST', headers: apiHeaders(), cache: 'no-store', body: JSON.stringify(body)
-    }).then(function (r) { return r.json(); })
-    .then(function (data) {
-      if (data.error) { alert('エラー: ' + (data.message || data.error)); return; }
-      alert('プリセット「' + (data.preset_name || '') + '」を適用しました（' + (data.applied || []).length + '品追加）');
+    }).then(function (r) {
+      return r.json().then(function (data) {
+        return { ok: r.ok, status: r.status, data: data };
+      });
+    })
+    .then(function (res) {
+      var data = res.data;
+      if (!res.ok || data.error) {
+        var errMsg = (data && (data.message || data.error)) || '適用に失敗しました';
+        if (res.status === 409) errMsg = (data && data.message) || 'プリセットがすでに割り当てられています';
+        alert('エラー: ' + errMsg);
+        return;
+      }
+      var okMsg = oneOnly
+        ? ('プリセット「' + (data.preset_name || '') + '」の1品を追加しました')
+        : ('プリセット「' + (data.preset_name || '') + '」を適用しました（' + (data.applied || []).length + '品）');
+      alert(okMsg);
       closePresetApplyModal();
       if (oneOnly) {
         loadFeedingSection();
@@ -3932,7 +4105,7 @@ function closeCatDetailFoldSection(btn) {
         var presets = data.presets || [];
         var h = '';
         h += renderPresetLocationSwitcher(loc, 'manage');
-        h += '<p style="font-size:11px;color:var(--text-dim);margin:0 0 10px;line-height:1.45;">上のタブで拠点を選んでから <b>+ 新規プリセット</b> を押すと、その拠点（<b>' + escapeHtml(presetLocShortLabel(loc)) + '</b>）用として登録されます。</p>';
+        h += '<p style="font-size:11px;color:var(--text-dim);margin:0 0 10px;line-height:1.45;">各プリセットカードの<b>「🍽 献立に載せる」</b>で、行ごとに自動反映のオンオフができます。上のタブで拠点を選んでから <b>+ 新規プリセット</b> を押すと、その拠点（<b>' + escapeHtml(presetLocShortLabel(loc)) + '</b>）用として登録されます。</p>';
         h += '<button class="btn btn-primary" style="font-size:12px;margin-bottom:12px;width:100%;" onclick="openCreatePresetModal()">+ 新規プリセット（' + escapeHtml(presetLocShortLabel(loc)) + '）</button>';
         if (presets.length === 0) {
           h += '<div class="empty-msg">この拠点のプリセットはまだありません。タブを切り替えると他拠点の一覧が表示されます。</div>';
@@ -3945,7 +4118,8 @@ function closeCatDetailFoldSection(btn) {
           h += '<div style="background:var(--surface);border-radius:8px;padding:10px 12px;margin-bottom:8px;">';
           h += '<div style="display:flex;justify-content:space-between;align-items:flex-start;gap:8px;">';
           h += '<div style="flex:1;min-width:0;"><div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;margin-bottom:4px;">' + presetLocationBadgeHtml(ps.location_id) + '<b><span data-nyagi-preset-food="1">' + escapeHtml(nyagiPresetFoodNamePlain(ps.name)) + '</span></b></div>';
-          h += '<div style="font-size:11px;color:var(--text-dim);">' + (ps.items || []).length + '品</div>';
+          h += '<div style="font-size:11px;color:var(--text-dim);">' + (Array.isArray(ps.items) ? ps.items.length : 0) + '品</div>';
+          h += renderPresetManageMenuTogglesHtml(ps);
           var psDescM = ps.description != null ? String(ps.description).trim() : '';
           h += '<div style="font-size:10px;color:var(--text-dim);margin:4px 0 0;line-height:1.35;white-space:pre-wrap;word-break:break-word;">';
           h += psDescM ? escapeHtml(psDescM.length > 140 ? psDescM.slice(0, 140) + '…' : psDescM) : '<span class="dim">全体メモなし</span>';
@@ -3953,8 +4127,10 @@ function closeCatDetailFoldSection(btn) {
           h += '<button type="button" class="btn btn-outline" style="font-size:10px;padding:3px 8px;margin-top:4px;" onclick="openEditPresetDescriptionModal(' + ps.id + ')">📋 全体メモを編集</button></div>';
           h += '<div style="display:flex;flex-direction:column;align-items:flex-end;gap:4px;flex-shrink:0;">';
           h += '<button type="button" class="btn-edit-small" style="font-size:10px;" onclick="cyclePresetLocation(' + ps.id + ',\'' + ploc + '\')" title="拠点を切替">🏷 拠点切替</button>';
-          h += '<div><button class="btn-edit-small" onclick="renamePreset(' + ps.id + ',\'' + escapeHtml(ps.name).replace(/'/g, "\\'") + '\')" title="名前変更">📝</button> <button class="btn-edit-small" onclick="editPresetItems(' + ps.id + ')" title="中身編集">✏️</button> <button class="btn-edit-small" style="color:#f87171;" onclick="deletePreset(' + ps.id + ')" title="削除">🗑</button></div>';
-          h += '</div></div></div></div>';
+          h += '<div><button class="btn-edit-small" onclick="renamePreset(' + ps.id + ',\'' + escapeHtml(ps.name).replace(/'/g, "\\'") + '\')" title="名前変更">📝</button> <button class="btn-edit-small" onclick="editPresetItems(' + ps.id + ')" title="フードの追加・量・メモの編集">✏️</button> <button class="btn-edit-small" style="color:#f87171;" onclick="deletePreset(' + ps.id + ')" title="削除">🗑</button></div>';
+          h += '</div>';
+          h += '</div>';
+          h += '</div>';
         }
         area.className = '';
         area.style.padding = '';
@@ -4120,10 +4296,15 @@ function closeCatDetailFoldSection(btn) {
         if (kcal) h += ' <span style="color:var(--text-dim);font-size:11px;">(' + kcal + 'kcal)</span>';
         if (it.scheduled_time) h += ' <span style="color:var(--text-dim);font-size:10px;">⏰' + escapeHtml(it.scheduled_time) + '</span>';
         h += '</div>';
-        h += '<div style="flex-shrink:0;display:flex;gap:4px;">';
+        var menuOffRow = it.menu_active !== undefined && it.menu_active !== null && Number(it.menu_active) === 0;
+        h += '<div style="flex-shrink:0;display:flex;flex-wrap:wrap;gap:4px;justify-content:flex-end;">';
+        h += '<button type="button" class="btn-edit-small" style="font-size:10px;" onclick="togglePresetItemMenuActive(' + presetId + ',' + it.id + ',' + (menuOffRow ? '1' : '0') + ')" title="献立に載せる行かどうか">' + (menuOffRow ? '▶有効' : '⏸無効') + '</button>';
         h += '<button type="button" class="btn-edit-small" style="font-size:11px;" onclick="openEditPresetItem(' + presetId + ',' + it.id + ')" title="量・メモなどを変更">✏️</button>';
         h += '<button type="button" class="btn-edit-small" style="color:#f87171;font-size:11px;" onclick="deletePresetItem(' + presetId + ',' + it.id + ')">🗑</button>';
         h += '</div></div>';
+        if (menuOffRow) {
+          h += '<div style="font-size:10px;color:#f87171;margin-top:4px;">この行は献立自動反映の対象外です</div>';
+        }
         if (it.notes && String(it.notes).trim()) {
           h += '<div style="font-size:10px;color:var(--text-dim);margin-top:4px;line-height:1.35;white-space:pre-wrap;word-break:break-word;">📝 ' + escapeHtml(String(it.notes).trim()) + '</div>';
         }
@@ -4134,6 +4315,22 @@ function closeCatDetailFoldSection(btn) {
     h += '</div>';
     return h;
   }
+
+  window.togglePresetItemMenuActive = function (presetId, itemId, nextActive, returnTo) {
+    fetch(API_BASE + '/feeding/presets/' + presetId + '/items/' + itemId, {
+      method: 'PUT',
+      headers: apiHeaders(), cache: 'no-store',
+      body: JSON.stringify({ menu_active: parseInt(nextActive, 10) }),
+    }).then(function (r) { return r.json(); })
+    .then(function (data) {
+      if (data.error) { alert('エラー: ' + (data.message || data.error)); return; }
+      if (returnTo === 'manage') {
+        _fillPresetManageModal(getStoredPresetLocation());
+        return;
+      }
+      editPresetItems(presetId);
+    }).catch(function () { alert('更新に失敗しました'); });
+  };
 
   window.deletePresetItem = function (presetId, itemId) {
     fetch(API_BASE + '/feeding/presets/' + presetId + '/items/' + itemId, { method: 'DELETE', headers: apiHeaders(), cache: 'no-store' })
@@ -4152,7 +4349,7 @@ function closeCatDetailFoldSection(btn) {
     var it = null;
     if (_presetItemsEditCache && _presetItemsEditCache.presetId === presetId && _presetItemsEditCache.items) {
       for (var i = 0; i < _presetItemsEditCache.items.length; i++) {
-        if (_presetItemsEditCache.items[i].id === itemId) { it = _presetItemsEditCache.items[i]; break; }
+        if (String(_presetItemsEditCache.items[i].id) === String(itemId)) { it = _presetItemsEditCache.items[i]; break; }
       }
     }
     if (!it) { alert('データが見つかりません。プリセット一覧を開き直してください。'); return; }
@@ -4447,15 +4644,17 @@ function closeCatDetailFoldSection(btn) {
       else { other.push(items[i]); }
     }
     function rowHtml(it) {
+      var menuOff = it.menu_active !== undefined && it.menu_active !== null && Number(it.menu_active) === 0;
       var notesHtml = '';
       if (it.notes && String(it.notes).trim()) {
         notesHtml = '<div style="font-size:10px;color:var(--text-dim);padding:4px 0 0;line-height:1.35;white-space:pre-wrap;word-break:break-word;">📝 ' + escapeHtml(String(it.notes).trim()) + '</div>';
       }
-      var nameText = escapeHtml(nyagiPresetFoodNamePlain(it.food_name)) + ' ' + it.amount_g + 'g';
-      var line = '<div style="display:flex;align-items:flex-start;gap:8px;width:100%;max-width:100%;box-sizing:border-box;padding:5px 0 7px;border-bottom:1px solid rgba(255,255,255,0.06);">';
+      var badge = menuOff ? '<span style="font-size:9px;color:#f87171;font-weight:600;margin-right:4px;">献立対象外</span>' : '';
+      var nameText = badge + escapeHtml(nyagiPresetFoodNamePlain(it.food_name)) + ' ' + it.amount_g + 'g';
+      var line = '<div style="display:flex;align-items:flex-start;gap:8px;width:100%;max-width:100%;box-sizing:border-box;padding:5px 0 7px;border-bottom:1px solid rgba(255,255,255,0.06);' + (menuOff ? 'opacity:0.75;' : '') + '">';
       line += '<div style="flex:1;min-width:0;font-size:11px;line-height:1.5;color:var(--text-dim);word-break:normal;overflow-wrap:break-word;writing-mode:horizontal-tb;white-space:normal;" data-nyagi-preset-food="1">' + nameText + notesHtml + '</div>';
-      if (presetIdForOneApply && it.id != null) {
-        line += '<div style="flex-shrink:0;"><button type="button" class="btn btn-outline" style="font-size:9px;padding:2px 8px;white-space:nowrap;width:auto !important;display:inline-block;" onclick="applyPreset(' + presetIdForOneApply + ',' + it.id + ')" title="この1品だけ献立に追加">1品</button></div>';
+      if (presetIdForOneApply && it.id != null && !menuOff) {
+        line += '<div style="flex-shrink:0;"><button type="button" class="btn btn-outline" style="font-size:9px;padding:2px 8px;white-space:nowrap;width:auto !important;display:inline-block;" onclick="applyPreset(' + presetIdForOneApply + ',' + it.id + ')" title="この1品だけ献立に追加（紐づけプリセットと一致しているときのみ）">1品</button></div>';
       }
       line += '</div>';
       return line;
@@ -4563,23 +4762,45 @@ function closeCatDetailFoldSection(btn) {
     return food.name + ' ' + _formTag(food.form);
   }
 
-  function _matchesQuery(food, words) {
-    var haystack = ((food.name || '') + ' ' + (food.brand || '') + ' ' + (food.flavor || '') + ' ' + (food.form || '')).toLowerCase();
+  function _matchesQuery(food, queryRaw) {
+    var haystack =
+      (food.name || '') +
+      ' ' +
+      (food.brand || '') +
+      ' ' +
+      (food.flavor || '') +
+      ' ' +
+      (food.form || '') +
+      ' ' +
+      (food.purpose || '') +
+      ' ' +
+      (food.notes || '') +
+      ' ' +
+      (food.category || '') +
+      ' ' +
+      (food.id || '');
+    if (typeof nyagiSearchTextMatchesQuery === 'function') {
+      return nyagiSearchTextMatchesQuery(haystack, queryRaw);
+    }
+    var q = String(queryRaw || '').trim();
+    if (!q) return true;
+    var words = q.toLowerCase().replace(/[\u3000]/g, ' ').split(/\s+/).filter(function (w) { return w.length > 0; });
+    var lo = haystack.toLowerCase();
     for (var w = 0; w < words.length; w++) {
-      if (haystack.indexOf(words[w]) === -1) return false;
+      if (lo.indexOf(words[w]) === -1) return false;
     }
     return true;
   }
 
   function _renderFoodDropdown(dropdownEl, foods, query, onSelect) {
     dropdownEl.innerHTML = '';
-    var words = query.toLowerCase().replace(/[\u3000]/g, ' ').split(/\s+/).filter(function (w) { return w.length > 0; });
+    var words = String(query || '').trim().replace(/[\u3000]/g, ' ').split(/\s+/).filter(function (w) { return w.length > 0; });
     var groups = {};
     var totalCount = 0;
     var maxItems = words.length > 0 ? 50 : 20;
     for (var i = 0; i < foods.length; i++) {
       if (totalCount >= maxItems) break;
-      if (words.length > 0 && !_matchesQuery(foods[i], words)) continue;
+      if (words.length > 0 && !_matchesQuery(foods[i], query)) continue;
       var ft = foods[i].food_type || 'complete';
       if (!groups[ft]) groups[ft] = [];
       groups[ft].push(foods[i]);
@@ -7156,14 +7377,17 @@ function closeCatDetailFoldSection(btn) {
     var input = document.getElementById('mpMedSearchInput');
     var dropdown = document.getElementById('mpMedSearchDropdown');
     if (!input || !dropdown) return;
-    var q = input.value.trim().toLowerCase();
+    var q = input.value.trim();
 
     var list = Array.isArray(_medicinesList) ? _medicinesList : [];
     var filtered = list;
     if (q) {
       filtered = list.filter(function (m) {
         var label = (m.name || '') + ' ' + (m.form || '') + ' ' + (m.category || '');
-        return label.toLowerCase().indexOf(q) !== -1;
+        if (typeof nyagiSearchTextMatchesQuery === 'function') {
+          return nyagiSearchTextMatchesQuery(label, q);
+        }
+        return label.toLowerCase().indexOf(q.toLowerCase()) !== -1;
       });
     }
 

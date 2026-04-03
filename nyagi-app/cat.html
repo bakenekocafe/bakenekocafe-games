@@ -1468,7 +1468,8 @@
   <!-- 病院予定モーダル -->
   <div id="vetScheduleModal" class="modal-overlay">
     <div class="modal-box">
-      <div class="modal-title">📅 病院の予定を登録</div>
+      <div class="modal-title" id="vsModalTitle">📅 病院の予定を登録</div>
+      <input type="hidden" id="vsEditId" value="">
       <div class="form-group">
         <label class="form-label">種別</label>
         <select id="vsType" class="form-select">
@@ -1487,6 +1488,10 @@
       <div class="form-group">
         <label class="form-label">予約時刻（任意・日本時間）</label>
         <input type="time" id="vsTime" class="form-input" title="病院の予約枠の時刻。未入力なら予定日のみ登録されます。">
+      </div>
+      <div class="form-group">
+        <label class="form-label">病院名（任意）</label>
+        <input type="text" id="vsClinicName" class="form-input" maxlength="200" placeholder="例: ○○動物病院" autocomplete="organization">
       </div>
       <div class="form-group">
         <label class="form-label">メモ（任意） <button type="button" class="inline-mic-btn" data-voice-for="vsMemo" onclick="startInlineVoice('vsMemo')">🎤</button></label>
@@ -1912,7 +1917,7 @@
   <script src="js/app.js?v=220"></script>
   <script src="js/nyagi-scroll-restore.js?v=217"></script>
   <script src="js/nyagi-search-normalize.js?v=1"></script>
-  <script src="js/cat-detail.js?v=290"></script>
+  <script src="js/cat-detail.js?v=291"></script>
   <script src="js/voice-console.js?v=216"></script>
 </body>
 </html>

@@ -2003,19 +2003,22 @@ function closeCatDetailFoldSection(btn) {
           schedHtml += '<div style="font-size:11px;color:#86efac;margin-top:2px;font-weight:600;">✅ 予約 ' + escapeHtml(String(up.booked_date).trim()) + '</div>';
         }
         var schedNote = '';
+        var schedClinic = '';
         if (up.details) {
           try {
             var pd = typeof up.details === 'string' ? JSON.parse(up.details) : up.details;
             schedNote = (pd && pd.note) ? String(pd.note).trim() : '';
-          } catch (_sn) { schedNote = ''; }
+            schedClinic = (pd && pd.clinic_name) ? String(pd.clinic_name).trim() : '';
+          } catch (_sn) { schedNote = ''; schedClinic = ''; }
         }
+        if (schedClinic) schedHtml += '<div style="font-size:11px;color:#a5b4fc;margin-top:2px;">🏥 ' + escapeHtml(schedClinic) + '</div>';
         if (schedNote) schedHtml += '<div style="font-size:11px;color:var(--text-dim);margin-top:2px;">📝 ' + escapeHtml(schedNote) + '</div>';
         schedHtml += '</div>';
         schedHtml += '<div style="display:flex;flex-direction:column;align-items:flex-end;gap:4px;">';
         schedHtml += '<span style="font-size:13px;font-weight:700;color:' + urgColor + ';white-space:nowrap;">' + daysText + '</span>';
         schedHtml += '<button type="button" class="btn-add" onclick="openClinicRecordFromSchedule(' + up.id + ')" style="background:rgba(99,102,241,0.15);color:#a78bfa;font-size:11px;padding:4px 8px;white-space:nowrap;">📝 受診を記録する</button>';
-        schedHtml += '<div style="display:flex;gap:4px;">';
-        schedHtml += '<button class="btn-edit-small" onclick="editVetScheduleDate(' + up.id + ',\'' + escapeHtml(up.next_due) + '\')" style="font-size:10px;color:var(--text-dim);padding:2px 6px;" title="日付変更">📅 変更</button>';
+        schedHtml += '<div style="display:flex;gap:4px;flex-wrap:wrap;justify-content:flex-end;">';
+        schedHtml += '<button class="btn-edit-small" onclick="openVetScheduleEditModal(' + up.id + ')" style="font-size:10px;color:#a78bfa;padding:2px 6px;" title="種別・日付・予約・病院名・メモを編集">✏️ 編集</button>';
         schedHtml += '<button class="btn-edit-small" onclick="deleteVetSchedule(' + up.id + ')" style="font-size:10px;color:#f87171;padding:2px 6px;" title="削除">🗑</button>';
         schedHtml += '</div>';
         schedHtml += '</div>';
@@ -5548,22 +5551,6 @@ function closeCatDetailFoldSection(btn) {
     }).catch(function () { alert('削除に失敗しました'); });
   };
 
-  window.editVetScheduleDate = function (recordId, currentDate) {
-    var newDate = prompt('新しい予定日（YYYY-MM-DD）:', currentDate);
-    if (!newDate || newDate === currentDate) return;
-    if (!/^\d{4}-\d{2}-\d{2}$/.test(newDate)) { alert('日付形式が正しくありません（YYYY-MM-DD）'); return; }
-    fetch(API_BASE + '/health/records/' + recordId, {
-      method: 'PUT',
-      headers: apiHeaders(), cache: 'no-store',
-      body: JSON.stringify({ next_due: newDate }),
-    }).then(function (r) { return r.json(); })
-    .then(function (data) {
-      if (data.error) { alert('エラー: ' + (data.message || data.error)); return; }
-      loadClinicRecords();
-      loadScoreCard();
-    }).catch(function () { alert('更新に失敗しました'); });
-  };
-
   window.deleteClinicRecord = function (recordId) {
     if (!confirm('この病院記録を削除しますか？\nこの操作は取り消せません。')) return;
     fetch(API_BASE + '/health/records/' + recordId, {
@@ -5718,20 +5705,103 @@ function closeCatDetailFoldSection(btn) {
 
   // ── 病院予定モーダル ─────────────────────────────────────────────────────────────
 
+  function vetScheduleDetailPayload(memo, clinicName) {
+    var o = {};
+    if (memo) o.note = memo;
+    if (clinicName) o.clinic_name = clinicName;
+    return Object.keys(o).length ? JSON.stringify(o) : null;
+  }
+
   window.openVetScheduleModal = function () {
+    var ve = document.getElementById('vsEditId');
+    if (ve) ve.value = '';
+    var tit = document.getElementById('vsModalTitle');
+    if (tit) tit.textContent = '📅 病院の予定を登録';
     document.getElementById('vsType').value = 'checkup';
     document.getElementById('vsDate').value = '';
     var vst = document.getElementById('vsTime');
     if (vst) vst.value = '';
+    var vcn = document.getElementById('vsClinicName');
+    if (vcn) vcn.value = '';
     document.getElementById('vsMemo').value = '';
     var vsb = document.getElementById('vsSubmitBtn');
     var vsbs = document.getElementById('vsSubmitSlackBtn');
     if (vsb) { vsb.disabled = false; vsb.textContent = '登録'; }
-    if (vsbs) { vsbs.disabled = false; vsbs.textContent = '登録してSlackに送信'; }
+    if (vsbs) {
+      vsbs.disabled = false;
+      vsbs.textContent = '登録してSlackに送信';
+      vsbs.style.display = '';
+    }
     document.getElementById('vetScheduleModal').classList.add('open');
   };
 
+  window.openVetScheduleEditModal = function (recordId) {
+    var rid = recordId != null ? String(recordId).trim() : '';
+    if (!rid) return;
+    fetch(API_BASE + '/health/records/' + encodeURIComponent(rid), {
+      headers: apiHeaders(), cache: 'no-store',
+    }).then(function (r) { return r.json(); })
+    .then(function (data) {
+      if (data.error || !data.record) {
+        alert('読み込みに失敗しました: ' + (data.message || data.error || ''));
+        return;
+      }
+      var rec = data.record;
+      if (!rec.next_due) {
+        alert('この行は病院予定ではありません。');
+        return;
+      }
+      var ve = document.getElementById('vsEditId');
+      if (ve) ve.value = rid;
+      var tit = document.getElementById('vsModalTitle');
+      if (tit) tit.textContent = '📅 病院の予定を編集';
+      document.getElementById('vsType').value = rec.record_type || 'checkup';
+      document.getElementById('vsDate').value = String(rec.next_due).slice(0, 10);
+      var bd = rec.booked_date ? String(rec.booked_date).trim() : '';
+      var timeEl = document.getElementById('vsTime');
+      if (timeEl) {
+        if (bd.indexOf(' ') !== -1) {
+          var tpart = bd.split(/\s+/)[1] || '';
+          timeEl.value = tpart.length >= 5 ? tpart.slice(0, 5) : '';
+        } else {
+          timeEl.value = '';
+        }
+      }
+      var note = '';
+      var cname = '';
+      if (rec.details) {
+        try {
+          var pd = typeof rec.details === 'string' ? JSON.parse(rec.details) : rec.details;
+          note = (pd && pd.note) ? String(pd.note) : '';
+          cname = (pd && pd.clinic_name) ? String(pd.clinic_name) : '';
+        } catch (_) { note = ''; cname = ''; }
+      }
+      document.getElementById('vsMemo').value = note;
+      var vcn = document.getElementById('vsClinicName');
+      if (vcn) vcn.value = cname;
+      var vsbs = document.getElementById('vsSubmitSlackBtn');
+      if (vsbs) vsbs.style.display = 'none';
+      var vsb = document.getElementById('vsSubmitBtn');
+      if (vsb) { vsb.disabled = false; vsb.textContent = '保存'; }
+      document.getElementById('vetScheduleModal').classList.add('open');
+    }).catch(function () {
+      alert('読み込みに失敗しました');
+    });
+  };
+
   window.closeVetScheduleModal = function () {
+    var ve = document.getElementById('vsEditId');
+    if (ve) ve.value = '';
+    var tit = document.getElementById('vsModalTitle');
+    if (tit) tit.textContent = '📅 病院の予定を登録';
+    var vsbs = document.getElementById('vsSubmitSlackBtn');
+    if (vsbs) {
+      vsbs.style.display = '';
+      vsbs.disabled = false;
+      vsbs.textContent = '登録してSlackに送信';
+    }
+    var vsb = document.getElementById('vsSubmitBtn');
+    if (vsb) { vsb.disabled = false; vsb.textContent = '登録'; }
     document.getElementById('vetScheduleModal').classList.remove('open');
   };
 
@@ -5742,6 +5812,9 @@ function closeCatDetailFoldSection(btn) {
     var timeEl = document.getElementById('vsTime');
     var timeVal = timeEl && timeEl.value ? String(timeEl.value).trim() : '';
     var memo = document.getElementById('vsMemo').value.trim();
+    var clinicName = '';
+    var cnEl = document.getElementById('vsClinicName');
+    if (cnEl) clinicName = cnEl.value.trim().slice(0, 200);
 
     if (!schedDate) { alert('予定日を入力してください'); return; }
 
@@ -5753,29 +5826,78 @@ function closeCatDetailFoldSection(btn) {
 
     var typeLabels = { vaccine: 'ワクチン', checkup: '健康診断', surgery: '手術', dental: '歯科', test: '検査', observation: '経過観察' };
     var label = typeLabels[schedType] || schedType;
-    var valueSummary = schedDate + ' ' + label + (memo ? '（' + memo.slice(0, 50) + '）' : '');
+    var valueSummary = schedDate + ' ' + label;
+    if (clinicName) valueSummary += ' · ' + clinicName.slice(0, 40);
+    if (memo) valueSummary += '（' + memo.slice(0, 50) + '）';
+
+    var detailsStr = vetScheduleDetailPayload(memo, clinicName);
+
+    var editEl = document.getElementById('vsEditId');
+    var editId = editEl && editEl.value ? String(editEl.value).trim() : '';
+
+    if (wantedSlack && editId) {
+      alert('編集時はSlackへ一括送信しません。内容を変えたあと必要ならチャット等で共有してください。');
+      return;
+    }
+
+    var btn = document.getElementById('vsSubmitBtn');
+    var btnSlack = document.getElementById('vsSubmitSlackBtn');
+    var busyLabel = wantedSlack ? 'Slack送信中…' : (editId ? '保存中…' : '登録中…');
+    if (btn) { btn.disabled = true; btn.textContent = busyLabel; }
+    if (btnSlack) { btnSlack.disabled = true; btnSlack.textContent = busyLabel; }
+
+    function resetVsBtns() {
+      var isEd = !!(document.getElementById('vsEditId') && document.getElementById('vsEditId').value);
+      if (btn) {
+        btn.disabled = false;
+        btn.textContent = isEd ? '保存' : '登録';
+      }
+      if (btnSlack) {
+        btnSlack.disabled = false;
+        btnSlack.textContent = '登録してSlackに送信';
+      }
+    }
+
+    if (editId) {
+      var putBody = {
+        record_type: schedType,
+        next_due: schedDate,
+        booked_date: bookedDate,
+        value: valueSummary,
+        details: detailsStr != null ? detailsStr : '{}',
+      };
+      fetch(API_BASE + '/health/records/' + encodeURIComponent(editId), {
+        method: 'PUT',
+        headers: apiHeaders(), cache: 'no-store',
+        body: JSON.stringify(putBody),
+      }).then(function (r) { return r.json(); })
+      .then(function (data) {
+        if (data.error) {
+          alert('エラー: ' + (data.message || data.error));
+          resetVsBtns();
+          return;
+        }
+        resetVsBtns();
+        closeVetScheduleModal();
+        loadClinicRecords();
+        loadScoreCard();
+      }).catch(function () {
+        resetVsBtns();
+        alert('保存に失敗しました');
+      });
+      return;
+    }
 
     var body = {
       cat_id: catId,
       record_type: schedType,
       record_date: todayJstYmd(),
       value: valueSummary,
-      details: memo ? JSON.stringify({ note: memo }) : null,
+      details: detailsStr,
       next_due: schedDate,
       booked_date: bookedDate,
       notify_slack: wantedSlack,
     };
-
-    var btn = document.getElementById('vsSubmitBtn');
-    var btnSlack = document.getElementById('vsSubmitSlackBtn');
-    var busyLabel = wantedSlack ? 'Slack送信中…' : '登録中…';
-    if (btn) { btn.disabled = true; btn.textContent = busyLabel; }
-    if (btnSlack) { btnSlack.disabled = true; btnSlack.textContent = busyLabel; }
-
-    function resetVsBtns() {
-      if (btn) { btn.disabled = false; btn.textContent = '登録'; }
-      if (btnSlack) { btnSlack.disabled = false; btnSlack.textContent = '登録してSlackに送信'; }
-    }
 
     fetch(API_BASE + '/health/records', {
       method: 'POST',

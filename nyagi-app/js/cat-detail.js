@@ -1999,6 +1999,9 @@ function closeCatDetailFoldSection(btn) {
         schedHtml += '<div style="flex:1;">';
         schedHtml += '<div style="font-size:14px;font-weight:600;color:var(--text-main);">' + escapeHtml(upLabel) + '</div>';
         schedHtml += '<div style="font-size:12px;color:var(--text-dim);margin-top:2px;">' + escapeHtml(formatClinicDateWestern(up.next_due)) + '</div>';
+        if (up.booked_date && String(up.booked_date).trim()) {
+          schedHtml += '<div style="font-size:11px;color:#86efac;margin-top:2px;font-weight:600;">✅ 予約 ' + escapeHtml(String(up.booked_date).trim()) + '</div>';
+        }
         var schedNote = '';
         if (up.details) {
           try {
@@ -5718,7 +5721,13 @@ function closeCatDetailFoldSection(btn) {
   window.openVetScheduleModal = function () {
     document.getElementById('vsType').value = 'checkup';
     document.getElementById('vsDate').value = '';
+    var vst = document.getElementById('vsTime');
+    if (vst) vst.value = '';
     document.getElementById('vsMemo').value = '';
+    var vsb = document.getElementById('vsSubmitBtn');
+    var vsbs = document.getElementById('vsSubmitSlackBtn');
+    if (vsb) { vsb.disabled = false; vsb.textContent = '登録'; }
+    if (vsbs) { vsbs.disabled = false; vsbs.textContent = '登録してSlackに送信'; }
     document.getElementById('vetScheduleModal').classList.add('open');
   };
 
@@ -5726,12 +5735,21 @@ function closeCatDetailFoldSection(btn) {
     document.getElementById('vetScheduleModal').classList.remove('open');
   };
 
-  window.submitVetSchedule = function () {
+  window.submitVetSchedule = function (notifySlack) {
+    var wantedSlack = !!notifySlack;
     var schedType = document.getElementById('vsType').value;
     var schedDate = document.getElementById('vsDate').value;
+    var timeEl = document.getElementById('vsTime');
+    var timeVal = timeEl && timeEl.value ? String(timeEl.value).trim() : '';
     var memo = document.getElementById('vsMemo').value.trim();
 
     if (!schedDate) { alert('予定日を入力してください'); return; }
+
+    var bookedDate = null;
+    if (timeVal && schedDate) {
+      var hm = timeVal.length >= 5 ? timeVal.slice(0, 5) : timeVal;
+      bookedDate = schedDate + ' ' + hm;
+    }
 
     var typeLabels = { vaccine: 'ワクチン', checkup: '健康診断', surgery: '手術', dental: '歯科', test: '検査', observation: '経過観察' };
     var label = typeLabels[schedType] || schedType;
@@ -5744,7 +5762,20 @@ function closeCatDetailFoldSection(btn) {
       value: valueSummary,
       details: memo ? JSON.stringify({ note: memo }) : null,
       next_due: schedDate,
+      booked_date: bookedDate,
+      notify_slack: wantedSlack,
     };
+
+    var btn = document.getElementById('vsSubmitBtn');
+    var btnSlack = document.getElementById('vsSubmitSlackBtn');
+    var busyLabel = wantedSlack ? 'Slack送信中…' : '登録中…';
+    if (btn) { btn.disabled = true; btn.textContent = busyLabel; }
+    if (btnSlack) { btnSlack.disabled = true; btnSlack.textContent = busyLabel; }
+
+    function resetVsBtns() {
+      if (btn) { btn.disabled = false; btn.textContent = '登録'; }
+      if (btnSlack) { btnSlack.disabled = false; btnSlack.textContent = '登録してSlackに送信'; }
+    }
 
     fetch(API_BASE + '/health/records', {
       method: 'POST',
@@ -5752,11 +5783,20 @@ function closeCatDetailFoldSection(btn) {
       body: JSON.stringify(body),
     }).then(function (r) { return r.json(); })
     .then(function (data) {
-      if (data.error) { alert('エラー: ' + (data.message || data.error)); return; }
+      if (data.error) {
+        alert('エラー: ' + (data.message || data.error));
+        resetVsBtns();
+        return;
+      }
+      if (wantedSlack && data.slack) {
+        slackClinicRecordFollowup(data);
+      }
+      resetVsBtns();
       closeVetScheduleModal();
       loadClinicRecords();
       loadScoreCard();
     }).catch(function () {
+      resetVsBtns();
       alert('予定の登録に失敗しました');
     });
   };
@@ -6565,14 +6605,21 @@ function closeCatDetailFoldSection(btn) {
 
   function formatDate(iso) {
     if (!iso) return '';
+    if (window.NyagiJst && typeof NyagiJst.formatMdHm === 'function') return NyagiJst.formatMdHm(iso);
     try {
       var d = new Date(iso);
-      var mo = d.getMonth() + 1;
-      var da = d.getDate();
-      var h = d.getHours();
-      var mi = d.getMinutes();
-      return mo + '/' + da + ' ' + (h < 10 ? '0' : '') + h + ':' + (mi < 10 ? '0' : '') + mi;
-    } catch (_) { return iso; }
+      if (isNaN(d.getTime())) return String(iso);
+      return d.toLocaleString('ja-JP', {
+        timeZone: 'Asia/Tokyo',
+        month: 'numeric',
+        day: 'numeric',
+        hour: '2-digit',
+        minute: '2-digit',
+        hour12: false,
+      });
+    } catch (_) {
+      return String(iso);
+    }
   }
 
   function formatDateShort(str) {
@@ -6609,11 +6656,7 @@ function closeCatDetailFoldSection(btn) {
     }
     area.innerHTML = '<div class="detail-section"><div class="section-header"><div class="detail-title">✅ この猫のタスク</div></div><div class="loading" style="padding:8px;font-size:12px;"><span class="spinner"></span> 読み込み中...</div></div>';
 
-    var today = new Date();
-    var y = today.getFullYear();
-    var mo = ('0' + (today.getMonth() + 1)).slice(-2);
-    var d = ('0' + today.getDate()).slice(-2);
-    var dateStr = y + '-' + mo + '-' + d;
+    var dateStr = todayJstYmd();
     var url = API_BASE + '/tasks?date=' + dateStr + '&cat_id=' + encodeURIComponent(catId);
 
     return fetch(url, { headers: apiHeaders(), cache: 'no-store' })

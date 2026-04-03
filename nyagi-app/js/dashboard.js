@@ -346,25 +346,38 @@
         if (vetScheds[vi].days_left <= 30) { within30.push(vetScheds[vi]); }
         else { later.push(vetScheds[vi]); }
       }
-      var weekdays = ['日','月','火','水','木','金','土'];
       function formatVetDate(isoDate) {
         if (!isoDate) return '';
-        var d = new Date(isoDate + 'T00:00:00');
-        var m = d.getMonth() + 1;
-        var day = d.getDate();
-        var w = weekdays[d.getDay()];
-        return m + '/' + day + '（' + w + '）';
+        if (window.NyagiJst && typeof NyagiJst.formatYmdWithWday === 'function') {
+          return NyagiJst.formatYmdWithWday(isoDate) || '';
+        }
+        var d = new Date(String(isoDate).slice(0, 10) + 'T12:00:00+09:00');
+        var wk = new Intl.DateTimeFormat('en-US', { timeZone: 'Asia/Tokyo', weekday: 'long' }).format(d);
+        var w = { Sunday: '日', Monday: '月', Tuesday: '火', Wednesday: '水', Thursday: '木', Friday: '金', Saturday: '土' }[wk] || '';
+        var map = {};
+        var fp = new Intl.DateTimeFormat('en-GB', { timeZone: 'Asia/Tokyo', month: 'numeric', day: 'numeric' }).formatToParts(d);
+        for (var fi = 0; fi < fp.length; fi++) {
+          if (fp[fi].type !== 'literal') map[fp[fi].type] = fp[fi].value;
+        }
+        return Number(map.month) + '/' + Number(map.day) + (w ? '（' + w + '）' : '');
       }
       function formatVetDateTime(val) {
         if (!val) return '';
+        if (window.NyagiJst && typeof NyagiJst.formatBookedDateTime === 'function') {
+          return NyagiJst.formatBookedDateTime(val) || '';
+        }
         var parts = val.split(' ');
         var datePart = parts[0];
         var timePart = parts[1] || '';
-        var d = new Date(datePart + 'T00:00:00');
-        var m = d.getMonth() + 1;
-        var day = d.getDate();
-        var w = weekdays[d.getDay()];
-        var result = m + '/' + day + '（' + w + '）';
+        var d = new Date(datePart + 'T12:00:00+09:00');
+        var wk2 = new Intl.DateTimeFormat('en-US', { timeZone: 'Asia/Tokyo', weekday: 'long' }).format(d);
+        var w2 = { Sunday: '日', Monday: '月', Tuesday: '火', Wednesday: '水', Thursday: '木', Friday: '金', Saturday: '土' }[wk2] || '';
+        var map2 = {};
+        var fp2 = new Intl.DateTimeFormat('en-GB', { timeZone: 'Asia/Tokyo', month: 'numeric', day: 'numeric' }).formatToParts(d);
+        for (var fj = 0; fj < fp2.length; fj++) {
+          if (fp2[fj].type !== 'literal') map2[fp2[fj].type] = fp2[fj].value;
+        }
+        var result = Number(map2.month) + '/' + Number(map2.day) + (w2 ? '（' + w2 + '）' : '');
         if (timePart) result += ' ' + timePart;
         return result;
       }
@@ -525,8 +538,7 @@
     if (currentDate) {
       dateInput.value = currentDate;
     } else {
-      var today = new Date();
-      dateInput.value = today.getFullYear() + '-' + String(today.getMonth() + 1).padStart(2, '0') + '-' + String(today.getDate()).padStart(2, '0');
+      dateInput.value = (window.NyagiJst && NyagiJst.todayYmd) ? NyagiJst.todayYmd() : new Date().toLocaleDateString('sv-SE', { timeZone: 'Asia/Tokyo' });
     }
 
     var timeInput = document.createElement('input');
@@ -893,7 +905,7 @@
   function loadTaskProgressBars() {
     var container = document.getElementById('dashTaskProgress');
     if (!container) return;
-    var dateStr = new Date().toLocaleDateString('sv-SE', { timeZone: 'Asia/Tokyo' });
+    var dateStr = (window.NyagiJst && NyagiJst.todayYmd) ? NyagiJst.todayYmd() : new Date().toLocaleDateString('sv-SE', { timeZone: 'Asia/Tokyo' });
     var url = _origin + '/api/ops/tasks?date=' + encodeURIComponent(dateStr) + '&group_by=attribute';
     fetch(url, { headers: apiHeaders(), cache: 'no-store' })
       .then(function (r) { return r.json(); })
@@ -983,14 +995,21 @@
 
   function formatDate(iso) {
     if (!iso) return '';
+    if (window.NyagiJst && typeof NyagiJst.formatMdHm === 'function') return NyagiJst.formatMdHm(iso);
     try {
       var d = new Date(iso);
-      var mo = d.getMonth() + 1;
-      var da = d.getDate();
-      var h = d.getHours();
-      var mi = d.getMinutes();
-      return mo + '/' + da + ' ' + (h < 10 ? '0' : '') + h + ':' + (mi < 10 ? '0' : '') + mi;
-    } catch (_) { return iso; }
+      if (isNaN(d.getTime())) return String(iso);
+      return d.toLocaleString('ja-JP', {
+        timeZone: 'Asia/Tokyo',
+        month: 'numeric',
+        day: 'numeric',
+        hour: '2-digit',
+        minute: '2-digit',
+        hour12: false,
+      });
+    } catch (_) {
+      return String(iso);
+    }
   }
 
 })();

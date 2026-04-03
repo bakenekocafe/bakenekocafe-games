@@ -439,6 +439,10 @@
 
   /** YYYY-MM-DD → M/D（曜） */
   function formatTaskDueDateForList(ymdRaw) {
+    if (window.NyagiJst && typeof NyagiJst.formatYmdWithWday === 'function') {
+      var j = NyagiJst.formatYmdWithWday(ymdRaw);
+      if (j) return j;
+    }
     var ymd = String(ymdRaw || '').slice(0, 10);
     if (ymd.length !== 10 || ymd.charAt(4) !== '-') return '';
     var parts = ymd.split('-');
@@ -446,10 +450,10 @@
     var mo = parseInt(parts[1], 10);
     var d = parseInt(parts[2], 10);
     if (isNaN(y) || isNaN(mo) || isNaN(d)) return '';
-    var dt = new Date(y, mo - 1, d);
-    var wdays = ['日', '月', '火', '水', '木', '金', '土'];
-    var w = wdays[dt.getDay()];
-    return mo + '/' + d + '（' + w + '）';
+    var dt = new Date(ymd + 'T12:00:00+09:00');
+    var wk = new Intl.DateTimeFormat('en-US', { timeZone: 'Asia/Tokyo', weekday: 'long' }).format(dt);
+    var w = { Sunday: '日', Monday: '月', Tuesday: '火', Wednesday: '水', Thursday: '木', Friday: '金', Saturday: '土' }[wk] || '';
+    return mo + '/' + d + (w ? '（' + w + '）' : '');
   }
 
   /** 指定実行日（scheduled_date）。値があるときだけ一覧に出す */

@@ -604,15 +604,21 @@
   }
 
   function formatTime(iso) {
+    if (!iso) return '';
+    if (window.NyagiJst && typeof NyagiJst.formatMdHm === 'function') return NyagiJst.formatMdHm(iso);
     try {
       var d = new Date(iso);
-      var mo = d.getMonth() + 1;
-      var da = d.getDate();
-      var h = d.getHours();
-      var mi = d.getMinutes();
-      return mo + '/' + da + ' ' + (h < 10 ? '0' : '') + h + ':' + (mi < 10 ? '0' : '') + mi;
+      if (isNaN(d.getTime())) return String(iso);
+      return d.toLocaleString('ja-JP', {
+        timeZone: 'Asia/Tokyo',
+        month: 'numeric',
+        day: 'numeric',
+        hour: '2-digit',
+        minute: '2-digit',
+        hour12: false,
+      });
     } catch (_) {
-      return iso;
+      return String(iso);
     }
   }
 

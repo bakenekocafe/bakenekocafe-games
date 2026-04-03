@@ -102,6 +102,10 @@
   /** YYYY-MM-DD → 表示用 M/D */
   /** タスクの指定実行日用 M/D（曜） */
   function ovFmtTaskYmdWithWday(ymdRaw) {
+    if (window.NyagiJst && typeof NyagiJst.formatYmdWithWday === 'function') {
+      var j = NyagiJst.formatYmdWithWday(ymdRaw);
+      if (j) return j;
+    }
     var ymd = String(ymdRaw || '').slice(0, 10);
     if (ymd.length !== 10 || ymd.charAt(4) !== '-') return '';
     var parts = ymd.split('-');
@@ -109,9 +113,10 @@
     var mo = parseInt(parts[1], 10);
     var d = parseInt(parts[2], 10);
     if (isNaN(y) || isNaN(mo) || isNaN(d)) return fmtExcretionMdYmd(ymd);
-    var dt = new Date(y, mo - 1, d);
-    var wdays = ['日', '月', '火', '水', '木', '金', '土'];
-    return mo + '/' + d + '（' + wdays[dt.getDay()] + '）';
+    var dt = new Date(ymd + 'T12:00:00+09:00');
+    var wk = new Intl.DateTimeFormat('en-US', { timeZone: 'Asia/Tokyo', weekday: 'long' }).format(dt);
+    var wch = { Sunday: '日', Monday: '月', Tuesday: '火', Wednesday: '水', Thursday: '木', Friday: '金', Saturday: '土' }[wk] || '';
+    return mo + '/' + d + (wch ? '（' + wch + '）' : '');
   }
 
   function ovHtmlTaskScheduledIf(item) {

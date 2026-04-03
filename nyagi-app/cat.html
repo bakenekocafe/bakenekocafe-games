@@ -753,6 +753,7 @@
       justify-content: center;
     }
     .modal-overlay.open { display: flex; }
+    .nyagi-confirm-overlay { z-index: 1105; }
     .modal-box {
       background: var(--bg);
       border-radius: 12px;
@@ -1567,6 +1568,10 @@
         <input type="date" id="crDate" class="form-input">
       </div>
       <div class="form-group">
+        <label class="form-label">病院名（任意）</label>
+        <input type="text" id="crClinicName" class="form-input" maxlength="200" placeholder="例: ○○動物病院" autocomplete="organization">
+      </div>
+      <div class="form-group">
         <label class="form-label">内容 <button type="button" class="inline-mic-btn" data-voice-for="crContent" onclick="startInlineVoice('crContent')">🎤</button></label>
         <textarea id="crContent" class="form-textarea cr-content-field" rows="22" placeholder="診察内容、処方、所見など自由に記入"></textarea>
       </div>
@@ -1604,6 +1609,18 @@
       <div class="modal-actions" style="margin-top:12px;flex-wrap:wrap;gap:8px;">
         <button type="button" class="btn btn-outline" onclick="closeClinicRecordViewModal()">閉じる</button>
         <button type="button" class="btn btn-primary" id="crViewEditBtn">編集で開く</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- 病院記録・添付削除の確認（はい / いいえ） -->
+  <div id="crAttachDeleteConfirmModal" class="modal-overlay nyagi-confirm-overlay" onclick="if(event.target===this)dismissCrAttachDeleteConfirm()">
+    <div class="modal-box" style="max-width:400px;z-index:1;" onclick="event.stopPropagation()">
+      <div class="modal-title">📎 添付ファイルを削除</div>
+      <p id="crAttachDeleteConfirmText" class="cr-attach-del-confirm-msg" style="font-size:14px;line-height:1.55;color:var(--text-main);margin:0 0 20px;white-space:pre-line;"></p>
+      <div class="modal-actions" style="margin-top:0;gap:10px;">
+        <button type="button" class="btn btn-outline" style="flex:1;" onclick="dismissCrAttachDeleteConfirm()">いいえ</button>
+        <button type="button" class="btn btn-primary" style="flex:1;background:#dc2626;border-color:#dc2626;" onclick="confirmCrAttachDeleteYes()">はい、削除する</button>
       </div>
     </div>
   </div>
@@ -1756,7 +1773,7 @@
       <div class="form-group">
         <label class="form-label">ステータス</label>
         <select id="lsStatus" class="form-select">
-          <option value="active">在籍</option>
+          <option value="in_care">在籍</option>
           <option value="adopted">卒業</option>
           <option value="trial">トライアル中</option>
         </select>
@@ -2060,7 +2077,7 @@
   <script src="js/app.js?v=220"></script>
   <script src="js/nyagi-scroll-restore.js?v=217"></script>
   <script src="js/nyagi-search-normalize.js?v=1"></script>
-  <script src="js/cat-detail.js?v=292"></script>
+  <script src="js/cat-detail.js?v=295"></script>
   <script src="js/voice-console.js?v=216"></script>
 </body>
 </html>

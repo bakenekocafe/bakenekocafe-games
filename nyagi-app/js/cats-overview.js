@@ -198,151 +198,13 @@
 
   var _ovInlineHandlersBound = false;
 
-  var NYAGI_PRESET_LOC_KEY = 'nyagi_feeding_preset_location';
   var _ovFeedCtx = null;
-  var _ovPendingNewPreset = null;
   var _ovFoodsCache = null;
   var _ovFoodsSpecies = null;
   var _ovEditingPlanId = null;
-  var _ovPresetItemsCache = null;
-  var _ovPendingPresetItem = null;
-  /** プリセット行のフード・量・枠を編集するときのアイテムID（一覧の ovAddPlan から PUT） */
-  var _ovEditingPresetItemId = null;
 
   function feedingApiBase() {
     return apiOpsBase() + '/feeding';
-  }
-
-  function ovGetStoredPresetLocation() {
-    try {
-      var v = localStorage.getItem(NYAGI_PRESET_LOC_KEY);
-      if (v === 'cafe' || v === 'nekomata') return v;
-    } catch (_) {}
-    return 'cafe';
-  }
-
-  function ovSetStoredPresetLocation(loc) {
-    if (loc !== 'cafe' && loc !== 'nekomata') return;
-    try { localStorage.setItem(NYAGI_PRESET_LOC_KEY, loc); } catch (_) {}
-  }
-
-  function ovEffectivePresetLoc(c) {
-    if (c && (c.location_id === 'cafe' || c.location_id === 'nekomata')) return c.location_id;
-    return ovGetStoredPresetLocation();
-  }
-
-  function ovFeedingPresetsListUrl(sp, loc) {
-    var u = feedingApiBase() + '/presets?species=' + encodeURIComponent(sp || 'cat');
-    if (loc === 'cafe' || loc === 'nekomata') u += '&location_id=' + encodeURIComponent(loc);
-    return u;
-  }
-
-  function ovPresetLocShortLabel(loc) {
-    return loc === 'nekomata' ? '猫又療養所' : 'BAKENEKO CAFE';
-  }
-
-  function ovPresetLocationBadgeHtml(loc) {
-    var L = loc === 'nekomata' ? 'nekomata' : 'cafe';
-    var bg = L === 'nekomata' ? 'rgba(248,113,113,0.15)' : 'rgba(251,191,36,0.12)';
-    var c = L === 'nekomata' ? '#f87171' : '#fbbf24';
-    return '<span style="font-size:10px;padding:2px 6px;border-radius:4px;background:' + bg + ';color:' + c + ';font-weight:600;">' + esc(ovPresetLocShortLabel(L)) + '</span>';
-  }
-
-  function ovFeedingPresetAlphaSectionHtml(tabLoc, ps, lastLabelRef) {
-    if (tabLoc !== 'cafe' || !ps || !ps.alpha_bucket_label) return '';
-    var lab = ps.alpha_bucket_label;
-    if (lastLabelRef.v === lab) return '';
-    lastLabelRef.v = lab;
-    return '<div style="font-size:11px;font-weight:700;color:var(--text-dim);margin:12px 0 6px;padding:4px 0;border-bottom:1px solid rgba(255,255,255,0.08);">' + esc(lab) + '</div>';
-  }
-
-  function ovRenderPresetLocationSwitcher(activeLoc, context) {
-    var aCafe = activeLoc === 'cafe' ? 'background:rgba(251,191,36,0.25);border-color:rgba(251,191,36,0.55);color:#fbbf24;font-weight:700;' : 'background:var(--surface);border-color:rgba(255,255,255,0.12);color:var(--text-dim);';
-    var aNeko = activeLoc === 'nekomata' ? 'background:rgba(248,113,113,0.18);border-color:rgba(248,113,113,0.45);color:#f87171;font-weight:700;' : 'background:var(--surface);border-color:rgba(255,255,255,0.12);color:var(--text-dim);';
-    var h = '<div style="font-size:11px;color:var(--text-dim);margin:0 0 8px;font-weight:600;">🏷 表示拠点</div>';
-    h += '<div class="nyagi-preset-loc-row">';
-    h += '<button type="button" class="btn" style="padding:10px 6px;font-size:11px;border:2px solid;border-radius:8px;' + aCafe + '" data-ov-preset-loc="cafe" data-ov-preset-ctx="' + escAttr(context) + '">🐱 CAFE</button>';
-    h += '<button type="button" class="btn" style="padding:10px 6px;font-size:11px;border:2px solid;border-radius:8px;' + aNeko + '" data-ov-preset-loc="nekomata" data-ov-preset-ctx="' + escAttr(context) + '">🏥 猫又</button>';
-    h += '</div>';
-    return h;
-  }
-
-  /** プリセット表示用: API 由来の改行・異常空白で「縦に1文字ずつ」に見えるのを防ぐ */
-  function nyagiPresetFoodNamePlain(raw) {
-    var s = String(raw == null ? '' : raw);
-    s = s.replace(/[\r\n\x0B\x0C\u2028\u2029\u0085]+/g, ' ');
-    s = s.replace(/[\s\u00a0\u3000]+/g, ' ').trim();
-    return s;
-  }
-
-  function ovRenderPresetItemsSummary(items, totalKcal, presetIdForOneApply) {
-    var morn = [];
-    var eve = [];
-    var other = [];
-    for (var i = 0; i < (items || []).length; i++) {
-      if (items[i].meal_slot === 'evening') eve.push(items[i]);
-      else if (items[i].meal_slot === 'morning' || items[i].meal_slot === 'afternoon') morn.push(items[i]);
-      else other.push(items[i]);
-    }
-    var h = '<div style="display:block;width:100%;max-width:100%;box-sizing:border-box;margin-top:4px;">';
-    function rowHtml(it) {
-      var menuOff = it.menu_active !== undefined && it.menu_active !== null && Number(it.menu_active) === 0;
-      var notesHtml = '';
-      if (it.notes && String(it.notes).trim()) {
-        notesHtml = '<div style="font-size:10px;color:var(--text-dim);padding:4px 0 0;line-height:1.35;white-space:pre-wrap;word-break:break-word;">📝 ' + esc(String(it.notes).trim()) + '</div>';
-      }
-      var badge = menuOff ? '<span style="font-size:9px;color:#f87171;font-weight:600;margin-right:4px;">献立対象外</span>' : '';
-      var nameText = badge + esc(nyagiPresetFoodNamePlain(it.food_name)) + ' ' + it.amount_g + 'g';
-      var line = '<div style="display:flex;align-items:flex-start;gap:8px;width:100%;max-width:100%;box-sizing:border-box;padding:5px 0 7px;border-bottom:1px solid rgba(255,255,255,0.06);' + (menuOff ? 'opacity:0.75;' : '') + '">';
-      line += '<div style="flex:1;min-width:0;font-size:11px;line-height:1.5;color:var(--text-dim);word-break:normal;overflow-wrap:break-word;writing-mode:horizontal-tb;white-space:normal;" data-nyagi-preset-food="1">' + nameText + notesHtml + '</div>';
-      if (presetIdForOneApply && it.id != null && !menuOff) {
-        line += '<div style="flex-shrink:0;"><button type="button" class="btn btn-outline" style="font-size:9px;padding:2px 8px;white-space:nowrap;width:auto !important;display:inline-block;" data-ov-apply-preset-item="' + escAttr(String(presetIdForOneApply) + ':' + String(it.id)) + '">1品</button></div>';
-      }
-      line += '</div>';
-      return line;
-    }
-    function block(title, arr) {
-      if (arr.length === 0) return '';
-      var x = '<div style="font-size:10px;color:var(--accent,#fb923c);font-weight:600;margin-top:6px;margin-bottom:2px;">' + esc(title) + '</div>';
-      for (var m = 0; m < arr.length; m++) x += rowHtml(arr[m]);
-      return x;
-    }
-    h += block('☀ 朝/昼', morn);
-    h += block('🌙 夕', eve);
-    h += block('その他', other);
-    if (!items || items.length === 0) h += '<div style="font-size:11px;color:var(--text-dim);">未登録</div>';
-    if (totalKcal) h += '<div style="font-size:11px;color:var(--accent,#fb923c);margin-top:2px;">計 ' + totalKcal + ' kcal</div>';
-    h += '</div>';
-    return h;
-  }
-
-  /** プリセット管理: 献立オンオフ（品数直後＝説明文より上。常に見出しを表示） */
-  function ovRenderPresetManageMenuTogglesHtml(ps) {
-    var items = ps.items;
-    if (!Array.isArray(items)) items = [];
-    var h = '<div class="nyagi-preset-manage-menu" style="margin:10px 0;padding:10px;background:rgba(168,139,250,0.08);border-radius:8px;border:1px solid rgba(168,139,250,0.25);">';
-    h += '<div style="font-size:11px;font-weight:700;color:var(--text-main);margin-bottom:6px;">🍽 献立に載せる</div>';
-    h += '<div style="font-size:10px;color:var(--text-dim);line-height:1.4;margin-bottom:8px;">「外す」＝全適用・業務終了の対象外（量・メモは ✏️）。</div>';
-    if (items.length === 0) {
-      h += '<div style="font-size:12px;color:var(--text-dim);">フード行がありません。 <button type="button" class="btn-edit-small" data-ov-edit-preset-items="' + escAttr(String(ps.id)) + '">✏️ 追加</button></div></div>';
-      return h;
-    }
-    for (var mi = 0; mi < items.length; mi++) {
-      var it = items[mi];
-      if (!it || it.id == null) continue;
-      var menuOff = it.menu_active !== undefined && it.menu_active !== null && Number(it.menu_active) === 0;
-      var slot = it.meal_slot || '';
-      var slotJa = slot === 'evening' ? '夕' : (slot === 'morning' || slot === 'afternoon' ? '朝/昼' : slot);
-      var toggAttr = escAttr(String(ps.id) + '|' + String(it.id) + '|' + (menuOff ? '1' : '0'));
-      h += '<div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;padding:8px 0;border-bottom:1px solid rgba(255,255,255,0.06);' + (menuOff ? 'opacity:0.88;' : '') + '">';
-      h += '<div style="flex:1;min-width:0;font-size:12px;line-height:1.35;" data-nyagi-preset-food="1">';
-      h += (menuOff ? '<span style="color:#f87171;font-size:10px;font-weight:700;margin-right:6px;">対象外</span>' : '<span style="color:#4ade80;font-size:10px;font-weight:700;margin-right:6px;">対象</span>');
-      h += esc(nyagiPresetFoodNamePlain(it.food_name)) + ' <b>' + it.amount_g + 'g</b> <span style="color:var(--text-dim);font-size:10px;">' + esc(slotJa) + '</span></div>';
-      h += '<button type="button" class="btn btn-outline" style="font-size:10px;padding:4px 10px;white-space:nowrap;" data-ov-manage-toggle-menu="' + toggAttr + '">' + (menuOff ? '載せる' : '外す') + '</button>';
-      h += '</div>';
-    }
-    h += '</div>';
-    return h;
   }
 
   function ovFindCat(catId) {
@@ -352,16 +214,8 @@
     return null;
   }
 
-  function ovClosePresetModal() {
-    _ovPendingNewPreset = null;
-    var m = document.getElementById('ovPresetApplyModal');
-    if (m) m.classList.remove('open');
-  }
-
   function ovCloseAddPlanModal() {
     _ovEditingPlanId = null;
-    _ovPendingPresetItem = null;
-    _ovEditingPresetItemId = null;
     var m = document.getElementById('ovAddPlanModal');
     if (m) m.classList.remove('open');
   }
@@ -369,217 +223,6 @@
   function ovCloseFlModal() {
     var m = document.getElementById('ovFeedingLogModal');
     if (m) m.classList.remove('open');
-  }
-
-  function ovFillPresetApplyModal(loc) {
-    var modal = document.getElementById('ovPresetApplyModal');
-    if (!modal || !_ovFeedCtx) return;
-    var sp = _ovFeedCtx.species || 'cat';
-    ovSetStoredPresetLocation(loc);
-    fetch(ovFeedingPresetsListUrl(sp, loc), { headers: apiHeaders(), cache: 'no-store' })
-      .then(function (r) { return r.json(); })
-      .then(function (data) {
-        var presets = data.presets || [];
-        var innerHtml = '<div class="modal-box" style="max-height:80vh;overflow-y:auto;">';
-        innerHtml += '<div class="modal-title">📋 プリセット適用 <small class="dim">' + esc(_ovFeedCtx.name) + '</small></div>';
-        innerHtml += '<div style="margin:0 0 10px;text-align:center;"><button type="button" class="btn btn-outline" style="font-size:12px;width:100%;" data-ov-open-preset-manage="1">⚙️ プリセット管理</button></div>';
-        innerHtml += ovRenderPresetLocationSwitcher(loc, 'apply');
-        if (presets.length === 0) {
-          innerHtml += '<div class="empty-msg">この拠点のプリセットがありません。</div>';
-        } else {
-          var lastAlphaOvApply = { v: null };
-          for (var i = 0; i < presets.length; i++) {
-            var ps = presets[i];
-            innerHtml += ovFeedingPresetAlphaSectionHtml(loc, ps, lastAlphaOvApply);
-            innerHtml += '<div class="nyagi-preset-card">';
-            innerHtml += '<div class="nyagi-preset-card__head">' + ovPresetLocationBadgeHtml(ps.location_id) + '<b style="font-size:13px;"><span data-nyagi-preset-food="1">' + esc(nyagiPresetFoodNamePlain(ps.name)) + '</span></b></div>';
-            if (ps.description) innerHtml += '<div style="font-size:11px;color:var(--text-dim);margin-top:2px;line-height:1.4;white-space:pre-wrap;word-break:break-word;">' + esc(ps.description) + '</div>';
-            innerHtml += '<div class="nyagi-preset-card__items">' + ovRenderPresetItemsSummary(ps.items || [], ps.total_kcal, ps.id) + '</div>';
-            innerHtml += '<div class="nyagi-preset-card__foot">';
-            var ovTakenApply = ps.assigned_cat && String(ps.assigned_cat.id) !== String(_ovFeedCtx.catId);
-            if (ovTakenApply) {
-              innerHtml += '<span style="font-size:11px;color:#f87171;">他の猫（' + esc(String(ps.assigned_cat.name || '')) + '）に割当済みのため、全件適用できません</span>';
-            } else {
-              innerHtml += '<button type="button" class="btn btn-primary" style="font-size:11px;padding:4px 10px;" data-ov-apply-preset="' + escAttr(String(ps.id)) + '" title="有効メニューだけで献立を入れ替えます">全て適用</button>';
-            }
-            innerHtml += '</div>';
-            innerHtml += '</div>';
-          }
-        }
-        innerHtml += '<div class="modal-actions"><button type="button" class="btn btn-outline" data-ov-close-preset="1">閉じる</button></div></div>';
-        modal.innerHTML = innerHtml;
-      }).catch(function () { alert('プリセットの読み込みに失敗しました'); ovClosePresetModal(); });
-  }
-
-  function ovFillPresetAssignModal(loc) {
-    var modal = document.getElementById('ovPresetApplyModal');
-    if (!modal || !_ovFeedCtx) return;
-    var sp = _ovFeedCtx.species || 'cat';
-    ovSetStoredPresetLocation(loc);
-    fetch(ovFeedingPresetsListUrl(sp, loc), { headers: apiHeaders(), cache: 'no-store' })
-      .then(function (r) { return r.json(); })
-      .then(function (data) {
-        var presets = data.presets || [];
-        var currentId = _ovFeedCtx.assignedPresetId;
-        var curNum = currentId != null ? Number(currentId) : null;
-        var innerHtml = '<div class="modal-box" style="max-height:85vh;overflow-y:auto;">';
-        innerHtml += '<div class="modal-title">🔗 プリセット紐づけ <small class="dim">' + esc(_ovFeedCtx.name) + '</small></div>';
-        innerHtml += '<p style="font-size:12px;color:var(--text-dim);margin:0 0 10px;">業務終了時に<b>有効メニュー</b>だけで献立が入れ替わります（紐づけのみでは献立は変わりません）。</p>';
-        innerHtml += ovRenderPresetLocationSwitcher(loc, 'assign');
-        innerHtml += '<div style="margin-bottom:8px;">';
-        innerHtml += '<div style="cursor:pointer;padding:10px 12px;border-radius:8px;margin-bottom:4px;background:' + (!curNum ? 'rgba(168,139,250,0.15)' : 'var(--surface)') + ';border:1px solid rgba(255,255,255,0.12);" data-ov-assign-preset="none">';
-        innerHtml += '<div style="font-size:13px;font-weight:600;">紐づけ解除（なし）</div></div>';
-        var lastAlphaOvAssign = { v: null };
-        for (var i = 0; i < presets.length; i++) {
-          var ps = presets[i];
-          innerHtml += ovFeedingPresetAlphaSectionHtml(loc, ps, lastAlphaOvAssign);
-          var isActive = curNum != null && !isNaN(curNum) && curNum === Number(ps.id);
-          var ovTakenByOther = ps.assigned_cat && String(ps.assigned_cat.id) !== String(_ovFeedCtx.catId);
-          var rowCur = ovTakenByOther ? 'not-allowed' : 'pointer';
-          var rowOp = ovTakenByOther ? '0.72' : '1';
-          var dataAsg = ovTakenByOther ? '' : (' data-ov-assign-preset="' + escAttr(String(ps.id)) + '"');
-          innerHtml += '<div style="cursor:' + rowCur + ';padding:10px 12px;border-radius:8px;margin-bottom:4px;opacity:' + rowOp + ';background:' + (isActive ? 'rgba(168,139,250,0.15)' : 'var(--surface)') + ';border:1px solid rgba(255,255,255,0.12);"' + dataAsg + '>';
-          innerHtml += '<div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:6px;">';
-          innerHtml += '<div style="display:flex;align-items:center;gap:6px;">' + ovPresetLocationBadgeHtml(ps.location_id) + '<b style="font-size:13px;">' + esc(ps.name) + '</b></div>';
-          if (isActive) innerHtml += '<span style="font-size:11px;color:var(--primary,#a78bfa);font-weight:600;">✔ 現在</span>';
-          innerHtml += '</div>';
-          if (ovTakenByOther) {
-            innerHtml += '<div style="font-size:11px;color:#f87171;margin-top:4px;">他の猫（' + esc(String(ps.assigned_cat.name || '')) + '）に割当済みです</div>';
-          }
-          innerHtml += ovRenderPresetItemsSummary(ps.items || [], ps.total_kcal);
-          innerHtml += '</div>';
-        }
-        innerHtml += '</div><div class="modal-actions"><button type="button" class="btn btn-outline" data-ov-close-preset="1">閉じる</button></div></div>';
-        modal.innerHTML = innerHtml;
-      }).catch(function () { alert('プリセットの読み込みに失敗しました'); ovClosePresetModal(); });
-  }
-
-  function ovFillPresetManageModal(loc, softRefresh) {
-    var modal = document.getElementById('ovPresetApplyModal');
-    if (!modal || !_ovFeedCtx) return;
-    var sp = _ovFeedCtx.species || 'cat';
-    ovSetStoredPresetLocation(loc);
-    var area;
-    if (softRefresh) {
-      area = document.getElementById('ovPresetManageContent');
-      if (!area) return;
-      area.className = 'loading';
-      area.style.padding = '16px';
-      area.textContent = '更新中...';
-    } else {
-      modal.innerHTML = '<div class="modal-box" style="max-height:85vh;overflow-y:auto;"><div class="modal-title">⚙️ プリセット管理</div><div id="ovPresetManageContent" class="loading" style="padding:16px;">読み込み中...</div><div class="modal-actions"><button type="button" class="btn btn-outline" data-ov-close-preset="1">閉じる</button></div></div>';
-      area = document.getElementById('ovPresetManageContent');
-    }
-    fetch(ovFeedingPresetsListUrl(sp, loc), { headers: apiHeaders(), cache: 'no-store' })
-      .then(function (r) { return r.json(); })
-      .then(function (data) {
-        var presets = data.presets || [];
-        var h = ovRenderPresetLocationSwitcher(loc, 'manage');
-        h += '<p style="font-size:11px;color:var(--text-dim);margin:0 0 10px;">各カードの<b>「🍽 献立に載せる」</b>で行ごとにオンオフできます。拠点タブで切替後、<b>+ 新規</b>でその拠点用に作成します。</p>';
-        h += '<button type="button" class="btn btn-primary" style="font-size:12px;margin-bottom:12px;width:100%;" data-ov-create-preset="1">+ 新規プリセット（' + esc(ovPresetLocShortLabel(loc)) + '）</button>';
-        if (presets.length === 0) {
-          h += '<div class="empty-msg">プリセットがありません</div>';
-        }
-        var lastAlphaOvManage = { v: null };
-        for (var i = 0; i < presets.length; i++) {
-          var ps = presets[i];
-          h += ovFeedingPresetAlphaSectionHtml(loc, ps, lastAlphaOvManage);
-          var ploc = ps.location_id === 'nekomata' ? 'nekomata' : 'cafe';
-          h += '<div style="background:var(--surface);border-radius:8px;padding:10px 12px;margin-bottom:8px;">';
-          h += '<div style="display:flex;justify-content:space-between;align-items:flex-start;gap:8px;">';
-          h += '<div style="flex:1;min-width:0;"><div style="display:flex;align-items:center;gap:6px;">' + ovPresetLocationBadgeHtml(ps.location_id) + '<b>' + esc(ps.name) + '</b></div>';
-          h += '<div style="font-size:11px;color:var(--text-dim);">' + (Array.isArray(ps.items) ? ps.items.length : 0) + '品</div>';
-          h += ovRenderPresetManageMenuTogglesHtml(ps);
-          var psDesc = ps.description != null ? String(ps.description).trim() : '';
-          h += '<div style="font-size:10px;color:var(--text-dim);margin:4px 0 0;line-height:1.35;white-space:pre-wrap;word-break:break-word;">';
-          h += psDesc ? esc(psDesc.length > 140 ? psDesc.slice(0, 140) + '…' : psDesc) : '<span class="dim">全体メモなし</span>';
-          h += '</div>';
-          h += '<button type="button" class="btn btn-outline" style="font-size:10px;padding:3px 8px;margin-top:4px;" data-ov-edit-preset-desc="' + escAttr(String(ps.id)) + '">📋 全体メモを編集</button></div>';
-          h += '<div style="display:flex;flex-direction:column;align-items:flex-end;gap:4px;">';
-          h += '<button type="button" class="btn-edit-small" style="font-size:10px;" data-ov-cycle-preset-loc="' + escAttr(String(ps.id)) + '" data-ov-cycle-cur="' + escAttr(ploc) + '">🏷 拠点切替</button>';
-          h += '<div><button type="button" class="btn-edit-small" data-ov-rename-preset="' + escAttr(String(ps.id)) + '" data-ov-rename-name="' + escAttr(ps.name) + '">📝</button> ';
-          h += '<button type="button" class="btn-edit-small" data-ov-edit-preset-items="' + escAttr(String(ps.id)) + '" title="フードの追加・量・メモ">✏️</button> ';
-          h += '<button type="button" class="btn-edit-small" style="color:#f87171;" data-ov-delete-preset="' + escAttr(String(ps.id)) + '">🗑</button></div>';
-          h += '</div>';
-          h += '</div>';
-          h += '</div>';
-        }
-        if (area) {
-          area.className = '';
-          area.style.padding = '';
-          area.innerHTML = h;
-        }
-      }).catch(function () {
-        if (area) { area.className = ''; area.style.padding = ''; area.innerHTML = '<div class="empty-msg">読み込み失敗</div>'; }
-      });
-  }
-
-  function ovOpenPresetApply(catId) {
-    var c = ovFindCat(catId);
-    if (!c) return;
-    _ovFeedCtx = {
-      catId: c.id,
-      name: c.name,
-      species: c.species || 'cat',
-      locationId: c.location_id,
-      assignedPresetId: null,
-    };
-    var modal = document.getElementById('ovPresetApplyModal');
-    if (!modal) return;
-    modal.innerHTML = '<div class="modal-box"><div class="loading" style="padding:16px;">読み込み中...</div></div>';
-    modal.classList.add('open');
-    ovFillPresetApplyModal(ovEffectivePresetLoc(c));
-  }
-
-  function ovOpenPresetAssign(catId) {
-    var c = ovFindCat(catId);
-    if (!c) return;
-    var modal = document.getElementById('ovPresetApplyModal');
-    if (!modal) return;
-    modal.innerHTML = '<div class="modal-box"><div class="loading" style="padding:16px;">読み込み中...</div></div>';
-    modal.classList.add('open');
-    fetch(apiOpsBase() + '/cats/' + encodeURIComponent(catId), { headers: apiHeaders(), cache: 'no-store' })
-      .then(function (r) { return r.json(); })
-      .then(function (d) {
-        var apid = null;
-        if (d.cat && d.cat.assigned_preset_id != null && d.cat.assigned_preset_id !== '') {
-          apid = d.cat.assigned_preset_id;
-        }
-        _ovFeedCtx = {
-          catId: c.id,
-          name: c.name,
-          species: (d.cat && d.cat.species) || c.species || 'cat',
-          locationId: c.location_id,
-          assignedPresetId: apid,
-        };
-        ovFillPresetAssignModal(ovEffectivePresetLoc(c));
-      })
-      .catch(function () {
-        _ovFeedCtx = {
-          catId: c.id,
-          name: c.name,
-          species: c.species || 'cat',
-          locationId: c.location_id,
-          assignedPresetId: null,
-        };
-        ovFillPresetAssignModal(ovEffectivePresetLoc(c));
-      });
-  }
-
-  function ovOpenPresetManage(catId) {
-    var c = ovFindCat(catId);
-    if (!c) return;
-    _ovFeedCtx = {
-      catId: c.id,
-      name: c.name,
-      species: c.species || 'cat',
-      locationId: c.location_id,
-      assignedPresetId: null,
-    };
-    var modal = document.getElementById('ovPresetApplyModal');
-    if (!modal) return;
-    modal.classList.add('open');
-    ovFillPresetManageModal(ovGetStoredPresetLocation());
   }
 
   function ovEnsureFoods(cb) {
@@ -615,8 +258,7 @@
     });
   }
 
-  function ovOpenAddPlanModal(catId, defaultSlot, editPlanId, opts) {
-    opts = opts || {};
+  function ovOpenAddPlanModal(catId, defaultSlot, editPlanId) {
     var c = ovFindCat(catId);
     if (!c) return;
     _ovFeedCtx = {
@@ -627,10 +269,6 @@
       assignedPresetId: c.assigned_preset_id,
     };
     _ovEditingPlanId = editPlanId || null;
-    if (!opts.preservePendingPreset) {
-      _ovPendingPresetItem = null;
-      _ovEditingPresetItemId = null;
-    }
     var title = document.querySelector('#ovAddPlanModal .modal-title');
     if (title) title.innerHTML = (_ovEditingPlanId ? '🍽 プランを編集' : '🍽 プランを追加') + ' <span class="dim" style="font-size:12px;">' + esc(c.name) + '</span>';
     var slotSel = document.getElementById('ovApSlot');
@@ -689,37 +327,6 @@
     var slot = document.getElementById('ovApSlot') && document.getElementById('ovApSlot').value;
     var amountG = document.getElementById('ovApAmount') && parseFloat(document.getElementById('ovApAmount').value);
     var notes = document.getElementById('ovApNotes') && document.getElementById('ovApNotes').value;
-    if (_ovPendingPresetItem) {
-      if (!foodId || !amountG) { alert('フードと量は必須です'); return; }
-      var notesPreset = (notes != null && String(notes).trim() !== '') ? String(notes).trim() : null;
-      var presetItemBody = { food_id: foodId, meal_slot: slot || 'morning', amount_g: amountG, notes: notesPreset };
-      var urlPreset = feedingApiBase() + '/presets/' + encodeURIComponent(_ovPendingPresetItem) + '/items';
-      var methodPreset = 'POST';
-      var savingPresetEdit = !!_ovEditingPresetItemId;
-      if (_ovEditingPresetItemId) {
-        urlPreset =
-          feedingApiBase() +
-          '/presets/' +
-          encodeURIComponent(_ovPendingPresetItem) +
-          '/items/' +
-          encodeURIComponent(_ovEditingPresetItemId);
-        methodPreset = 'PUT';
-      }
-      fetch(urlPreset, {
-        method: methodPreset,
-        headers: apiHeaders(),
-        cache: 'no-store',
-        body: JSON.stringify(presetItemBody),
-      }).then(function (r) { return r.json(); })
-        .then(function (data) {
-          if (data.error) { alert('エラー: ' + (data.message || data.error)); return; }
-          var backPid = _ovPendingPresetItem;
-          ovCloseAddPlanModal();
-          if (backPid) ovShowPresetItemsEditor(backPid);
-          else ovFillPresetManageModal(ovGetStoredPresetLocation());
-        }).catch(function () { alert(savingPresetEdit ? '更新に失敗しました' : '追加に失敗しました'); });
-      return;
-    }
     if (!foodId || !amountG) { alert('フードと量は必須です'); return; }
     var notesPlan = (notes != null && String(notes).trim() !== '') ? String(notes).trim() : null;
     var payload = { cat_id: _ovFeedCtx.catId, food_id: foodId, meal_slot: slot, amount_g: amountG, notes: notesPlan, scheduled_time: null };
@@ -1327,18 +934,7 @@
     if (loM && !loM._ovBound) { loM._ovBound = true; loM.addEventListener('click', ovLeftoverModalClick); }
   }
 
-  function ovShowNewPresetDescriptionStep() {
-    var modal = document.getElementById('ovPresetApplyModal');
-    if (!modal || !_ovFeedCtx || !_ovPendingNewPreset) return;
-    var nm = _ovPendingNewPreset.name;
-    modal.innerHTML = '<div class="modal-box" style="max-height:85vh;overflow-y:auto;"><div class="modal-title">新規プリセット — 全体メモ <span class="dim">' + esc(nm) + '</span></div>' +
-      '<div style="padding:12px 16px;"><p class="dim" style="font-size:11px;margin:0 0 8px;line-height:1.4;">改行で段落分けできます。空欄のままでも作成できます。</p>' +
-      '<textarea id="ovNewPresetDescTa" rows="5" style="width:100%;box-sizing:border-box;padding:10px;border-radius:8px;border:1px solid rgba(255,255,255,0.12);background:rgba(0,0,0,0.2);color:inherit;font-size:13px;line-height:1.45;resize:vertical;"></textarea>' +
-      '<div class="modal-actions" style="margin-top:12px;"><button type="button" class="btn btn-primary" data-ov-submit-new-preset-desc="1">作成</button> ' +
-      '<button type="button" class="btn btn-outline" data-ov-cancel-new-preset-desc="1">キャンセル</button></div></div></div>';
-  }
-
-  function ovHandlePresetModalClick(ev) {
+  function _removed_ovHandlePresetModalClick_placeholder(ev) {
     var t = ev.target;
     if (!t || !t.closest) return;
     var cnp = t.closest('[data-ov-cancel-new-preset-desc]');
@@ -2326,12 +1922,6 @@
   function bindOverviewInlineHandlers() {
     if (_ovInlineHandlersBound) return;
     _ovInlineHandlersBound = true;
-    document.addEventListener('click', function (ev) {
-      var pm = document.getElementById('ovPresetApplyModal');
-      if (pm && pm.classList.contains('open') && ev.target && ev.target.closest && pm.contains(ev.target)) {
-        ovHandlePresetModalClick(ev);
-      }
-    });
     cardArea.addEventListener('click', function (ev) {
       var pccCareBundle = ev.target.closest && ev.target.closest('.btn-pcc-care-bundle');
       if (pccCareBundle) {
@@ -2339,30 +1929,6 @@
         ev.stopPropagation();
         var cidB = pccCareBundle.getAttribute('data-cat-id');
         if (cidB) saveGroomingBundleCare(cidB, null, pccCareBundle);
-        return;
-      }
-      var fp = ev.target.closest && ev.target.closest('.btn-ov-feed-preset');
-      if (fp) {
-        ev.preventDefault();
-        ev.stopPropagation();
-        var cid = fp.getAttribute('data-cat-id');
-        if (cid) ovOpenPresetApply(cid);
-        return;
-      }
-      var fa = ev.target.closest && ev.target.closest('.btn-ov-feed-assign');
-      if (fa) {
-        ev.preventDefault();
-        ev.stopPropagation();
-        var cida = fa.getAttribute('data-cat-id');
-        if (cida) ovOpenPresetAssign(cida);
-        return;
-      }
-      var fm = ev.target.closest && ev.target.closest('.btn-ov-feed-manage');
-      if (fm) {
-        ev.preventDefault();
-        ev.stopPropagation();
-        var cidm = fm.getAttribute('data-cat-id');
-        if (cidm) ovOpenPresetManage(cidm);
         return;
       }
       var fadd = ev.target.closest && ev.target.closest('.btn-ov-feed-addplan');
@@ -3036,7 +2602,7 @@
       // ヘッダー: 名前 + ステータス + スコア
       html += '<div class="pcc-header">';
       html += '<div class="pcc-name">' + alertDot(c.alert_level) + speciesIcon(c.species) + ' ' + esc(c.name);
-      if (c.status && c.status !== 'in_care' && c.status !== 'cafe' && c.status !== 'active') {
+      if (c.status && c.status !== 'in_care') {
         html += ' <span class="badge badge-gray" style="font-size:9px;vertical-align:middle;">' + esc(statusLabel(c.status)) + '</span>';
       }
       html += '</div>';
@@ -3757,7 +3323,9 @@
     return list;
   }
 
-  function ovHtmlFeedPlanRowBlock(p) {
+  function ovHtmlFeedPlanRowBlock(p, c) {
+    var cidStr = c && c.id != null ? String(c.id) : '';
+    var cnameStr = c && c.name != null ? String(c.name) : '';
     var menu = esc(p.food_name || '—');
     if (p.amount_g != null && p.amount_g !== '') menu += ' <strong>' + esc(String(p.amount_g)) + 'g</strong>';
     var st = '';
@@ -3787,6 +3355,10 @@
     } else {
       st = '<span class="feed-pending">⬜</span> ';
     }
+    if (pidStr && cidStr) {
+      st += '<button type="button" class="btn btn-outline btn-ov-feed-editplan" style="font-size:11px;padding:4px 8px;" data-cat-id="' + escAttr(cidStr) + '" data-plan-id="' + escAttr(pidStr) + '" title="献立を編集">✏️</button> ';
+      st += '<button type="button" class="btn btn-outline btn-ov-feed-delplan" style="font-size:11px;padding:4px 8px;" data-plan-id="' + escAttr(pidStr) + '" data-cat-name="' + escAttr(cnameStr) + '" title="献立から削除">🗑</button> ';
+    }
     var linePctClass = '';
     if (p.fed_today) {
       var epRow2 = (p.eaten_pct_today != null && p.eaten_pct_today !== '') ? Number(p.eaten_pct_today) : NaN;
@@ -3799,13 +3371,13 @@
     return out;
   }
 
-  function ovHtmlFeedPlanLinesFromArr(arr) {
+  function ovHtmlFeedPlanLinesFromArr(arr, c) {
     if (!arr || arr.length === 0) {
       return '<span class="dim" style="font-size:11px;">—</span>';
     }
     var s = '';
     for (var k = 0; k < arr.length; k++) {
-      s += ovHtmlFeedPlanRowBlock(arr[k]);
+      s += ovHtmlFeedPlanRowBlock(arr[k], c);
     }
     return s;
   }
@@ -3814,20 +3386,21 @@
     var html = '<div class="item-card">';
     html += '<div class="item-card-title">🍚 ごはん <small class="dim">あげた・残し</small></div>';
     html += '<div class="item-card-body">';
-    html += '<div class="ov-feed-hint" style="font-size:11px;color:var(--text-dim);margin-bottom:6px;line-height:1.4;">献立の追加・編集・手動記録は「詳細」から。<strong>本日分は ✅ をタップ</strong>でも取り消せます。昨日の「あげた」取消は「🥄残し」内から行えます。</div>';
+    html += '<div class="ov-feed-hint" style="font-size:11px;color:var(--text-dim);margin-bottom:6px;line-height:1.4;">ここは<strong>本日の献立</strong>のみ（各行の✏️・🗑で編集・削除、＋献立で追加）。プリセットの定義・紐づけ・一括適用は猫の<strong>詳細</strong>から。<strong>業務終了の一括処理</strong>では、プリセットで有効な品だけが入れ替わり、それ以外の当日行は消えることがあります。<strong>本日分は ✅ をタップ</strong>で取り消せます。昨日の取消は「🥄残し」から。</div>';
     var feedCats = orderCatsForFeedingCard();
     for (var i = 0; i < feedCats.length; i++) {
       var c = feedCats[i];
       var plan = c.feeding_plan || [];
       var inner = '';
       var toolbar = '<div class="ov-feed-toolbar">' +
+        '<button type="button" class="btn btn-outline btn-ov-feed-addplan" data-cat-id="' + escAttr(String(c.id)) + '">＋献立</button>' +
         '<button type="button" class="btn btn-outline btn-ov-feed-leftover" data-cat-id="' + escAttr(String(c.id)) + '">🥄残し</button>' +
         '<a href="' + catLink(c.id, 'feedingArea') + '" class="btn btn-outline" style="text-decoration:none;">詳細</a>' +
         '</div>';
       var prefBlock = ovHtmlFoodPreferenceBlock(c);
       var memoBlock = ovHtmlFeedingSyncedMemos(c);
       if (plan.length === 0) {
-        inner = prefBlock + memoBlock + '<span class="dim">献立なし（詳細で設定）</span>';
+        inner = prefBlock + memoBlock + '<span class="dim">献立なし（「＋献立」または詳細で追加）</span>';
       } else {
         inner = prefBlock + memoBlock;
         var amP = [];
@@ -3842,14 +3415,14 @@
         inner += '<div class="ov-med-two-cols ov-feed-two-cols">' +
           '<div class="ov-med-slot-card ov-med-slot-am">' +
           '<div class="ov-med-slot-head">🌅 朝</div>' +
-          '<div class="ov-med-slot-body ov-feed-slot-body">' + ovHtmlFeedPlanLinesFromArr(amP) + '</div></div>' +
+          '<div class="ov-med-slot-body ov-feed-slot-body">' + ovHtmlFeedPlanLinesFromArr(amP, c) + '</div></div>' +
           '<div class="ov-med-slot-card ov-med-slot-pm">' +
           '<div class="ov-med-slot-head">🌙 夜</div>' +
-          '<div class="ov-med-slot-body ov-feed-slot-body">' + ovHtmlFeedPlanLinesFromArr(pmP) + '</div></div>' +
+          '<div class="ov-med-slot-body ov-feed-slot-body">' + ovHtmlFeedPlanLinesFromArr(pmP, c) + '</div></div>' +
           '</div>';
         if (otP.length > 0) {
           inner += '<div class="ov-med-slot-other ov-feed-other"><div class="ov-med-slot-head-sub">その他</div>' +
-            ovHtmlFeedPlanLinesFromArr(otP) + '</div>';
+            ovHtmlFeedPlanLinesFromArr(otP, c) + '</div>';
         }
       }
       html += itemRowEditable(c, '<div class="item-values-medcol ov-feed-block" style="width:100%;">' + toolbar + inner + '</div>', '', '');
@@ -4042,7 +3615,7 @@
   }
 
   function statusLabel(status) {
-    var labels = { active: '在籍', in_care: '在籍', cafe: '在籍', adopted: '卒業', trial: 'トライアル中', transferred: '移動', deceased: '他界' };
+    var labels = { in_care: '在籍', adopted: '卒業', trial: 'トライアル中', deceased: '他界' };
     return labels[status] || status;
   }
 

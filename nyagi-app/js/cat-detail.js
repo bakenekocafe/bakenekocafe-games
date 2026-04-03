@@ -65,6 +65,9 @@ function closeCatDetailFoldSection(btn) {
   var catNotesArea         = document.getElementById('catNotesArea');
   /** renderCatNotes 直近の一覧（編集モーダル用） */
   var _catNotesListCache   = [];
+  var _cnAttachmentPreviewUrl = null;
+  var _cnEditHadAttachment = false;
+  var _cnNoteClearAttachment = false;
   var scoreCardArea        = document.getElementById('scoreCardArea');
   var actionsArea          = document.getElementById('actionsArea');
   var reportLink           = document.getElementById('reportLink');
@@ -5570,7 +5573,26 @@ function closeCatDetailFoldSection(btn) {
     }).catch(function () { alert('削除に失敗しました'); });
   };
 
-  window.submitClinicRecord = function () {
+  function slackClinicRecordFollowup(data) {
+    if (!data || !data.slack) return;
+    var s = data.slack;
+    if (s.sent) {
+      if (s.with_file) {
+        alert('Slackに送信しました（テキストと添付ファイルを含む場合があります）。');
+      } else {
+        alert('Slackに送信しました。');
+      }
+      return;
+    }
+    var reason = s.reason || '';
+    var msg = '保存はできていますが、Slackへの送信に失敗しました。';
+    if (reason === 'slack_channel_not_configured') msg += '\n（この拠点のSlackチャンネルが未設定です。管理者に確認してください）';
+    else if (reason) msg += '\n（' + reason + '）';
+    alert(msg);
+  }
+
+  window.submitClinicRecord = function (notifySlack) {
+    var wantedSlack = !!notifySlack;
     var recordType = document.getElementById('crType').value;
     var recordDate = document.getElementById('crDate').value;
     var content = document.getElementById('crContent').value.trim();
@@ -5597,7 +5619,10 @@ function closeCatDetailFoldSection(btn) {
     };
 
     var btn = document.getElementById('crSubmitBtn');
-    if (btn) { btn.disabled = true; btn.textContent = '📝 要約を作成中…'; }
+    var btnSlack = document.getElementById('crSubmitSlackBtn');
+    var busyLabel = '📝 要約を作成中…';
+    if (btn) { btn.disabled = true; btn.textContent = busyLabel; }
+    if (btnSlack) { btnSlack.disabled = true; btnSlack.textContent = busyLabel; }
     var scheduleIdToClear = _clearScheduleId;
     var pendingFiles = _clinicPendingFiles.slice();
 
@@ -5607,6 +5632,11 @@ function closeCatDetailFoldSection(btn) {
     var saveMethod = editId ? 'PUT' : 'POST';
     var saveBody = editId ? JSON.stringify(putBody) : JSON.stringify(postBody);
 
+    function resetCrButtons() {
+      if (btn) { btn.disabled = false; btn.textContent = '保存'; }
+      if (btnSlack) { btnSlack.disabled = false; btnSlack.textContent = '保存してSlackに送信'; }
+    }
+
     fetch(saveUrl, {
       method: saveMethod,
       headers: apiHeaders(), cache: 'no-store',
@@ -5615,7 +5645,7 @@ function closeCatDetailFoldSection(btn) {
     .then(function (data) {
       if (data.error) {
         alert('エラー: ' + (data.message || data.error));
-        if (btn) { btn.disabled = false; btn.textContent = '保存'; }
+        resetCrButtons();
         throw new Error('record_failed');
       }
       var rid = editId ? Number(editId) : (data.record && data.record.id);
@@ -5650,17 +5680,35 @@ function closeCatDetailFoldSection(btn) {
             }
           });
         });
+      }).then(function () {
+        if (!wantedSlack || !rid) return Promise.resolve();
+        var slackPayload = { notify_slack: true };
+        if (editId) slackPayload.clinic_slack_is_update = true;
+        return fetch(API_BASE + '/health/records/' + encodeURIComponent(rid), {
+          method: 'PUT',
+          headers: apiHeaders(), cache: 'no-store',
+          body: JSON.stringify(slackPayload),
+        }).then(function (sr) { return sr.json().then(function (sd) { return { sr: sr, sd: sd }; }); })
+        .then(function (pack) {
+          var sr = pack.sr;
+          var sd = pack.sd;
+          if (!sr.ok || sd.error) {
+            alert('Slack送信: ' + (sd.message || sd.error || ('HTTP ' + sr.status)));
+            return;
+          }
+          slackClinicRecordFollowup(sd);
+        });
       });
     }).then(function () {
       _clearScheduleId = null;
       _clinicPendingFiles = [];
-      if (btn) { btn.disabled = false; btn.textContent = '保存'; }
+      resetCrButtons();
       closeClinicRecordModal();
       loadClinicRecords();
       loadScoreCard();
     }).catch(function (err) {
       if (err && err.message === 'record_failed') return;
-      if (btn) { btn.disabled = false; btn.textContent = '保存'; }
+      resetCrButtons();
       alert('病院記録の保存に失敗しました');
     });
   };
@@ -6688,6 +6736,9 @@ function closeCatDetailFoldSection(btn) {
       html += '<span>' + formatDate(n.created_at) + '</span>';
       html += '</div>';
       html += '<div class="cat-note-body">' + escapeHtml(n.note) + '</div>';
+      if (n.attachment_file_id) {
+        html += '<div class="cat-note-img-hint" style="font-size:12px;color:var(--text-dim);margin:6px 0 0;">📷 画像が添付されています（編集で表示）</div>';
+      }
       html += '<div class="cat-note-actions">';
       html += '<button type="button" onclick="openEditCatNote(' + n.id + ')">編集</button>';
       html += '<button type="button" class="cat-note-del" onclick="deleteCatNoteConfirm(' + n.id + ')">削除</button>';
@@ -6710,6 +6761,53 @@ function closeCatDetailFoldSection(btn) {
     return labels[cat] || cat || '一般';
   }
 
+  function revokeCnAttachmentPreview() {
+    if (_cnAttachmentPreviewUrl) {
+      try { URL.revokeObjectURL(_cnAttachmentPreviewUrl); } catch (_e) {}
+      _cnAttachmentPreviewUrl = null;
+    }
+  }
+
+  function resetCatNoteSlackImage() {
+    revokeCnAttachmentPreview();
+    var inp = document.getElementById('cnSlackImage');
+    var prev = document.getElementById('cnSlackImagePreview');
+    var wrap = document.getElementById('cnSlackImagePreviewWrap');
+    if (inp) inp.value = '';
+    if (prev) { prev.removeAttribute('src'); prev.style.display = 'none'; }
+    if (wrap) wrap.style.display = 'none';
+  }
+
+  window.clearCnSlackImage = function () {
+    resetCatNoteSlackImage();
+    _cnNoteClearAttachment = true;
+  };
+
+  window.onCnSlackImageChange = function () {
+    var inp = document.getElementById('cnSlackImage');
+    var f = inp && inp.files && inp.files[0];
+    var prev = document.getElementById('cnSlackImagePreview');
+    var wrap = document.getElementById('cnSlackImagePreviewWrap');
+    if (!f) {
+      if (wrap) wrap.style.display = 'none';
+      if (prev) { prev.removeAttribute('src'); prev.style.display = 'none'; }
+      return;
+    }
+    if (f.size > 10 * 1024 * 1024) {
+      alert('画像は10MB以下にしてください');
+      if (inp) inp.value = '';
+      return;
+    }
+    _cnNoteClearAttachment = false;
+    var url = URL.createObjectURL(f);
+    if (prev) {
+      prev.onload = function () { try { URL.revokeObjectURL(url); } catch (_e) {} };
+      prev.src = url;
+      prev.style.display = 'block';
+    }
+    if (wrap) wrap.style.display = 'block';
+  };
+
   window.openCatNoteModal = function () {
     var eid = document.getElementById('cnEditId');
     var ttl = document.getElementById('cnModalTitle');
@@ -6718,6 +6816,9 @@ function closeCatDetailFoldSection(btn) {
     document.getElementById('cnNote').value = '';
     document.getElementById('cnCategory').value = 'general';
     document.getElementById('cnPinned').checked = false;
+    _cnEditHadAttachment = false;
+    _cnNoteClearAttachment = false;
+    resetCatNoteSlackImage();
     document.getElementById('catNoteModal').classList.add('open');
   };
 
@@ -6740,6 +6841,30 @@ function closeCatDetailFoldSection(btn) {
     document.getElementById('cnNote').value = row.note || '';
     document.getElementById('cnCategory').value = row.category || 'general';
     document.getElementById('cnPinned').checked = !!row.pinned;
+    _cnEditHadAttachment = !!row.attachment_file_id;
+    _cnNoteClearAttachment = false;
+    resetCatNoteSlackImage();
+    if (row.attachment_file_id) {
+      fetch(API_BASE + '/cat-notes/' + encodeURIComponent(row.id) + '/attachment', {
+        headers: apiHeaders(), cache: 'no-store',
+      }).then(function (r) {
+        if (!r.ok) return null;
+        return r.blob();
+      }).then(function (blob) {
+        if (!blob) return;
+        revokeCnAttachmentPreview();
+        var u = URL.createObjectURL(blob);
+        _cnAttachmentPreviewUrl = u;
+        var prev = document.getElementById('cnSlackImagePreview');
+        var wrap = document.getElementById('cnSlackImagePreviewWrap');
+        if (prev) {
+          prev.onload = function () {};
+          prev.src = u;
+          prev.style.display = 'block';
+        }
+        if (wrap) wrap.style.display = 'block';
+      }).catch(function () {});
+    }
     document.getElementById('catNoteModal').classList.add('open');
   };
 
@@ -6761,52 +6886,126 @@ function closeCatDetailFoldSection(btn) {
     document.getElementById('catNoteModal').classList.remove('open');
     var eid = document.getElementById('cnEditId');
     if (eid) eid.value = '';
+    _cnEditHadAttachment = false;
+    _cnNoteClearAttachment = false;
+    resetCatNoteSlackImage();
   };
 
-  window.submitCatNote = function () {
+  function catNoteReadFileAsDataURL(file) {
+    return new Promise(function (resolve, reject) {
+      var r = new FileReader();
+      r.onload = function () { resolve(r.result); };
+      r.onerror = function () { reject(new Error('read_failed')); };
+      r.readAsDataURL(file);
+    });
+  }
+
+  function slackCatNoteFollowup(data, wantedSlack) {
+    if (!wantedSlack || !data || !data.slack) return;
+    var s = data.slack;
+    if (s.sent) {
+      if (s.with_file) {
+        alert('保存しました。Slackにテキストと画像を送信しました。');
+      } else {
+        alert('保存しました。Slackに送信しました。');
+      }
+      return;
+    }
+    var reason = s.reason || '';
+    var msg = '保存はしましたが、Slackへの送信に失敗しました。';
+    if (reason === 'slack_channel_not_configured') msg += '\n（この拠点のSlackチャンネルが未設定です。管理者に確認してください）';
+    else if (reason) msg += '\n（' + reason + '）';
+    alert(msg);
+  }
+
+  window.submitCatNote = function (notifySlack) {
+    var wantedSlack = !!notifySlack;
     var note = document.getElementById('cnNote').value.trim();
     if (!note) { alert('内容を入力してください'); return; }
 
     var editIdEl = document.getElementById('cnEditId');
     var editId = editIdEl && editIdEl.value ? String(editIdEl.value).trim() : '';
 
-    if (editId) {
-      fetch(API_BASE + '/cat-notes/' + encodeURIComponent(editId), {
-        method: 'PUT',
+    var fileInp = document.getElementById('cnSlackImage');
+    var file = fileInp && fileInp.files && fileInp.files[0];
+
+    function runSubmit(slackImageDataUrl, slackImageName) {
+      var payload = {
+        note: note,
+        category: document.getElementById('cnCategory').value,
+        pinned: document.getElementById('cnPinned').checked,
+      };
+      if (slackImageDataUrl) {
+        payload.note_image = slackImageDataUrl;
+        if (slackImageName) payload.note_image_name = slackImageName;
+      }
+      if (editId && _cnNoteClearAttachment && !slackImageDataUrl) {
+        payload.clear_attachment = true;
+      }
+      if (wantedSlack) {
+        payload.notify_slack = true;
+        if (slackImageDataUrl) {
+          payload.slack_image = slackImageDataUrl;
+          if (slackImageName) payload.slack_image_name = slackImageName;
+        }
+      }
+
+      if (editId) {
+        fetch(API_BASE + '/cat-notes/' + encodeURIComponent(editId), {
+          method: 'PUT',
+          headers: apiHeaders(), cache: 'no-store',
+          body: JSON.stringify(payload),
+        }).then(function (r) { return r.json(); })
+        .then(function (data) {
+          if (data.error) { alert('エラー: ' + (data.message || data.error)); return; }
+          if (wantedSlack) slackCatNoteFollowup(data, true);
+          closeCatNoteModal();
+          loadCatNotes();
+        }).catch(function () {
+          alert('保存に失敗しました');
+        });
+        return;
+      }
+
+      fetch(API_BASE + '/cat-notes', {
+        method: 'POST',
         headers: apiHeaders(), cache: 'no-store',
         body: JSON.stringify({
+          cat_id: catId,
           note: note,
           category: document.getElementById('cnCategory').value,
           pinned: document.getElementById('cnPinned').checked,
+          notify_slack: wantedSlack,
+          note_image: payload.note_image,
+          note_image_name: payload.note_image_name,
+          slack_image: payload.slack_image,
+          slack_image_name: payload.slack_image_name,
         }),
       }).then(function (r) { return r.json(); })
       .then(function (data) {
         if (data.error) { alert('エラー: ' + (data.message || data.error)); return; }
+        if (wantedSlack) slackCatNoteFollowup(data, true);
         closeCatNoteModal();
         loadCatNotes();
       }).catch(function () {
         alert('保存に失敗しました');
       });
+    }
+
+    if (file) {
+      if (file.size > 10 * 1024 * 1024) {
+        alert('画像は10MB以下にしてください');
+        return;
+      }
+      catNoteReadFileAsDataURL(file).then(function (dataUrl) {
+        runSubmit(dataUrl, file.name || '');
+      }).catch(function () {
+        alert('画像の読み込みに失敗しました');
+      });
       return;
     }
 
-    fetch(API_BASE + '/cat-notes', {
-      method: 'POST',
-      headers: apiHeaders(), cache: 'no-store',
-      body: JSON.stringify({
-        cat_id: catId,
-        note: note,
-        category: document.getElementById('cnCategory').value,
-        pinned: document.getElementById('cnPinned').checked,
-      }),
-    }).then(function (r) { return r.json(); })
-    .then(function (data) {
-      if (data.error) { alert('エラー: ' + (data.message || data.error)); return; }
-      closeCatNoteModal();
-      loadCatNotes();
-    }).catch(function () {
-      alert('保存に失敗しました');
-    });
+    runSubmit(null, null);
   };
 
   window.openInternalNoteModal = function () {
@@ -7660,23 +7859,222 @@ function closeCatDetailFoldSection(btn) {
     loadMedicationSchedule();
   };
 
-  // 猫一覧に戻るフローティングボタン
-  (function buildBackFab() {
-    var style = document.createElement('style');
-    style.textContent =
-      '.cd-back-fab{position:fixed;bottom:calc(24px + env(safe-area-inset-bottom,0px));left:calc(20px + env(safe-area-inset-left,0px));width:52px;height:52px;border-radius:50%;border:none;background:linear-gradient(135deg,#a78bfa,#7c3aed);color:#fff;font-size:22px;box-shadow:0 4px 14px rgba(124,58,237,.45);z-index:900;cursor:pointer;transition:transform .15s,opacity .15s;display:flex;align-items:center;justify-content:center;}' +
-      '.cd-back-fab:active{transform:scale(.92);}';
-    document.head.appendChild(style);
-    var fab = document.createElement('button');
-    fab.className = 'cd-back-fab';
-    fab.setAttribute('aria-label', '猫一覧に戻る');
-    fab.textContent = '\uD83D\uDC3E';
-    fab.title = '猫一覧に戻る';
-    fab.addEventListener('click', function () {
-      history.back();
-      setTimeout(function () { window.location.href = 'cats.html'; }, 400);
+  // 猫詳細「猫ナビ」: 一覧（cats-overview）と同じ左下🐾・同系パレット。タブ→項目ボタン→折りたたみを開いてスクロール。一覧へはパレット内。
+  (function buildCatDetailCatNav() {
+    var TAB_LABELS = ['\u6982\u8981', '\u65E5\u3005\u306E\u8A18\u9332', '\u533B\u7642\u30FB\u4E88\u5B9A'];
+    var SECTIONS = [
+      { id: 'catHeaderArea', label: '\uD83D\uDD1D \u30D8\u30C3\u30C0\u30FC', tab: 0 },
+      { id: 'scoreCardArea', label: '\uD83C\uDFE5 \u5065\u5EB7\u30B9\u30B3\u30A2', tab: 0 },
+      { id: 'basicInfoArea', label: '\uD83D\uDCCB \u57FA\u672C\u60C5\u5831', tab: 0 },
+      { id: 'intakeInfoArea', label: '\uD83D\uDCE5 \u5F15\u304D\u53D7\u3051', tab: 0 },
+      { id: 'adoptionInfoArea', label: '\uD83C\uDFE0 \u8B72\u6E21\u95A2\u9023', tab: 0 },
+      { id: 'catNotesArea', label: '\uD83D\uDCDD \u6CE8\u610F\u4E8B\u9805', tab: 0 },
+      { id: 'catTasksArea', label: '\u2705 \u30BF\u30B9\u30AF', tab: 0 },
+      { id: 'healthRecordsArea', label: '\u2696\uFE0F \u4F53\u91CD\u8A18\u9332', tab: 1 },
+      { id: 'weightChartArea', label: '\u2696\uFE0F \u4F53\u91CD\u63A8\u79FB', tab: 1 },
+      { id: 'calorieArea', label: '\uD83D\uDD25 \u30AB\u30ED\u30EA\u30FC', tab: 1 },
+      { id: 'feedingArea', label: '\uD83C\uDF7D \u7D66\u990A\u30D7\u30E9\u30F3', tab: 1 },
+      { id: 'careArea', label: '\uD83E\uDDFE \u30B1\u30A2', tab: 1 },
+      { id: 'stoolArea', label: '\uD83D\uDEBD \u6392\u4FBF', tab: 1 },
+      { id: 'urineArea', label: '\uD83D\uDCA7 \u6392\u5C3F', tab: 1 },
+      { id: 'medicationScheduleArea', label: '\uD83D\uDC8A \u304A\u85AC', tab: 2 },
+      { id: 'vetScheduleArea', label: '\uD83D\uDCC5 \u75C5\u9662\u4E88\u5B9A', tab: 2 },
+      { id: 'clinicRecordsArea', label: '\uD83C\uDFE5 \u75C5\u9662\u8A18\u9332', tab: 2 },
+      { id: 'actionsArea', label: '\uD83D\uDCCB \u672A\u5B8C\u4E86', tab: 2 },
+    ];
+
+    var _cdNavActiveTab = 0;
+    var _cdNavFab = null;
+    var _cdNavBackdrop = null;
+    var _cdNavPalette = null;
+
+    function cdNavInjectStyles() {
+      var old = document.getElementById('nyagi-cat-detail-nav-css');
+      if (old && old.parentNode) old.parentNode.removeChild(old);
+      var css = [
+        '.cat-nav-fab{position:fixed;bottom:calc(24px + env(safe-area-inset-bottom,0px));left:calc(20px + env(safe-area-inset-left,0px));width:52px;height:52px;border-radius:50%;border:none;background:linear-gradient(135deg,#a78bfa,#7c3aed);color:#fff;font-size:22px;box-shadow:0 4px 14px rgba(124,58,237,.45);z-index:900;cursor:pointer;transition:transform .15s,opacity .15s,background .2s;display:flex;align-items:center;justify-content:center}',
+        '.cat-nav-fab:active{transform:scale(.92)}',
+        '.cat-nav-fab.open{background:linear-gradient(135deg,#7c3aed,#5b21b6)}',
+        '.cat-nav-backdrop{position:fixed;inset:0;z-index:899;background:rgba(0,0,0,.3);opacity:0;pointer-events:none;transition:opacity .2s}',
+        '.cat-nav-backdrop.open{opacity:1;pointer-events:auto}',
+        '.cat-nav-palette{position:fixed;bottom:calc(86px + env(safe-area-inset-bottom,0px));left:calc(16px + env(safe-area-inset-left,0px));right:auto;top:auto;width:min(360px,calc(100vw - 28px));max-height:min(72vh,620px);background:var(--surface,#1e1e2e);border:1px solid rgba(255,255,255,.15);border-radius:14px;box-shadow:0 8px 32px rgba(0,0,0,.5);z-index:901;display:flex;flex-direction:column;opacity:0;transform:translateY(16px) scale(.95);pointer-events:none;transition:opacity .2s,transform .2s}',
+        '.cat-nav-palette.open{opacity:1;transform:translateY(0) scale(1);pointer-events:auto}',
+        '.cat-nav-header{display:flex;align-items:center;justify-content:space-between;padding:10px 14px 8px;font-weight:700;font-size:14px;border-bottom:1px solid rgba(255,255,255,.08);flex-shrink:0;gap:8px}',
+        '.cat-nav-header-actions{display:flex;align-items:center;gap:6px;flex-shrink:0}',
+        '.cd-cat-nav-back{font-size:11px;font-weight:600;padding:6px 10px;border-radius:10px;border:1px solid rgba(255,255,255,.2);background:rgba(255,255,255,.08);color:var(--text-main,#e8e8e8);cursor:pointer;white-space:nowrap}',
+        '.cd-cat-nav-back:active{opacity:.85}',
+        '.cat-nav-close{background:none;border:none;color:var(--text-dim,#888);font-size:22px;cursor:pointer;padding:0 4px;line-height:1}',
+        '.cat-nav-tabs{display:flex!important;flex-wrap:wrap!important;gap:6px;padding:8px 12px;flex-shrink:0;border-bottom:1px solid rgba(255,255,255,.06);max-height:30vh;overflow-y:auto;-webkit-overflow-scrolling:touch}',
+        '.cat-nav-tab{flex:0 0 auto;padding:6px 11px;border-radius:16px;border:1px solid rgba(255,255,255,.15);background:rgba(255,255,255,.04);color:var(--text-dim,#888);font-size:11px;font-weight:600;cursor:pointer;white-space:nowrap;transition:background .15s,color .15s,border-color .15s}',
+        '.cat-nav-tab.active{background:var(--primary,#a78bfa);color:#fff;border-color:var(--primary,#a78bfa)}',
+        '#cdCatNavList.cat-nav-list{display:flex!important;flex-wrap:wrap!important;gap:6px!important;align-content:flex-start!important;align-items:stretch!important;flex:1!important;min-height:0!important;overflow-y:auto!important;-webkit-overflow-scrolling:touch!important;padding:8px 10px 12px!important}',
+        '#cdCatNavList.cat-nav-list>.dim{width:100%!important;flex:0 0 100%!important;text-align:center;padding:10px 8px;font-size:12px}',
+        '#cdCatNavList .cat-nav-item{-webkit-appearance:none!important;appearance:none!important;margin:0!important;display:flex!important;align-items:center!important;justify-content:center!important;text-align:center!important;width:calc((100% - 6px) / 2)!important;max-width:calc((100% - 6px) / 2)!important;flex:0 0 calc((100% - 6px) / 2)!important;min-width:0!important;min-height:44px;padding:8px 6px;border:1px solid rgba(255,255,255,.08);background:rgba(255,255,255,.06);color:var(--text-main,#e0e0e0);font-size:12px;font-weight:600;line-height:1.25;cursor:pointer;border-radius:10px;word-break:break-word;box-sizing:border-box!important}',
+        '#cdCatNavList .cat-nav-item:active{background:rgba(167,139,250,.22)!important;border-color:rgba(167,139,250,.35)!important}',
+        '@keyframes catNavHL{0%{box-shadow:0 0 0 3px rgba(167,139,250,.6)}100%{box-shadow:0 0 0 0 rgba(167,139,250,0)}}',
+        '.cat-nav-highlight{animation:catNavHL 1.5s ease-out forwards;border-radius:8px}',
+      ].join('');
+      var s = document.createElement('style');
+      s.id = 'nyagi-cat-detail-nav-css';
+      s.textContent = css;
+      document.head.appendChild(s);
+    }
+
+    function cdNavForceListLayout() {
+      var listEl = document.getElementById('cdCatNavList');
+      if (!listEl) return;
+      var w = 'calc((100% - 6px) / 2)';
+      var items = listEl.querySelectorAll('.cat-nav-item');
+      for (var i = 0; i < items.length; i++) {
+        var b = items[i];
+        b.style.setProperty('width', w, 'important');
+        b.style.setProperty('max-width', w, 'important');
+        b.style.setProperty('flex', '0 0 ' + w, 'important');
+      }
+    }
+
+    function cdNavEnsureFoldOpen(wrap) {
+      if (!wrap || !wrap.classList.contains('cat-detail-fold--collapsed')) return false;
+      wrap.classList.remove('cat-detail-fold--collapsed');
+      var tb = wrap.querySelector('.cat-detail-fold__toggle');
+      if (tb) tb.setAttribute('aria-expanded', 'true');
+      return true;
+    }
+
+    function cdNavHighlight(el) {
+      if (!el) return;
+      el.classList.remove('cat-nav-highlight');
+      try { void el.offsetWidth; } catch (_) {}
+      el.classList.add('cat-nav-highlight');
+      setTimeout(function () {
+        try { el.classList.remove('cat-nav-highlight'); } catch (_) {}
+      }, 1800);
+    }
+
+    function cdNavScrollTo(areaId) {
+      var inner = document.getElementById(areaId);
+      if (!inner) return;
+      var wrap = inner.closest('.cat-detail-fold');
+      var scrollBlock = areaId === 'catHeaderArea' ? 'start' : 'center';
+      var opened = false;
+      if (wrap) opened = cdNavEnsureFoldOpen(wrap);
+      var highlightTarget = wrap || inner;
+      setTimeout(function () {
+        inner.scrollIntoView({ behavior: 'smooth', block: scrollBlock });
+        cdNavHighlight(highlightTarget);
+      }, opened ? 420 : 80);
+    }
+
+    function cdNavGoCatsList() {
+      cdNavClose();
+      try { history.back(); } catch (_) {}
+      setTimeout(function () { window.location.href = 'cats.html'; }, 350);
+    }
+
+    function cdNavPopulateTabs() {
+      var tabsEl = document.getElementById('cdCatNavTabs');
+      if (!tabsEl) return;
+      var th = '';
+      for (var ti = 0; ti < TAB_LABELS.length; ti++) {
+        th += '<button type="button" class="cat-nav-tab' + (ti === _cdNavActiveTab ? ' active' : '') + '" data-cd-tab-idx="' + ti + '">' + TAB_LABELS[ti] + '</button>';
+      }
+      tabsEl.innerHTML = th;
+    }
+
+    function cdNavPopulateList(tabIdx) {
+      var listEl = document.getElementById('cdCatNavList');
+      if (!listEl) return;
+      var h = '';
+      for (var i = 0; i < SECTIONS.length; i++) {
+        var s = SECTIONS[i];
+        if (s.tab !== tabIdx) continue;
+        if (!document.getElementById(s.id)) continue;
+        h += '<button type="button" class="cat-nav-item" data-cd-nav-target="' + s.id + '">' + s.label + '</button>';
+      }
+      listEl.innerHTML = h || '<div class="dim" style="color:var(--text-dim);">\u3053\u306E\u30BF\u30D6\u306B\u9805\u76EE\u306F\u3042\u308A\u307E\u305B\u3093</div>';
+      cdNavForceListLayout();
+    }
+
+    function cdNavClose() {
+      if (_cdNavPalette) _cdNavPalette.classList.remove('open');
+      if (_cdNavFab) _cdNavFab.classList.remove('open');
+      if (_cdNavBackdrop) _cdNavBackdrop.classList.remove('open');
+    }
+
+    function cdNavOpen() {
+      cdNavInjectStyles();
+      cdNavPopulateTabs();
+      cdNavPopulateList(_cdNavActiveTab);
+      if (_cdNavPalette) _cdNavPalette.classList.add('open');
+      if (_cdNavFab) _cdNavFab.classList.add('open');
+      if (_cdNavBackdrop) _cdNavBackdrop.classList.add('open');
+    }
+
+    function cdNavToggle() {
+      if (_cdNavPalette && _cdNavPalette.classList.contains('open')) cdNavClose();
+      else cdNavOpen();
+    }
+
+    cdNavInjectStyles();
+
+    _cdNavFab = document.createElement('button');
+    _cdNavFab.type = 'button';
+    _cdNavFab.className = 'cat-nav-fab';
+    _cdNavFab.setAttribute('aria-label', '\u732B\u30CA\u30D3');
+    _cdNavFab.title = '\u732B\u30CA\u30D3\uFF08\u30BB\u30AF\u30B7\u30E7\u30F3\u3078\u30B8\u30E3\u30F3\u30D7\uFF09';
+    _cdNavFab.textContent = '\uD83D\uDC3E';
+    _cdNavFab.addEventListener('click', cdNavToggle);
+
+    _cdNavBackdrop = document.createElement('div');
+    _cdNavBackdrop.className = 'cat-nav-backdrop';
+    _cdNavBackdrop.addEventListener('click', cdNavClose);
+
+    _cdNavPalette = document.createElement('div');
+    _cdNavPalette.className = 'cat-nav-palette';
+    _cdNavPalette.innerHTML =
+      '<div class="cat-nav-header">' +
+      '<span>\uD83D\uDC3E \u732B\u30CA\u30D3</span>' +
+      '<div class="cat-nav-header-actions">' +
+      '<button type="button" class="cd-cat-nav-back">\u732B\u4E00\u89A7\u3078</button>' +
+      '<button type="button" class="cat-nav-close" aria-label="\u9589\u3058\u308B">&times;</button>' +
+      '</div></div>' +
+      '<div class="cat-nav-tabs" id="cdCatNavTabs"></div>' +
+      '<div class="cat-nav-list" id="cdCatNavList"></div>';
+
+    _cdNavPalette.querySelector('.cat-nav-close').addEventListener('click', cdNavClose);
+    _cdNavPalette.querySelector('.cd-cat-nav-back').addEventListener('click', function (ev) {
+      ev.preventDefault();
+      ev.stopPropagation();
+      cdNavGoCatsList();
     });
-    document.body.appendChild(fab);
+
+    _cdNavPalette.addEventListener('click', function (ev) {
+      var tab = ev.target.closest && ev.target.closest('.cat-nav-tab');
+      if (tab) {
+        var idx = parseInt(tab.getAttribute('data-cd-tab-idx'), 10);
+        if (!isNaN(idx)) {
+          _cdNavActiveTab = idx;
+          var allT = _cdNavPalette.querySelectorAll('.cat-nav-tab');
+          for (var t = 0; t < allT.length; t++) {
+            allT[t].classList.toggle('active', parseInt(allT[t].getAttribute('data-cd-tab-idx'), 10) === idx);
+          }
+          cdNavPopulateList(idx);
+        }
+        return;
+      }
+      var item = ev.target.closest && ev.target.closest('.cat-nav-item');
+      if (item) {
+        var tid = item.getAttribute('data-cd-nav-target');
+        if (tid) {
+          cdNavClose();
+          cdNavScrollTo(tid);
+        }
+      }
+    });
+
+    document.body.appendChild(_cdNavFab);
+    document.body.appendChild(_cdNavBackdrop);
+    document.body.appendChild(_cdNavPalette);
   }());
 
 })();

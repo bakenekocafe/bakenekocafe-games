@@ -1340,9 +1340,22 @@
           <input type="checkbox" id="cnPinned"> ピン留め（常に上に表示）
         </label>
       </div>
-      <div class="modal-actions">
+      <div class="form-group">
+        <label class="form-label" for="cnSlackImage">画像（保存で記録に残ります / Slack送信時も利用）</label>
+        <input type="file" id="cnSlackImage" class="form-select" accept="image/*" style="padding:8px;" onchange="onCnSlackImageChange()">
+        <p style="font-size:11px;color:var(--text-dim);margin:6px 0 0;line-height:1.45;">JPEG/PNG/GIF/WebP、最大10MB。編集で開くと保存済み画像を表示します。「画像を外す」で削除できます。</p>
+        <div id="cnSlackImagePreviewWrap" style="display:none;margin-top:10px;">
+          <img id="cnSlackImagePreview" alt="" style="max-width:100%;max-height:160px;border-radius:8px;border:1px solid rgba(255,255,255,0.12);display:none;">
+          <div style="margin-top:6px;">
+            <button type="button" class="btn btn-outline" style="font-size:12px;padding:6px 10px;" onclick="clearCnSlackImage()">画像を外す</button>
+          </div>
+        </div>
+      </div>
+      <p style="font-size:11px;color:var(--text-dim);margin:0 0 8px;line-height:1.45;">「Slackに送信」は、業務終了レポート（小原くんの日報など）と同じ拠点のチャンネルへ投稿します。</p>
+      <div class="modal-actions" style="flex-wrap:wrap;gap:8px;">
         <button class="btn btn-outline" onclick="closeCatNoteModal()">キャンセル</button>
-        <button class="btn btn-primary" onclick="submitCatNote()">保存</button>
+        <button class="btn btn-primary" onclick="submitCatNote(false)">保存</button>
+        <button type="button" class="btn btn-primary" style="background:linear-gradient(135deg,#4a5568,#2d3748);border-color:#4a5568;" onclick="submitCatNote(true)" title="保存後、拠点のSlackに投稿">保存してSlackに送信</button>
       </div>
     </div>
   </div>
@@ -1443,9 +1456,11 @@
         <div class="file-attach-hint">PDF・画像 / 各10MB以下。保存後にまとめてアップロードされます。</div>
         <div id="crExistingFileHint" class="file-attach-hint" style="display:none;color:var(--text-dim);margin-top:6px;"></div>
       </div>
-      <div class="modal-actions">
+      <p style="font-size:11px;color:var(--text-dim);margin:0 0 8px;line-height:1.45;">「Slackに送信」は業務終了レポートと同じ拠点チャンネルへ投稿します。モーダルで選んだ添付の先頭1件を可能なら画像/PDFとして同時送信します。</p>
+      <div class="modal-actions" style="flex-wrap:wrap;gap:8px;">
         <button class="btn btn-outline" onclick="closeClinicRecordModal()">キャンセル</button>
-        <button class="btn btn-primary" id="crSubmitBtn" onclick="submitClinicRecord()">保存</button>
+        <button class="btn btn-primary" id="crSubmitBtn" onclick="submitClinicRecord(false)">保存</button>
+        <button type="button" class="btn btn-primary" id="crSubmitSlackBtn" style="background:linear-gradient(135deg,#4a5568,#2d3748);border-color:#4a5568;" onclick="submitClinicRecord(true)" title="保存後、拠点のSlackへ共有">保存してSlackに送信</button>
       </div>
     </div>
   </div>
@@ -1891,7 +1906,7 @@
   <script src="js/app.js?v=219"></script>
   <script src="js/nyagi-scroll-restore.js?v=217"></script>
   <script src="js/nyagi-search-normalize.js?v=1"></script>
-  <script src="js/cat-detail.js?v=281"></script>
+  <script src="js/cat-detail.js?v=288"></script>
   <script src="js/voice-console.js?v=216"></script>
 </body>
 </html>

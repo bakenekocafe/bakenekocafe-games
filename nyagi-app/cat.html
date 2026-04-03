@@ -9,11 +9,11 @@
   </script>
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
   <title>NYAGI 猫詳細</title>
-  <link rel="manifest" href="manifest.json?v=213">
+  <link rel="manifest" href="manifest.json?v=215">
   <meta name="theme-color" content="#1a1a2e">
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-  <link rel="stylesheet" href="style.css?v=214">
+  <link rel="stylesheet" href="style.css?v=215">
   <script src="js/nyagi-fixed-header.js?v=209" defer></script>
   <script src="js/nyagi-cache-clear.js?v=209" defer></script>
   <link rel="stylesheet" href="voice-console.css?v=213">
@@ -171,6 +171,76 @@
       color: var(--primary, #a78bfa);
       margin: 6px 0 8px;
       padding-left: 2px;
+    }
+    .cr-summary--preview {
+      display: -webkit-box;
+      -webkit-line-clamp: 3;
+      -webkit-box-orient: vertical;
+      overflow: hidden;
+      line-height: 1.45;
+    }
+    .cr-attach-list { margin-top: 8px; }
+    .cr-attach-block {
+      margin: 8px 0;
+      padding: 8px 10px;
+      background: var(--surface-alt, rgba(0,0,0,0.15));
+      border-radius: 8px;
+      border: 1px solid var(--border, rgba(255,255,255,0.06));
+    }
+    .cr-attach-row-main {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      flex-wrap: wrap;
+    }
+    .cr-attach-name {
+      flex: 1;
+      min-width: 0;
+      word-break: break-all;
+      font-size: 12px;
+      color: var(--text-main, #e0e0e0);
+    }
+    .cr-attach-row-danger {
+      margin-top: 8px;
+      padding-top: 8px;
+      border-top: 1px dashed var(--border, rgba(255,255,255,0.12));
+    }
+    .cr-attach-delete-btn {
+      font-size: 11px;
+      color: #f87171;
+      background: transparent;
+      border: none;
+      cursor: pointer;
+      padding: 4px 0;
+      text-align: left;
+    }
+    .cr-attach-delete-btn:active { opacity: 0.85; }
+    .cr-view-summary-label,
+    .cr-view-note-label,
+    .cr-view-attach-heading {
+      font-size: 11px;
+      font-weight: 600;
+      color: var(--text-dim, #999);
+      margin-top: 12px;
+      margin-bottom: 4px;
+    }
+    .cr-view-summary-label { margin-top: 0; }
+    .cr-view-summary-text {
+      font-size: 13px;
+      font-weight: 700;
+      color: var(--primary, #a78bfa);
+      line-height: 1.5;
+    }
+    .cr-view-full-note {
+      white-space: pre-wrap;
+      word-break: break-word;
+      line-height: 1.6;
+      font-size: 14px;
+      color: var(--text-main, #e8e8e8);
+      background: var(--surface-alt, rgba(0,0,0,0.12));
+      border-radius: 8px;
+      padding: 14px 14px;
+      /* 本文はモーダル内 #crViewBody 側で一括スクロール（縦は #crViewBody が担当） */
     }
     .cr-structured {
       display: flex;
@@ -1080,6 +1150,66 @@
       padding: 12px 10px; font-size: 12px; color: var(--text-dim); text-align: center;
     }
 
+    /*
+     * 病院記録・閲覧／編集モーダル — 必ずこのファイル内「.form-textarea { height:64px }」より後に置く。
+     * !important で外部キャッシュ・詳細度ぶれに負けず「内容」「本文」縦領域を確保する。
+     */
+    #clinicRecordViewModal .modal-box.modal-box--cr-view {
+      width: min(94vw, 720px) !important;
+      max-width: min(94vw, 720px) !important;
+      height: min(96vh, 1200px) !important;
+      max-height: min(96vh, 1200px) !important;
+      min-height: min(88vh, 960px) !important;
+      display: flex !important;
+      flex-direction: column !important;
+      overflow: hidden !important;
+      box-sizing: border-box !important;
+    }
+    #clinicRecordViewModal .modal-box--cr-view > .modal-title {
+      flex-shrink: 0;
+      margin-bottom: 8px;
+    }
+    #clinicRecordViewModal .modal-box--cr-view > #crViewMeta {
+      flex-shrink: 0;
+    }
+    #clinicRecordViewModal #crViewBody {
+      flex: 1 1 0 !important;
+      min-height: 0 !important;
+      overflow-y: auto !important;
+      overflow-x: hidden !important;
+      -webkit-overflow-scrolling: touch;
+      padding: 4px 8px 8px 0;
+      margin-right: -4px;
+    }
+    #clinicRecordViewModal .modal-box--cr-view > .modal-actions {
+      flex-shrink: 0;
+      margin-top: 12px;
+      padding-top: 8px;
+      border-top: 1px solid var(--border, rgba(255,255,255,0.08));
+    }
+
+    #clinicRecordModal .modal-box.modal-box--cr-edit {
+      width: min(94vw, 720px) !important;
+      max-width: min(94vw, 720px) !important;
+      max-height: min(96vh, 1200px) !important;
+      min-height: min(88vh, 960px) !important;
+      overflow-y: auto !important;
+      overflow-x: hidden !important;
+      -webkit-overflow-scrolling: touch;
+      box-sizing: border-box !important;
+    }
+    #clinicRecordModal textarea#crContent.cr-content-field {
+      display: block !important;
+      width: 100% !important;
+      box-sizing: border-box !important;
+      height: auto !important;
+      min-height: clamp(360px, 64vh, min(80vh, 920px)) !important;
+      resize: vertical !important;
+      font-size: 14px !important;
+      line-height: 1.55 !important;
+      padding: 12px 12px !important;
+    }
+
   </style>
 </head>
 <body>
@@ -1415,7 +1545,7 @@
 
   <!-- 病院記録モーダル -->
   <div id="clinicRecordModal" class="modal-overlay">
-    <div class="modal-box">
+    <div class="modal-box modal-box--cr-edit">
       <input type="hidden" id="crEditId" value="">
       <div class="modal-title" id="crModalTitle">🏥 病院記録を追加</div>
       <div class="form-group">
@@ -1438,7 +1568,7 @@
       </div>
       <div class="form-group">
         <label class="form-label">内容 <button type="button" class="inline-mic-btn" data-voice-for="crContent" onclick="startInlineVoice('crContent')">🎤</button></label>
-        <textarea id="crContent" class="form-textarea" rows="5" placeholder="診察内容、処方、所見など自由に記入"></textarea>
+        <textarea id="crContent" class="form-textarea cr-content-field" rows="22" placeholder="診察内容、処方、所見など自由に記入"></textarea>
       </div>
       <div class="form-group" id="crNextDueGroup" style="display:none;" aria-hidden="true">
         <label class="form-label">次回予定日（病院記録では未使用・予定は「+ 予定追加」から）</label>
@@ -1461,6 +1591,19 @@
         <button class="btn btn-outline" onclick="closeClinicRecordModal()">キャンセル</button>
         <button class="btn btn-primary" id="crSubmitBtn" onclick="submitClinicRecord(false)">保存</button>
         <button type="button" class="btn btn-primary" id="crSubmitSlackBtn" style="background:linear-gradient(135deg,#4a5568,#2d3748);border-color:#4a5568;" onclick="submitClinicRecord(true)" title="保存後、拠点のSlackへ共有">保存してSlackに送信</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- 病院記録 閲覧モーダル（全文・添付） -->
+  <div id="clinicRecordViewModal" class="modal-overlay" onclick="if(event.target===this)closeClinicRecordViewModal()">
+    <div class="modal-box modal-box--cr-view" onclick="event.stopPropagation()">
+      <div class="modal-title" id="crViewTitle">🏥 病院記録</div>
+      <div id="crViewMeta" style="font-size:12px;color:var(--text-dim);margin-bottom:8px;line-height:1.4;"></div>
+      <div id="crViewBody"></div>
+      <div class="modal-actions" style="margin-top:12px;flex-wrap:wrap;gap:8px;">
+        <button type="button" class="btn btn-outline" onclick="closeClinicRecordViewModal()">閉じる</button>
+        <button type="button" class="btn btn-primary" id="crViewEditBtn">編集で開く</button>
       </div>
     </div>
   </div>

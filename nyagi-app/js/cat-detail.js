@@ -222,6 +222,18 @@ function closeCatDetailFoldSection(btn) {
     };
   }
 
+  /** GET 用（PDF/画像バイナリ）。Content-Type: application/json を付けない。 */
+  function apiHeadersBinary() {
+    if (!credentials || !credentials.adminKey || !credentials.staffId) {
+      return { 'X-Admin-Key': '', 'X-Staff-Id': '' };
+    }
+    return {
+      'X-Admin-Key': credentials.adminKey,
+      'X-Staff-Id': credentials.staffId,
+      Accept: '*/*',
+    };
+  }
+
   function _feedFetchJson(url) {
     return fetch(url, { headers: apiHeaders(), cache: 'no-store' }).then(function (r) {
       return r.text().then(function (text) {
@@ -2074,18 +2086,41 @@ function closeCatDetailFoldSection(btn) {
         }
         if (!summaryOnly && r.value) summaryOnly = String(r.value).trim();
         if (summaryOnly) {
-          html += '<div class="cr-summary">' + escapeHtml(summaryOnly) + '</div>';
+          html += '<div class="cr-summary cr-summary--preview">' + escapeHtml(summaryOnly) + '</div>';
         }
+        html +=
+          '<button type="button" class="btn btn-outline btn-sm" style="margin-top:4px;font-size:12px;" onclick="openClinicRecordViewModal(' +
+          r.id +
+          ')">📄 全文・詳細を表示</button>';
 
         var att = r.attachments || [];
         if (att.length > 0) {
-          html += '<div style="margin-top:8px;font-size:12px;">';
+          html += '<div class="cr-attach-list" style="margin-top:8px;font-size:12px;">';
           for (var ai = 0; ai < att.length; ai++) {
             var af = att[ai];
-            html += '<div style="display:flex;flex-wrap:wrap;align-items:center;gap:6px;margin:4px 0;">';
-            html += '<span style="word-break:break-all;">' + escapeHtml(af.original_name || ('file-' + af.id)) + '</span>';
-            html += '<button type="button" class="btn-edit-loc" style="font-size:11px;" onclick="openClinicRecordFile(' + r.id + ',' + af.id + ')">開く</button>';
-            html += '<button type="button" class="btn-edit-loc" style="font-size:11px;color:#f87171;" onclick="deleteClinicRecordAttachment(' + r.id + ',' + af.id + ')">削除</button>';
+            var attName = af.original_name || 'file-' + af.id;
+            var mimeArg = JSON.stringify(af.mime_type || '');
+            var nameArg = JSON.stringify(attName);
+            html += '<div class="cr-attach-block">';
+            html += '<div class="cr-attach-row-main">';
+            html += '<span class="cr-attach-name">' + escapeHtml(attName) + '</span>';
+            html +=
+              '<button type="button" class="btn-edit-loc cr-attach-open" style="font-size:11px;" onclick="openClinicRecordFile(' +
+              r.id +
+              ',' +
+              af.id +
+              ',' +
+              mimeArg +
+              ')">開く</button>';
+            html += '</div>';
+            html +=
+              '<div class="cr-attach-row-danger"><button type="button" class="cr-attach-delete-btn" onclick="deleteClinicRecordAttachment(' +
+              r.id +
+              ',' +
+              af.id +
+              ',' +
+              nameArg +
+              ')">この添付を削除…</button></div>';
             html += '</div>';
           }
           html += '</div>';
@@ -2101,30 +2136,90 @@ function closeCatDetailFoldSection(btn) {
     clinicRecordsArea.innerHTML = html;
   }
 
-  window.openClinicRecordFile = function (recordId, fileId) {
+  window.openClinicRecordFile = function (recordId, fileId, mimeHint) {
+    var hint = mimeHint != null ? String(mimeHint).trim() : '';
+    var newTab = window.open('about:blank', '_blank');
+    if (newTab) {
+      try {
+        newTab.opener = null;
+      } catch (_op) {}
+      try {
+        newTab.document.title = '読み込み中…';
+        newTab.document.body.innerHTML =
+          '<p style="font-family:sans-serif;padding:24px;text-align:center;color:#666">ファイルを取得しています…</p>';
+      } catch (_doc) {}
+    }
     fetch(API_BASE + '/health/records/' + recordId + '/files/' + fileId, {
-      headers: apiHeaders(), cache: 'no-store',
-    }).then(function (r) {
-      if (!r.ok) throw new Error('not found');
-      var disposition = r.headers.get('Content-Disposition') || '';
-      var nameMatch = disposition.match(/filename="([^"]+)"/);
-      var fileName = nameMatch ? nameMatch[1] : 'document';
-      return r.blob().then(function (blob) {
-        return { blob: blob, name: fileName };
+      headers: apiHeadersBinary(),
+      cache: 'no-store',
+    })
+      .then(function (r) {
+        if (!r.ok) throw new Error('not found');
+        var disposition = r.headers.get('Content-Disposition') || '';
+        var fileName = 'document';
+        if (disposition) {
+          var mStar = /filename\*=UTF-8''([^;\n]+)/i.exec(disposition);
+          var mQuot = /filename="([^"]*)"/i.exec(disposition);
+          if (mStar && mStar[1]) {
+            try {
+              fileName = decodeURIComponent(mStar[1].replace(/\+/g, ' '));
+            } catch (_fn) {
+              fileName = mStar[1];
+            }
+          } else if (mQuot && mQuot[1]) {
+            fileName = mQuot[1];
+          }
+        }
+        if (fileName === 'document' && hint.indexOf('pdf') !== -1) fileName = 'document.pdf';
+        var ctHeader = (r.headers.get('Content-Type') || '').split(';')[0].trim().toLowerCase();
+        return r.arrayBuffer().then(function (buf) {
+          var mime = ctHeader || hint || 'application/octet-stream';
+          if (mime === 'application/octet-stream' && hint.indexOf('pdf') !== -1) mime = 'application/pdf';
+          if (mime === 'application/octet-stream' || !mime) {
+            var sliceLen = Math.min(8, buf.byteLength);
+            var u8 = sliceLen > 0 ? new Uint8Array(buf.slice(0, sliceLen)) : new Uint8Array(0);
+            if (u8[0] === 0x25 && u8[1] === 0x50 && u8[2] === 0x44 && u8[3] === 0x46) mime = 'application/pdf';
+            else if (u8[0] === 0xff && u8[1] === 0xd8 && u8[2] === 0xff) mime = 'image/jpeg';
+            else if (u8[0] === 0x89 && u8[1] === 0x50 && u8[2] === 0x4e && u8[3] === 0x47) mime = 'image/png';
+          }
+          return { buf: buf, name: fileName, mime: mime };
+        });
+      })
+      .then(function (result) {
+        var blob = new Blob([result.buf], { type: result.mime || 'application/octet-stream' });
+        var url = URL.createObjectURL(blob);
+        if (newTab && !newTab.closed) {
+          try {
+            newTab.location.href = url;
+          } catch (_e) {}
+        } else {
+          var a = document.createElement('a');
+          a.href = url;
+          a.target = '_blank';
+          a.rel = 'noopener noreferrer';
+          document.body.appendChild(a);
+          a.click();
+          document.body.removeChild(a);
+        }
+        setTimeout(function () {
+          URL.revokeObjectURL(url);
+        }, 180000);
+      })
+      .catch(function () {
+        try {
+          if (newTab && !newTab.closed) newTab.close();
+        } catch (_c) {}
+        alert('ファイルの取得に失敗しました');
       });
-    }).then(function (result) {
-      var url = URL.createObjectURL(result.blob);
-      window.open(url, '_blank', 'noopener');
-      setTimeout(function () {
-        URL.revokeObjectURL(url);
-      }, 120000);
-    }).catch(function () {
-      alert('ファイルの取得に失敗しました');
-    });
   };
 
-  window.deleteClinicRecordAttachment = function (recordId, fileId) {
-    if (!window.confirm('この添付ファイルを削除しますか？')) return;
+  window.deleteClinicRecordAttachment = function (recordId, fileId, attachLabel) {
+    var confirmMsg = 'この添付ファイルを削除しますか？';
+    if (attachLabel != null && String(attachLabel).trim() !== '') {
+      confirmMsg =
+        '「' + String(attachLabel).trim() + '」を削除しますか？\nこの操作は取り消せません。削除したファイルは二度と表示できません。';
+    }
+    if (!window.confirm(confirmMsg)) return;
     fetch(API_BASE + '/health/records/' + recordId + '/files/' + fileId, {
       method: 'DELETE',
       headers: apiHeaders(), cache: 'no-store',
@@ -2141,10 +2236,165 @@ function closeCatDetailFoldSection(btn) {
       if (ed && String(ed.value) === String(recordId)) {
         window.openClinicRecordEditModal(recordId);
       }
+      var viewEl = document.getElementById('clinicRecordViewModal');
+      if (viewEl && viewEl.classList.contains('open')) {
+        window.openClinicRecordViewModal(recordId);
+      }
       loadClinicRecords();
     }).catch(function () {
       alert('削除に失敗しました');
     });
+  };
+
+  window.closeClinicRecordViewModal = function () {
+    var m = document.getElementById('clinicRecordViewModal');
+    if (m) m.classList.remove('open');
+  };
+
+  window.openClinicRecordViewModal = function (recordId) {
+    var modal = document.getElementById('clinicRecordViewModal');
+    var bodyEl = document.getElementById('crViewBody');
+    var metaEl = document.getElementById('crViewMeta');
+    var titleEl = document.getElementById('crViewTitle');
+    var editBtn = document.getElementById('crViewEditBtn');
+    if (!modal || !bodyEl) return;
+    bodyEl.innerHTML = '<div class="loading" style="padding:16px;">読み込み中…</div>';
+    if (metaEl) metaEl.textContent = '';
+    if (titleEl) titleEl.textContent = '🏥 病院記録';
+    modal.classList.add('open');
+
+    fetch(API_BASE + '/health/records/' + recordId, {
+      headers: apiHeaders(),
+      cache: 'no-store',
+    })
+      .then(function (r) {
+        return r.json();
+      })
+      .then(function (data) {
+        if (data.error || !data.record) {
+          bodyEl.innerHTML =
+            '<div style="color:#f87171;padding:12px;font-size:13px;">読み込みに失敗しました: ' +
+            escapeHtml(String(data.message || data.error || '')) +
+            '</div>';
+          return;
+        }
+        var rec = data.record;
+        var typeLabels = {
+          vaccine: 'ワクチン',
+          checkup: '健診',
+          surgery: '手術',
+          dental: '歯科',
+          emergency: '緊急',
+          test: '検査',
+          observation: '経過観察',
+          medication_start: '投薬開始',
+          medication_end: '投薬終了',
+        };
+        var typeLabel = typeLabels[rec.record_type] || rec.record_type || '';
+        if (titleEl) titleEl.textContent = '🏥 ' + (typeLabel ? typeLabel : '病院記録');
+        var metaParts = [];
+        if (rec.record_date) metaParts.push(formatClinicDateWestern(rec.record_date));
+        if (rec.recorder_name) metaParts.push('記録: ' + rec.recorder_name);
+        else if (rec.recorded_by) metaParts.push('記録者ID: ' + rec.recorded_by);
+        if (metaEl) metaEl.textContent = metaParts.join(' · ');
+
+        var parsed = null;
+        if (rec.details) {
+          try {
+            parsed = typeof rec.details === 'string' ? JSON.parse(rec.details) : rec.details;
+          } catch (_p) {
+            parsed = null;
+          }
+        }
+        var html = '';
+        var st = parsed && parsed.structured;
+        if (st && typeof st === 'object') {
+          var fieldDefs = [
+            ['diagnosis', '診断・病名'],
+            ['treatment', '処方・治療'],
+            ['findings', '所見・検査'],
+            ['next_steps', '次回指示'],
+          ];
+          html += '<div class="cr-structured">';
+          for (var fi = 0; fi < fieldDefs.length; fi++) {
+            var fk = fieldDefs[fi][0];
+            var flab = fieldDefs[fi][1];
+            var fval = st[fk];
+            if (fval != null && String(fval).trim() !== '') {
+              html +=
+                '<div class="cr-field"><div class="cr-field-label">' +
+                escapeHtml(flab) +
+                '</div><div class="cr-field-value">' +
+                escapeHtml(String(fval)) +
+                '</div></div>';
+            }
+          }
+          html += '</div>';
+        }
+        var note = '';
+        if (parsed && parsed.note) note = String(parsed.note);
+        if (!note && parsed && parsed.finding) note = String(parsed.finding);
+        if (!note && rec.value) note = String(rec.value);
+        if (parsed && parsed.summary && String(parsed.summary).trim()) {
+          html +=
+            '<div class="cr-view-summary-label">要約（一覧に表示）</div><div class="cr-view-summary-text">' +
+            escapeHtml(String(parsed.summary).trim()) +
+            '</div>';
+        }
+        if (note && String(note).trim()) {
+          html +=
+            '<div class="cr-view-note-label">本文・メモ（全文）</div><div class="cr-view-full-note">' +
+            escapeHtml(String(note)) +
+            '</div>';
+        } else if (!html) {
+          html = '<div style="color:var(--text-dim);font-size:13px;">（本文の登録がありません）</div>';
+        }
+
+        var att = rec.attachments || [];
+        if (att.length > 0) {
+          html +=
+            '<div class="cr-view-attach-heading">添付（' +
+            att.length +
+            '件）</div>';
+          for (var ai = 0; ai < att.length; ai++) {
+            var af = att[ai];
+            var attName = af.original_name || 'file-' + af.id;
+            var mimeArg = JSON.stringify(af.mime_type || '');
+            var nameArg = JSON.stringify(attName);
+            html += '<div class="cr-attach-block">';
+            html += '<div class="cr-attach-row-main">';
+            html += '<span class="cr-attach-name">' + escapeHtml(attName) + '</span>';
+            html +=
+              '<button type="button" class="btn-edit-loc cr-attach-open" style="font-size:11px;" onclick="openClinicRecordFile(' +
+              rec.id +
+              ',' +
+              af.id +
+              ',' +
+              mimeArg +
+              ')">開く</button>';
+            html += '</div>';
+            html +=
+              '<div class="cr-attach-row-danger"><button type="button" class="cr-attach-delete-btn" onclick="deleteClinicRecordAttachment(' +
+              rec.id +
+              ',' +
+              af.id +
+              ',' +
+              nameArg +
+              ')">この添付を削除…</button></div>';
+            html += '</div>';
+          }
+        }
+        bodyEl.innerHTML = html;
+        if (editBtn) {
+          editBtn.onclick = function () {
+            window.closeClinicRecordViewModal();
+            window.openClinicRecordEditModal(recordId);
+          };
+        }
+      })
+      .catch(function () {
+        bodyEl.innerHTML = '<div style="color:#f87171;padding:12px;">通信に失敗しました</div>';
+      });
   };
 
   window.onClinicExtraFilesSelected = function (input) {
@@ -5344,10 +5594,29 @@ function closeCatDetailFoldSection(btn) {
     var h = '<div style="color:var(--text-dim);margin-bottom:6px;font-weight:600;">現在の添付（' + att.length + '件）</div>';
     for (var i = 0; i < att.length; i++) {
       var af = att[i];
-      h += '<div style="display:flex;flex-wrap:wrap;align-items:center;gap:6px;margin:4px 0;padding:6px;background:rgba(0,0,0,0.2);border-radius:6px;">';
-      h += '<span style="flex:1;min-width:0;word-break:break-all;font-size:12px;">' + escapeHtml(af.original_name || ('file-' + af.id)) + '</span>';
-      h += '<button type="button" class="btn-edit-loc" style="font-size:11px;" onclick="openClinicRecordFile(' + recordId + ',' + af.id + ')">開く</button>';
-      h += '<button type="button" class="btn-edit-loc" style="font-size:11px;color:#f87171;" onclick="deleteClinicRecordAttachment(' + recordId + ',' + af.id + ')">削除</button>';
+      var mName = af.original_name || 'file-' + af.id;
+      var mimeArg = JSON.stringify(af.mime_type || '');
+      var nameArg = JSON.stringify(mName);
+      h += '<div class="cr-attach-block">';
+      h += '<div class="cr-attach-row-main">';
+      h += '<span class="cr-attach-name">' + escapeHtml(mName) + '</span>';
+      h +=
+        '<button type="button" class="btn-edit-loc cr-attach-open" style="font-size:11px;" onclick="openClinicRecordFile(' +
+        recordId +
+        ',' +
+        af.id +
+        ',' +
+        mimeArg +
+        ')">開く</button>';
+      h += '</div>';
+      h +=
+        '<div class="cr-attach-row-danger"><button type="button" class="cr-attach-delete-btn" onclick="deleteClinicRecordAttachment(' +
+        recordId +
+        ',' +
+        af.id +
+        ',' +
+        nameArg +
+        ')">この添付を削除…</button></div>';
       h += '</div>';
     }
     wrap.innerHTML = h;

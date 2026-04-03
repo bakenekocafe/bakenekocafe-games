@@ -4516,24 +4516,41 @@ function closeCatDetailFoldSection(btn) {
     sr.onresult = function (e) {
       var text = e.results[0][0].transcript;
       if (confirm('音声入力: 「' + text + '」\nこの内容で記録しますか？')) {
-        var vPayload = { text: text, context: 'feeding' };
+        var line = String(text || '').trim();
+        if (currentCatData && currentCatData.name) {
+          var nm = String(currentCatData.name).trim();
+          if (nm && line.indexOf(nm) === -1) {
+            line = nm + ' ' + line;
+          }
+        }
+        var vPayload = { raw_transcript: line, input_type: 'speech' };
         try { var fl = localStorage.getItem('nyagi_dash_location'); if (fl && fl !== 'all') vPayload.filter_location = fl; } catch (_) {}
         try { var fs = localStorage.getItem('nyagi_dash_status'); if (fs && fs !== 'all') vPayload.filter_status = fs; } catch (_) {}
-        fetch(API_BASE.replace('/ops', '/ops') + '/voice/submit', {
+        fetch(API_BASE + '/voice/submit', {
           method: 'POST', headers: apiHeaders(), cache: 'no-store',
           body: JSON.stringify(vPayload)
-        }).then(function (r) { return r.json(); })
-        .then(function (data) {
-          if (data.error) { alert('エラー: ' + (data.message || data.error)); return; }
-          alert(data.confirm || '記録しました');
+        }).then(function (r) { return r.json().then(function (data) { return { ok: r.ok, status: r.status, data: data }; }); })
+        .then(function (res) {
+          var data = res.data;
+          if (!res.ok || data.error) {
+            alert('エラー: ' + (data.message || data.error || ('HTTP ' + res.status)));
+            return;
+          }
+          var conf = data.confirmation;
+          var msg = conf && conf.text ? ((conf.icon || '✅') + ' ' + conf.text) : '記録しました';
+          alert(msg);
           loadFeedingSection();
         }).catch(function () { alert('記録に失敗しました'); });
       }
     };
     sr.onerror = function (e) {
-      if (e.error !== 'no-speech') alert('音声認識エラー: ' + e.error);
+      if (e.error !== 'no-speech' && e.error !== 'aborted') alert('音声認識エラー: ' + e.error);
     };
-    sr.start();
+    try {
+      sr.start();
+    } catch (err) {
+      alert('音声認識を開始できません: ' + (err && err.message ? err.message : err));
+    }
   };
 
   function ensureFoodList(cb) {
@@ -7108,12 +7125,22 @@ function closeCatDetailFoldSection(btn) {
       _inlineSR = null;
     };
 
-    _inlineSR.onerror = function () {
+    _inlineSR.onerror = function (ev) {
       if (btn) { btn.classList.remove('recording'); btn.textContent = '🎤'; }
       _inlineSR = null;
+      var err = ev && ev.error ? ev.error : 'unknown';
+      if (err !== 'no-speech' && err !== 'aborted') {
+        alert('音声認識エラー: ' + err);
+      }
     };
 
-    _inlineSR.start();
+    try {
+      _inlineSR.start();
+    } catch (err) {
+      if (btn) { btn.classList.remove('recording'); btn.textContent = '🎤'; }
+      _inlineSR = null;
+      alert('音声認識を開始できません: ' + (err && err.message ? err.message : err));
+    }
   };
 
   window.stopInlineVoice = function () {

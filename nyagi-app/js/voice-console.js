@@ -268,7 +268,14 @@
       }
     };
 
-    recognition.start();
+    try {
+      recognition.start();
+    } catch (startErr) {
+      recognition = null;
+      setRecState(false);
+      showPanelResult('音声を開始できません: ' + (startErr && startErr.message ? startErr.message : startErr), 'error');
+      return;
+    }
     setRecState(true);
     showTranscript('聞き取り中...', true);
     hidePanelResult();

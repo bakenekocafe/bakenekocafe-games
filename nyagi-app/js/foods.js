@@ -109,21 +109,33 @@ function handleUrlScrape(url) {
 // ── テキスト → Web検索 ────────────────────────────────────────────────────────
 
 function handleTextSearch(query) {
+  var q = query != null ? String(query).trim() : '';
+  if (!q) {
+    showToast('検索語を入力してください', 'warning');
+    return;
+  }
+  var searchInputEl = document.getElementById('searchInput');
+  if (searchInputEl) searchInputEl.value = q;
+
   var btn = document.getElementById('searchBtn');
-  btn.disabled = true;
-  btn.textContent = '検索中...';
+  if (btn) {
+    btn.disabled = true;
+    btn.textContent = '検索中...';
+  }
   hideCandidates();
 
   var species = currentSpeciesFilter !== 'all' ? currentSpeciesFilter : 'cat';
   fetch(API_BASE + '/foods/search', {
     method: 'POST',
     headers: apiHeaders(), cache: 'no-store',
-    body: JSON.stringify({ query: query, species: species })
+    body: JSON.stringify({ query: q, species: species })
   })
   .then(function(r) { return r.json(); })
   .then(function(data) {
-    btn.disabled = false;
-    btn.textContent = '検索';
+    if (btn) {
+      btn.disabled = false;
+      btn.textContent = '検索';
+    }
 
     if (data.status === 'ok' && data.extracted) {
       currentPreviewUrl = data.url || '';
@@ -146,8 +158,10 @@ function handleTextSearch(query) {
     }
   })
   .catch(function(err) {
-    btn.disabled = false;
-    btn.textContent = '検索';
+    if (btn) {
+      btn.disabled = false;
+      btn.textContent = '検索';
+    }
     showToast('通信エラー: ' + err.message, 'error');
   });
 }

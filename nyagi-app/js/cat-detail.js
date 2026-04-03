@@ -5780,7 +5780,11 @@ function closeCatDetailFoldSection(btn) {
       var vcn = document.getElementById('vsClinicName');
       if (vcn) vcn.value = cname;
       var vsbs = document.getElementById('vsSubmitSlackBtn');
-      if (vsbs) vsbs.style.display = 'none';
+      if (vsbs) {
+        vsbs.style.display = '';
+        vsbs.disabled = false;
+        vsbs.textContent = '保存してSlackに送信';
+      }
       var vsb = document.getElementById('vsSubmitBtn');
       if (vsb) { vsb.disabled = false; vsb.textContent = '保存'; }
       document.getElementById('vetScheduleModal').classList.add('open');
@@ -5835,14 +5839,9 @@ function closeCatDetailFoldSection(btn) {
     var editEl = document.getElementById('vsEditId');
     var editId = editEl && editEl.value ? String(editEl.value).trim() : '';
 
-    if (wantedSlack && editId) {
-      alert('編集時はSlackへ一括送信しません。内容を変えたあと必要ならチャット等で共有してください。');
-      return;
-    }
-
     var btn = document.getElementById('vsSubmitBtn');
     var btnSlack = document.getElementById('vsSubmitSlackBtn');
-    var busyLabel = wantedSlack ? 'Slack送信中…' : (editId ? '保存中…' : '登録中…');
+    var busyLabel = wantedSlack ? (editId ? '保存＋Slack送信中…' : 'Slack送信中…') : (editId ? '保存中…' : '登録中…');
     if (btn) { btn.disabled = true; btn.textContent = busyLabel; }
     if (btnSlack) { btnSlack.disabled = true; btnSlack.textContent = busyLabel; }
 
@@ -5854,7 +5853,7 @@ function closeCatDetailFoldSection(btn) {
       }
       if (btnSlack) {
         btnSlack.disabled = false;
-        btnSlack.textContent = '登録してSlackに送信';
+        btnSlack.textContent = isEd ? '保存してSlackに送信' : '登録してSlackに送信';
       }
     }
 
@@ -5865,6 +5864,7 @@ function closeCatDetailFoldSection(btn) {
         booked_date: bookedDate,
         value: valueSummary,
         details: detailsStr != null ? detailsStr : '{}',
+        notify_slack: wantedSlack,
       };
       fetch(API_BASE + '/health/records/' + encodeURIComponent(editId), {
         method: 'PUT',
@@ -5876,6 +5876,9 @@ function closeCatDetailFoldSection(btn) {
           alert('エラー: ' + (data.message || data.error));
           resetVsBtns();
           return;
+        }
+        if (wantedSlack && data.slack) {
+          slackClinicRecordFollowup(data);
         }
         resetVsBtns();
         closeVetScheduleModal();

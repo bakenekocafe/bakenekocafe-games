@@ -996,7 +996,7 @@
     return out;
   }
 
-  /** cat-detail buildLeftoverItems と同じ（plan_id でログと献立を対応） */
+  /** cat-detail renderLeftoverInput と同様：献立差し替え後も昨日ログを落とさない */
   function ovBuildLeftoverItems(plans, logs) {
     var logByPlanId = {};
     for (var li = 0; li < logs.length; li++) {
@@ -1005,15 +1005,24 @@
       }
     }
     var items = [];
+    var usedLogIds = {};
     for (var pi = 0; pi < plans.length; pi++) {
       var plan = plans[pi];
       var pid = plan.plan_id;
       if (pid == null) continue;
-      items.push({ plan: plan, log: logByPlanId[String(pid)] || null });
+      var lg = logByPlanId[String(pid)] || null;
+      items.push({ plan: plan, log: lg });
+      if (lg && lg.id != null) usedLogIds[String(lg.id)] = true;
     }
     for (var lli = 0; lli < logs.length; lli++) {
-      if (!logs[lli].plan_id) {
-        items.push({ plan: null, log: logs[lli] });
+      var ent = logs[lli];
+      var lid = ent.id != null ? String(ent.id) : '';
+      if (!ent.plan_id) {
+        items.push({ plan: null, log: ent });
+        if (lid) usedLogIds[lid] = true;
+      } else if (lid && !usedLogIds[lid]) {
+        items.push({ plan: null, log: ent });
+        usedLogIds[lid] = true;
       }
     }
     return items;
@@ -1146,6 +1155,7 @@
       var itemsEve = ovBuildLeftoverItems(evePlans, eveLogs);
 
       var html = '';
+      html += '<p class="dim" style="font-size:11px;line-height:1.45;margin:0 0 10px;padding:0 4px;">業務終了で献立が変わっても、昨日の「あげた」はログに残るため下記で残りgを入力できます。</p>';
       html += ovRenderYesterdayFedUndoFromLogs(yLogsAll);
       html += ovRenderLeftoverSection('🌙 前日夜（昨夜の夜ごはんと同じ）', itemsPrev, yesterdayStr, 'prev');
       html += ovRenderLeftoverSection('☀️ 当日朝・昼', itemsDay, todayStr, 'day');

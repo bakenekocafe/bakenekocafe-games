@@ -3160,14 +3160,23 @@ function closeCatDetailFoldSection(btn) {
     }
 
     var items = [];
+    var usedLogIds = {};
     for (var pi = 0; pi < eveningPlans.length; pi++) {
       var plan = eveningPlans[pi];
       var log = logByPlanId[plan.id] || null;
       items.push({ plan: plan, log: log, type: 'plan' });
+      if (log && log.id != null) usedLogIds[String(log.id)] = true;
     }
     for (var lli = 0; lli < eveningLogs.length; lli++) {
-      if (!eveningLogs[lli].plan_id) {
-        items.push({ plan: null, log: eveningLogs[lli], type: 'manual' });
+      var el = eveningLogs[lli];
+      var lid = el.id != null ? String(el.id) : '';
+      if (!el.plan_id) {
+        items.push({ plan: null, log: el, type: 'manual' });
+        if (lid) usedLogIds[lid] = true;
+      } else if (lid && !usedLogIds[lid]) {
+        // 業務終了で献立が入れ替わると plan_id は昨日のプランのまま・今日の evening 行に無い → それでも残し入力できるようにする
+        items.push({ plan: null, log: el, type: 'manual' });
+        usedLogIds[lid] = true;
       }
     }
     if (items.length === 0) return '';
@@ -3183,6 +3192,7 @@ function closeCatDetailFoldSection(btn) {
 
     var h = '<div style="background:rgba(99,102,241,0.08);border:1px solid rgba(99,102,241,0.2);border-radius:10px;padding:12px;margin-bottom:12px;">';
     h += '<div style="font-size:14px;font-weight:700;color:#a78bfa;margin-bottom:8px;">🌙 昨夜の夜ごはん — 残り量を記録</div>';
+    h += '<div style="font-size:11px;color:var(--text-dim);line-height:1.45;margin-bottom:10px;">献立が業務終了で入れ替わっても、昨日の「あげた」記録は下に表示されます（メニュー名・提供量はログに保存された内容です）。</div>';
 
     for (var i = 0; i < items.length; i++) {
       var item = items[i];

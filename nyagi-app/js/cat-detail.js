@@ -8113,7 +8113,9 @@ function closeCatDetailFoldSection(btn) {
       el.innerHTML = '<div class="empty-msg">薬が登録されていません</div>';
       return;
     }
-    var html = '';
+    var html = '<div class="nyagi-preset-manage-menu" style="margin:10px 0;padding:10px;background:rgba(168,139,250,0.08);border-radius:8px;border:1px solid rgba(168,139,250,0.25);">';
+    html += '<div style="font-size:11px;font-weight:700;color:var(--text-main);margin-bottom:6px;">💊 投薬に載せる</div>';
+    html += '<div style="font-size:10px;color:var(--text-dim);line-height:1.4;margin-bottom:8px;">「外す」＝全適用・業務終了の自動入替の対象外（用量・メモは ✏️）。</div>';
     for (var i = 0; i < items.length; i++) {
       var it = items[i];
       _mpItemsCache[it.id] = it;
@@ -8125,24 +8127,22 @@ function closeCatDetailFoldSection(btn) {
         slotLabels += '<span style="display:inline-block;padding:1px 6px;border-radius:4px;font-size:10px;font-weight:600;' + cls + '">' + escapeHtml(slots[s]) + '</span> ';
       }
       var menuOff = it.menu_active !== undefined && it.menu_active !== null && Number(it.menu_active) === 0;
-      html += '<div style="display:flex;justify-content:space-between;align-items:center;padding:8px 10px;background:var(--surface);border-radius:6px;margin-bottom:4px;gap:6px;">';
-      html += '<div style="min-width:0;flex:1;">';
-      html += '<div style="font-size:13px;font-weight:600;">';
-      if (menuOff) html += '<span style="color:#f87171;font-size:10px;font-weight:700;margin-right:6px;">対象外</span>';
-      html += escapeHtml(it.medicine_name || '') + '</div>';
-      html += '<div style="font-size:11px;color:var(--text-dim);">';
-      if (it.dosage_amount) html += it.dosage_amount + (it.dosage_unit ? escapeHtml(it.dosage_unit) : '') + ' ';
-      html += escapeHtml(formatFreqLabel(it.frequency || '毎日')) + ' ';
-      html += slotLabels;
+      html += '<div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;padding:8px 0;border-bottom:1px solid rgba(255,255,255,0.06);' + (menuOff ? 'opacity:0.88;' : '') + '">';
+      html += '<div style="flex:1;min-width:0;font-size:12px;line-height:1.35;">';
+      html += (menuOff ? '<span style="color:#f87171;font-size:10px;font-weight:700;margin-right:6px;">対象外</span>' : '<span style="color:#4ade80;font-size:10px;font-weight:700;margin-right:6px;">対象</span>');
+      html += escapeHtml(it.medicine_name || '') + ' ';
+      if (it.dosage_amount) html += '<b>' + it.dosage_amount + (it.dosage_unit ? escapeHtml(it.dosage_unit) : '') + '</b> ';
+      html += '<span style="color:var(--text-dim);font-size:10px;">' + escapeHtml(formatFreqLabel(it.frequency || '毎日')) + ' ' + slotLabels;
       if (it.route) html += '(' + escapeHtml(it.route) + ')';
-      html += '</div></div>';
-      html += '<div style="display:flex;gap:4px;flex-shrink:0;flex-wrap:wrap;justify-content:flex-end;">';
-      html += '<button type="button" class="btn btn-outline" style="font-size:10px;padding:4px 8px;" onclick="toggleMedPresetMenuActive(' + it.id + ',' + (menuOff ? '1' : '0') + ')">' + (menuOff ? '対象にする' : '対象外') + '</button>';
+      html += '</span></div>';
+      html += '<div style="display:flex;gap:4px;flex-shrink:0;flex-wrap:wrap;justify-content:flex-end;align-items:center;">';
+      html += '<button type="button" class="btn btn-outline" style="font-size:10px;padding:4px 10px;white-space:nowrap;" onclick="toggleMedPresetMenuActive(' + it.id + ',' + (menuOff ? '1' : '0') + ')">' + (menuOff ? '載せる' : '外す') + '</button>';
       html += '<button type="button" class="btn-med-edit" style="background:rgba(56,189,248,0.2);color:#38bdf8;font-size:10px;" onclick="applyMedPresetItemToCat(' + it.id + ')" title="この猫にこの1件だけ適用">1件適用</button>';
       html += '<button type="button" class="btn-med-edit" onclick="startEditMedPresetItem(' + it.id + ')" title="編集">✏️</button>';
       html += '<button type="button" class="btn-med-stop" onclick="deleteMedPresetItemConfirm(' + it.id + ')" title="削除">🗑</button>';
       html += '</div></div>';
     }
+    html += '</div>';
     el.innerHTML = html;
   }
 

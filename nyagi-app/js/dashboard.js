@@ -185,6 +185,45 @@
 
   // ── 統合レンダリング ──
 
+  /** 給餌あげたサマリー: 朝／夜の1列分（献立0件は —）。title 省略時はデータ行用（見出しなし） */
+  function renderFedSummarySlotColumn(title, block) {
+    var pl = block && block.plans_total != null ? block.plans_total : 0;
+    var fd = block && block.fed_count != null ? block.fed_count : 0;
+    var pctRaw = block && block.fed_pct != null ? block.fed_pct : null;
+    var label = title
+      ? '<div style="font-size:9px;color:var(--text-dim);line-height:1.25;">' + title + '</div>'
+      : '';
+    if (pl === 0) {
+      return (
+        '<div style="width:82px;text-align:center;flex-shrink:0;">' +
+        label +
+        '<div style="color:var(--text-dim);font-size:12px;margin-top:' +
+        (title ? '4' : '0') +
+        'px;">—</div>' +
+        '</div>'
+      );
+    }
+    var pct = pctRaw != null ? pctRaw : Math.round((fd / pl) * 100);
+    var col = pct >= 80 ? '#4ade80' : pct >= 50 ? '#facc15' : '#f87171';
+    return (
+      '<div style="width:82px;text-align:center;flex-shrink:0;">' +
+      label +
+      '<div style="color:' +
+      col +
+      ';font-weight:600;font-size:12px;margin-top:' +
+      (title ? '2' : '0') +
+      'px;white-space:nowrap;">' +
+      fd +
+      '/' +
+      pl +
+      '</div>' +
+      '<div style="color:' + col + ';font-weight:700;font-size:13px;">' +
+      pct +
+      '%</div>' +
+      '</div>'
+    );
+  }
+
   function renderUnified(m, e) {
     var html = '';
 
@@ -271,43 +310,57 @@
       html += '</div>';
     }
 
-    // 8. 🍽 給餌サマリー（献立に対する「あげた」記録の割合）
+    // 8. 🍽 給餌サマリー（献立に対する「あげた」記録・朝／夜の2列）
     var feedingSummary = e.feeding_summary || [];
     if (feedingSummary.length > 0) {
-      html += '<div class="section-title">🍽 給餌サマリー <small class="dim" style="font-weight:500;font-size:11px;">（あげた記録）</small></div>';
+      html +=
+        '<div class="section-title">🍽 給餌サマリー <small class="dim" style="font-weight:500;font-size:11px;">（あげた記録・朝／夜）</small></div>';
       html += '<div class="card">';
+      html +=
+        '<div style="display:flex;align-items:flex-end;padding:4px 0 8px;border-bottom:1px solid rgba(255,255,255,0.08);font-size:10px;color:var(--text-dim);">' +
+        '<span style="flex:1;min-width:0;"></span>' +
+        '<span style="width:82px;text-align:center;flex-shrink:0;line-height:1.25;">☀ 朝</span>' +
+        '<span style="width:82px;text-align:center;flex-shrink:0;line-height:1.25;">☾ 夜分<br><small style="font-weight:500;opacity:0.85;">（晩・昼等）</small></span>' +
+        '<span style="width:36px;flex-shrink:0;"></span>' +
+        '</div>';
       for (var i = 0; i < feedingSummary.length; i++) {
         var fs = feedingSummary[i];
         var fid = fs.cat_id || '';
-        var fedPct = Math.round(fs.fed_pct != null ? fs.fed_pct : 0);
-        var fedCount = fs.fed_count != null ? fs.fed_count : 0;
-        var planTot = fs.plans_total != null ? fs.plans_total : 0;
-        var eatColor = fedPct >= 80 ? '#4ade80' : fedPct >= 50 ? '#facc15' : '#f87171';
-        html += '<div style="display:flex;justify-content:space-between;align-items:center;font-size:13px;padding:4px 0;' +
-          (i < feedingSummary.length - 1 ? 'border-bottom:1px solid rgba(255,255,255,0.06);' : '') + '">';
-        if (fid) {
-          html += '<a href="cat.html?id=' + encodeURIComponent(fid) + '" style="color:inherit;text-decoration:none;flex:1;">' + escapeHtml(fs.cat_name || '') + '</a>';
-          html +=
-            '<span style="text-align:right;line-height:1.2;">' +
-            '<span style="color:' + eatColor + ';font-weight:600;">' +
-            fedCount +
-            '/' +
-            planTot +
-            '</span> ' +
-            '<span style="color:' + eatColor + ';font-weight:700;font-size:14px;">' +
-            fedPct +
-            '%</span></span>';
-          html += '<a href="cat.html?id=' + encodeURIComponent(fid) + '#feedingArea" class="btn-edit-small" style="margin-left:8px;font-size:11px;padding:2px 6px;" title="猫詳細で編集">✏️</a>';
+        var mo = fs.morning;
+        var ev = fs.evening;
+        if (!mo && !ev && (fs.plans_total || 0) > 0) {
+          mo = { plans_total: 0, fed_count: 0, fed_pct: null };
+          ev = {
+            plans_total: fs.plans_total,
+            fed_count: fs.fed_count,
+            fed_pct: fs.fed_pct != null ? fs.fed_pct : null,
+          };
         } else {
-          html += '<span style="flex:1;">' + escapeHtml(fs.cat_name || '') + '</span>';
+          mo = mo || { plans_total: 0, fed_count: 0, fed_pct: null };
+          ev = ev || { plans_total: 0, fed_count: 0, fed_pct: null };
+        }
+        html +=
+          '<div style="display:flex;align-items:center;justify-content:space-between;font-size:13px;padding:6px 0;' +
+          (i < feedingSummary.length - 1 ? 'border-bottom:1px solid rgba(255,255,255,0.06);' : '') +
+          '">';
+        if (fid) {
           html +=
-            '<span style="text-align:right;"><span style="color:' + eatColor + ';font-weight:600;">' +
-            fedCount +
-            '/' +
-            planTot +
-            '</span> <span style="color:' + eatColor + ';font-weight:700;">' +
-            fedPct +
-            '%</span></span>';
+            '<a href="cat.html?id=' +
+            encodeURIComponent(fid) +
+            '" style="color:inherit;text-decoration:none;flex:1;min-width:0;padding-right:6px;">' +
+            escapeHtml(fs.cat_name || '') +
+            '</a>';
+          html += renderFedSummarySlotColumn('', mo);
+          html += renderFedSummarySlotColumn('', ev);
+          html +=
+            '<a href="cat.html?id=' +
+            encodeURIComponent(fid) +
+            '#feedingArea" class="btn-edit-small" style="margin-left:4px;font-size:11px;padding:2px 6px;flex-shrink:0;" title="猫詳細で編集">✏️</a>';
+        } else {
+          html += '<span style="flex:1;min-width:0;padding-right:6px;">' + escapeHtml(fs.cat_name || '') + '</span>';
+          html += renderFedSummarySlotColumn('', mo);
+          html += renderFedSummarySlotColumn('', ev);
+          html += '<span style="width:36px;flex-shrink:0;"></span>';
         }
         html += '</div>';
       }

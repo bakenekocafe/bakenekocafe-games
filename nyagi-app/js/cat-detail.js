@@ -4184,7 +4184,7 @@ function closeCatDetailFoldSection(btn) {
         var currentId = currentCatData && currentCatData.assigned_medication_preset_id;
         var innerHtml = '<div class="modal-box" style="max-height:85vh;overflow-y:auto;">';
         innerHtml += '<div class="modal-title">🔗 投薬プリセット紐づけ</div>';
-        innerHtml += '<p style="font-size:12px;color:var(--text-dim);margin:0 0 10px;">業務終了・朝の自動入替で、<b>有効な薬</b>だけがスケジュールに反映されます（紐づけのみの変更ではスケジュールはそのままです）。<br>』全て適用』でその場で入れ替えることもできます。</p>';
+        innerHtml += '<p style="font-size:12px;color:var(--text-dim);margin:0 0 10px;">業務終了・朝の自動入替で、<b>有効な薬</b>だけがスケジュールに反映されます（紐づけのみの変更ではスケジュールはそのままです）。<br>📋 プリセットタブの「全て適用」でその場で入れ替えることもできます。</p>';
         innerHtml += renderPresetLocationSwitcher(loc, 'medassign');
 
         innerHtml += '<div style="margin-bottom:8px;">';

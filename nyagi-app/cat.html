@@ -1948,7 +1948,14 @@
           <label class="form-label">説明（任意）</label>
           <textarea id="mpPresetDescription" class="form-textarea" rows="2" placeholder="スタッフ向けメモ"></textarea>
         </div>
-        <button type="button" class="btn btn-outline" style="font-size:12px;width:100%;" onclick="saveMedPresetMeta()">プリセット名・説明を保存</button>
+        <div class="form-group">
+          <label class="form-label">拠点（一覧の絞り込み）</label>
+          <select id="mpPresetLocation" class="form-select">
+            <option value="cafe">BAKENEKO CAFE</option>
+            <option value="nekomata">猫又療養所</option>
+          </select>
+        </div>
+        <button type="button" class="btn btn-outline" style="font-size:12px;width:100%;" onclick="saveMedPresetMeta()">プリセット名・説明・拠点を保存</button>
       </div>
       <div id="mpEditItemList" style="margin-bottom:12px;"></div>
       <div style="border-top:1px solid var(--surface-alt);padding-top:12px;">

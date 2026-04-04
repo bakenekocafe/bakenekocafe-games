@@ -271,25 +271,43 @@
       html += '</div>';
     }
 
-    // 8. 🍽 給餌サマリー
+    // 8. 🍽 給餌サマリー（献立に対する「あげた」記録の割合）
     var feedingSummary = e.feeding_summary || [];
     if (feedingSummary.length > 0) {
-      html += '<div class="section-title">🍽 給餌サマリー</div>';
+      html += '<div class="section-title">🍽 給餌サマリー <small class="dim" style="font-weight:500;font-size:11px;">（あげた記録）</small></div>';
       html += '<div class="card">';
       for (var i = 0; i < feedingSummary.length; i++) {
         var fs = feedingSummary[i];
         var fid = fs.cat_id || '';
-        var eatPct = Math.round(fs.avg_eaten || 0);
-        var eatColor = eatPct >= 80 ? '#4ade80' : eatPct >= 50 ? '#facc15' : '#f87171';
+        var fedPct = Math.round(fs.fed_pct != null ? fs.fed_pct : 0);
+        var fedCount = fs.fed_count != null ? fs.fed_count : 0;
+        var planTot = fs.plans_total != null ? fs.plans_total : 0;
+        var eatColor = fedPct >= 80 ? '#4ade80' : fedPct >= 50 ? '#facc15' : '#f87171';
         html += '<div style="display:flex;justify-content:space-between;align-items:center;font-size:13px;padding:4px 0;' +
           (i < feedingSummary.length - 1 ? 'border-bottom:1px solid rgba(255,255,255,0.06);' : '') + '">';
         if (fid) {
           html += '<a href="cat.html?id=' + encodeURIComponent(fid) + '" style="color:inherit;text-decoration:none;flex:1;">' + escapeHtml(fs.cat_name || '') + '</a>';
-          html += '<span style="color:' + eatColor + ';font-weight:600;">' + eatPct + '%</span>';
+          html +=
+            '<span style="text-align:right;line-height:1.2;">' +
+            '<span style="color:' + eatColor + ';font-weight:600;">' +
+            fedCount +
+            '/' +
+            planTot +
+            '</span> ' +
+            '<span style="color:' + eatColor + ';font-weight:700;font-size:14px;">' +
+            fedPct +
+            '%</span></span>';
           html += '<a href="cat.html?id=' + encodeURIComponent(fid) + '#feedingArea" class="btn-edit-small" style="margin-left:8px;font-size:11px;padding:2px 6px;" title="猫詳細で編集">✏️</a>';
         } else {
           html += '<span style="flex:1;">' + escapeHtml(fs.cat_name || '') + '</span>';
-          html += '<span style="color:' + eatColor + ';font-weight:600;">' + eatPct + '%</span>';
+          html +=
+            '<span style="text-align:right;"><span style="color:' + eatColor + ';font-weight:600;">' +
+            fedCount +
+            '/' +
+            planTot +
+            '</span> <span style="color:' + eatColor + ';font-weight:700;">' +
+            fedPct +
+            '%</span></span>';
         }
         html += '</div>';
       }

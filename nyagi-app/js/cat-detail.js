@@ -155,6 +155,12 @@ function closeCatDetailFoldSection(btn) {
     return u;
   }
 
+  function medicationPresetsListUrl(loc) {
+    var u = API_BASE + '/health/medication-presets';
+    if (loc === 'cafe' || loc === 'nekomata') u += '?location_id=' + encodeURIComponent(loc);
+    return u;
+  }
+
   /** プリセット管理カード内: 献立オンオフ（品数の直後に置き、長い説明文の下に隠れないようにする） */
   function renderPresetManageMenuTogglesHtml(ps) {
     var items = ps.items;
@@ -2565,11 +2571,12 @@ function closeCatDetailFoldSection(btn) {
     var date = selectedDate || _medLogDate || todayJstYmd();
     _medLogDate = date;
 
+    var medPrLoc = effectivePresetLocationForApply();
     return Promise.all([
-      fetch(API_BASE + '/health/medications?cat_id=' + encodeURIComponent(catId), { headers: apiHeaders(), cache: 'no-store' }).then(function (r) { return r.json(); }),
+      fetch(API_BASE + '/health/medications?cat_id=' + encodeURIComponent(catId) + '&active=false', { headers: apiHeaders(), cache: 'no-store' }).then(function (r) { return r.json(); }),
       fetch(API_BASE + '/health/medication-logs?cat_id=' + encodeURIComponent(catId) + '&date=' + date, { headers: apiHeaders(), cache: 'no-store' }).then(function (r) { return r.json(); }),
       fetch(API_BASE + '/health/records?cat_id=' + encodeURIComponent(catId) + '&type=medication&limit=60', { headers: apiHeaders(), cache: 'no-store' }).then(function (r) { return r.json(); }),
-      fetch(API_BASE + '/health/medication-presets', { headers: apiHeaders(), cache: 'no-store' }).then(function (r) { return r.json(); }),
+      fetch(medicationPresetsListUrl(medPrLoc), { headers: apiHeaders(), cache: 'no-store' }).then(function (r) { return r.json(); }),
     ]).then(function (results) {
       renderMedicationUnified(results[0].medications || [], results[1].logs || [], date, results[2].records || [], results[3].presets || []);
     }).catch(function () {
@@ -2630,9 +2637,21 @@ function closeCatDetailFoldSection(btn) {
     } else {
       for (var i = 0; i < medications.length; i++) {
         var med = medications[i];
-        html += '<div class="med-schedule-card">';
+        var medInactive = med.active === 0 || med.active === false || String(med.active) === '0';
+        var planPreset = med.plan_type === 'preset';
+        html += '<div class="med-schedule-card"' + (medInactive ? ' style="opacity:0.9;"' : '') + '>';
         html += '<div class="med-schedule-head"><div>';
-        html += '<div class="med-schedule-name">' + escapeHtml(med.medicine_name || '') + '</div>';
+        html += '<div class="med-schedule-name" style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;">';
+        html += '<span>' + escapeHtml(med.medicine_name || '') + '</span>';
+        if (medInactive) {
+          html += '<span style="font-size:10px;padding:2px 6px;border-radius:4px;background:rgba(248,113,113,0.2);color:#f87171;font-weight:700;">終了</span>';
+        }
+        if (planPreset) {
+          html += '<span style="font-size:10px;padding:2px 6px;border-radius:4px;background:rgba(74,222,128,0.15);color:#4ade80;font-weight:600;">プリセット</span>';
+        } else if (!medInactive) {
+          html += '<span style="font-size:10px;padding:2px 6px;border-radius:4px;background:rgba(148,163,184,0.12);color:#94a3b8;font-weight:600;">手動</span>';
+        }
+        html += '</div>';
         html += '<div class="med-schedule-meta">';
         if (med.dosage_amount) html += med.dosage_amount + (med.dosage_unit ? escapeHtml(med.dosage_unit) : '') + '&nbsp;';
         if (med.frequency) html += escapeHtml(formatFreqLabel(med.frequency)) + '&nbsp;';
@@ -2709,21 +2728,33 @@ function closeCatDetailFoldSection(btn) {
 
   function renderMedPresetContent(presets) {
     var html = '';
+    var locSw = effectivePresetLocationForApply();
+    html += renderPresetLocationSwitcher(locSw, 'med');
     if (presets.length === 0) {
-      html += '<div class="empty-msg">プリセットがありません</div>';
+      html += '<div class="empty-msg">この拠点に表示する投薬プリセットがありません（拠点切替または作成してください）</div>';
     } else {
       for (var i = 0; i < presets.length; i++) {
         var p = presets[i];
+        var takenByOther = p.assigned_cat && String(p.assigned_cat.id) !== String(catId);
         html += '<div style="display:flex;justify-content:space-between;align-items:center;padding:8px 10px;background:var(--surface);border-radius:6px;margin-bottom:6px;">';
-        html += '<div>';
-        html += '<div style="font-size:13px;font-weight:600;">' + escapeHtml(p.name) + '</div>';
+        html += '<div style="flex:1;min-width:0;">';
+        html += '<div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;font-size:13px;font-weight:600;">';
+        html += presetLocationBadgeHtml(p.location_id || 'cafe');
+        html += '<span>' + escapeHtml(p.name) + '</span></div>';
         if (p.description) html += '<div style="font-size:11px;color:var(--text-dim);">' + escapeHtml(p.description) + '</div>';
-        html += '<div style="font-size:11px;color:var(--text-dim);">💊 ' + (p.item_count || 0) + ' 件の薬</div>';
+        html += '<div style="font-size:11px;color:var(--text-dim);">💊 有効 ' + (p.item_count || 0) + ' 件</div>';
+        if (takenByOther) {
+          html += '<div style="font-size:10px;color:#f87171;margin-top:2px;">⚠ 別の猫（' + escapeHtml(p.assigned_cat.name || p.assigned_cat.id) + '）に割当中・全適用不可</div>';
+        }
         html += '</div>';
-        html += '<div style="display:flex;gap:4px;">';
+        html += '<div style="display:flex;gap:4px;flex-shrink:0;">';
         html += '<button class="btn-med-edit" onclick="editMedPreset(' + p.id + ')" title="編集">✏️</button>';
-        html += '<button class="btn-med-stop" onclick="deleteMedPresetConfirm(' + p.id + ')" title="削除">🗑</button>';
-        html += '<button class="btn-med-edit" style="background:rgba(74,222,128,0.18);color:#4ade80;font-size:11px;" onclick="applyMedPresetDirect(' + p.id + ',' + (p.item_count || 0) + ')" title="プリセット内の全薬をこの猫に適用">全て適用</button>';
+        html += '<button class="btn-med-stop" onclick="deleteMedPresetConfirm(' + p.id + ')" title="無効化（一覧から隠す）">🗑</button>';
+        if (takenByOther) {
+          html += '<span class="btn-med-edit" style="opacity:0.5;cursor:not-allowed;font-size:11px;">全て適用</span>';
+        } else {
+          html += '<button class="btn-med-edit" style="background:rgba(74,222,128,0.18);color:#4ade80;font-size:11px;" onclick="applyMedPresetDirect(' + p.id + ',' + (p.item_count || 0) + ')" title="プリセット由来のお薬だけ入れ替え（手動登録は残す）">全て適用</button>';
+        }
         html += '</div></div>';
       }
     }
@@ -2752,7 +2783,7 @@ function closeCatDetailFoldSection(btn) {
       alert('このプリセットには薬が登録されていません。先に編集で薬を追加してください。');
       return;
     }
-    if (!confirm('プリセット内の全ての薬をこの猫の投薬スケジュールに追加しますか？')) return;
+    if (!confirm('プリセット由来のお薬を、プリセットの内容で入れ替えます（手動で登録したお薬はそのまま残ります）。よろしいですか？')) return;
     fetch(API_BASE + '/health/medication-presets/' + presetId + '/apply', {
       method: 'POST', headers: apiHeaders(), cache: 'no-store',
       body: JSON.stringify({ cat_id: catId }),
@@ -2785,7 +2816,7 @@ function closeCatDetailFoldSection(btn) {
     if (!name) { alert('プリセット名を入力してください'); return; }
     fetch(API_BASE + '/health/medication-presets', {
       method: 'POST', headers: apiHeaders(), cache: 'no-store',
-      body: JSON.stringify({ name: name }),
+      body: JSON.stringify({ name: name, location_id: effectivePresetLocationForApply() }),
     }).then(function (r) { return r.json(); })
     .then(function (data) {
       if (data.error) { alert('エラー: ' + (data.message || data.error)); return; }
@@ -4069,6 +4100,7 @@ function closeCatDetailFoldSection(btn) {
     if (ctx === 'apply') _fillPresetApplyModal(loc);
     else if (ctx === 'manage') _fillPresetManageModal(loc);
     else if (ctx === 'assign') _fillPresetAssignModal(loc);
+    else if (ctx === 'med') loadMedicationSchedule();
   };
 
   window.closePresetApplyModal = function () {
@@ -7804,6 +7836,8 @@ function closeCatDetailFoldSection(btn) {
     var descIn = document.getElementById('mpPresetDescription');
     var name = nameIn ? nameIn.value.trim() : '';
     if (!name) { alert('プリセット名を入力してください'); return; }
+    var locIn = document.getElementById('mpPresetLocation');
+    var locVal = locIn && locIn.value === 'nekomata' ? 'nekomata' : 'cafe';
     fetch(API_BASE + '/health/medication-presets/' + _editingMedPresetId, {
       method: 'PUT',
       headers: apiHeaders(),
@@ -7811,6 +7845,7 @@ function closeCatDetailFoldSection(btn) {
       body: JSON.stringify({
         name: name,
         description: descIn && descIn.value.trim() ? descIn.value.trim() : null,
+        location_id: locVal,
       }),
     }).then(function (r) { return r.json(); })
       .then(function (data) {
@@ -7821,6 +7856,7 @@ function closeCatDetailFoldSection(btn) {
           if (_medPresets[pi].id === _editingMedPresetId) {
             _medPresets[pi].name = name;
             _medPresets[pi].description = descIn && descIn.value.trim() ? descIn.value.trim() : null;
+            _medPresets[pi].location_id = locVal;
             break;
           }
         }
@@ -7829,7 +7865,7 @@ function closeCatDetailFoldSection(btn) {
   };
 
   window.deleteMedPresetConfirm = function (presetId) {
-    if (!confirm('このプリセットを削除しますか？')) return;
+    if (!confirm('この投薬プリセットを無効化しますか？（一覧から隠れ、猫への割当も外れます。薬マスターや既存スケジュール履歴は消えません）')) return;
     fetch(API_BASE + '/health/medication-presets/' + presetId, {
       method: 'DELETE', headers: apiHeaders(), cache: 'no-store',
     }).then(function (r) { return r.json(); })
@@ -7852,8 +7888,10 @@ function closeCatDetailFoldSection(btn) {
 
     var nameIn = document.getElementById('mpPresetName');
     var descIn = document.getElementById('mpPresetDescription');
+    var locIn = document.getElementById('mpPresetLocation');
     if (nameIn) nameIn.value = p ? (p.name || '') : '';
     if (descIn) descIn.value = p ? (p.description || '') : '';
+    if (locIn) locIn.value = (p && p.location_id === 'nekomata') ? 'nekomata' : 'cafe';
 
     var editModal = document.getElementById('medPresetEditModal');
     if (editModal) editModal.classList.add('open');
@@ -8044,6 +8082,21 @@ function closeCatDetailFoldSection(btn) {
     if (cycleHint) cycleHint.style.display = isCycle ? '' : 'none';
   };
 
+  window.toggleMedPresetMenuActive = function (itemId, turnOnNum) {
+    if (!_editingMedPresetId) return;
+    var turnOn = Number(turnOnNum) === 1;
+    fetch(API_BASE + '/health/medication-presets/' + _editingMedPresetId + '/items/' + itemId, {
+      method: 'PUT',
+      headers: apiHeaders(),
+      cache: 'no-store',
+      body: JSON.stringify({ menu_active: turnOn ? 1 : 0 }),
+    }).then(function (r) { return r.json(); })
+      .then(function (data) {
+        if (data.error) { alert('エラー: ' + (data.message || data.error)); return; }
+        loadMedPresetItems(_editingMedPresetId);
+      }).catch(function () { alert('更新に失敗しました'); });
+  };
+
   function loadMedPresetItems(presetId) {
     fetch(API_BASE + '/health/medication-presets/' + presetId + '/items', { headers: apiHeaders(), cache: 'no-store' })
       .then(function (r) { return r.json(); })
@@ -8071,9 +8124,12 @@ function closeCatDetailFoldSection(btn) {
         var cls = slots[s] === '朝' ? 'background:rgba(250,204,21,0.2);color:#facc15;' : slots[s] === '晩' ? 'background:rgba(129,140,248,0.2);color:#818cf8;' : 'background:rgba(74,222,128,0.15);color:#4ade80;';
         slotLabels += '<span style="display:inline-block;padding:1px 6px;border-radius:4px;font-size:10px;font-weight:600;' + cls + '">' + escapeHtml(slots[s]) + '</span> ';
       }
+      var menuOff = it.menu_active !== undefined && it.menu_active !== null && Number(it.menu_active) === 0;
       html += '<div style="display:flex;justify-content:space-between;align-items:center;padding:8px 10px;background:var(--surface);border-radius:6px;margin-bottom:4px;gap:6px;">';
       html += '<div style="min-width:0;flex:1;">';
-      html += '<div style="font-size:13px;font-weight:600;">' + escapeHtml(it.medicine_name || '') + '</div>';
+      html += '<div style="font-size:13px;font-weight:600;">';
+      if (menuOff) html += '<span style="color:#f87171;font-size:10px;font-weight:700;margin-right:6px;">対象外</span>';
+      html += escapeHtml(it.medicine_name || '') + '</div>';
       html += '<div style="font-size:11px;color:var(--text-dim);">';
       if (it.dosage_amount) html += it.dosage_amount + (it.dosage_unit ? escapeHtml(it.dosage_unit) : '') + ' ';
       html += escapeHtml(formatFreqLabel(it.frequency || '毎日')) + ' ';
@@ -8081,6 +8137,7 @@ function closeCatDetailFoldSection(btn) {
       if (it.route) html += '(' + escapeHtml(it.route) + ')';
       html += '</div></div>';
       html += '<div style="display:flex;gap:4px;flex-shrink:0;flex-wrap:wrap;justify-content:flex-end;">';
+      html += '<button type="button" class="btn btn-outline" style="font-size:10px;padding:4px 8px;" onclick="toggleMedPresetMenuActive(' + it.id + ',' + (menuOff ? '1' : '0') + ')">' + (menuOff ? '対象にする' : '対象外') + '</button>';
       html += '<button type="button" class="btn-med-edit" style="background:rgba(56,189,248,0.2);color:#38bdf8;font-size:10px;" onclick="applyMedPresetItemToCat(' + it.id + ')" title="この猫にこの1件だけ適用">1件適用</button>';
       html += '<button type="button" class="btn-med-edit" onclick="startEditMedPresetItem(' + it.id + ')" title="編集">✏️</button>';
       html += '<button type="button" class="btn-med-stop" onclick="deleteMedPresetItemConfirm(' + it.id + ')" title="削除">🗑</button>';

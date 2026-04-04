@@ -9,7 +9,7 @@
   </script>
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
   <title>NYAGI 猫名辞書（音声）</title>
-  <link rel="manifest" href="manifest.json?v=215">
+  <link rel="manifest" href="manifest.json?v=216">
   <meta name="theme-color" content="#1a1a2e">
   <link rel="stylesheet" href="style.css?v=209">
   <script src="js/nyagi-fixed-header.js?v=209" defer></script>
@@ -34,6 +34,13 @@
     .vd-cat-head { font-weight: 700; font-size: 14px; margin: 14px 0 6px; color: var(--primary); }
     .vd-variant { flex: 1; min-width: 100px; font-weight: 600; word-break: break-word; }
     .vd-badge { font-size: 10px; padding: 2px 8px; border-radius: 4px; background: rgba(167,139,250,0.2); color: #c4b5fd; }
+    .vd-entry-src { font-size: 10px; padding: 2px 6px; border-radius: 4px; background: rgba(94,234,212,0.15); color: #5eead4; white-space: nowrap; }
+    .vd-src-panel { margin: -4px 0 10px 0; padding: 8px 12px; background: rgba(0,0,0,0.2); border-radius: 0 0 8px 8px; font-size: 11px; }
+    .vd-src-line { display: flex; flex-wrap: wrap; gap: 6px; align-items: baseline; padding: 6px 0; border-bottom: 1px solid var(--surface-alt); }
+    .vd-src-line:last-child { border-bottom: none; }
+    .vd-src-id { color: var(--text-dim); white-space: nowrap; }
+    .vd-src-raw { flex: 1; min-width: 120px; word-break: break-word; }
+    .vd-src-when { font-size: 10px; color: var(--text-dim); white-space: nowrap; }
     .vd-pri { font-size: 11px; color: var(--text-dim); }
     .vd-btn {
       border: none; border-radius: 6px; padding: 6px 12px; font-size: 12px; cursor: pointer;
@@ -147,6 +154,6 @@
 
   <script src="config.js?v=215"></script>
   <script src="js/nyagi-boot-overlay.js?v=215"></script>
-  <script src="js/voice-dict.js?v=1"></script>
+  <script src="js/voice-dict.js?v=2"></script>
 </body>
 </html>

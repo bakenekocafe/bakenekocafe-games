@@ -51,8 +51,20 @@
       kana_variant: 'かな',
       nickname: '愛称',
       official: '公式',
+      former_name: '旧名',
     };
     return m[t] || String(t || '—');
+  }
+
+  function entrySourceLabel(s) {
+    var m = {
+      manual_ui: 'UI追加',
+      manual_promoted: 'ログ反映',
+      auto_repair: '自動修復',
+      rename: '改名',
+    };
+    if (!s) return '';
+    return m[s] || String(s);
   }
 
   function showMsg(el, text, kind) {
@@ -125,18 +137,69 @@
           h += '<div class="vd-row" data-id="' + esc(String(e.id)) + '">';
           h += '<span class="vd-variant">' + esc(e.variant) + '</span>';
           h += '<span class="vd-badge">' + esc(variantBadgeLabel(e.variant_type)) + '</span>';
+          if (e.entry_source) {
+            h += '<span class="vd-entry-src">' + esc(entrySourceLabel(e.entry_source)) + '</span>';
+          }
+          var sc = parseInt(e.source_count, 10) || 0;
+          if (sc > 0) {
+            h += '<button type="button" class="vd-btn vd-srcbtn" data-id="' + esc(String(e.id)) + '">関連ログ ' + sc + '件</button>';
+          }
           h += '<span class="vd-pri">p' + esc(String(e.priority)) + '</span>';
           h += '<button type="button" class="vd-btn vd-btn--danger vd-del" data-id="' + esc(String(e.id)) + '">削除</button>';
           h += '</div>';
+          h += '<div class="vd-src-panel" id="vdSrcPanel-' + esc(String(e.id)) + '" style="display:none;"></div>';
         }
         box.innerHTML = h;
         var dels = box.querySelectorAll('.vd-del');
         for (var j = 0; j < dels.length; j++) {
           dels[j].addEventListener('click', onDeleteEntry);
         }
+        bindSourcePanels(box);
       }).catch(function () {
         box.innerHTML = '<div class="vd-err">読み込みに失敗しました</div>';
       });
+  }
+
+  function bindSourcePanels(box) {
+    var btns = box.querySelectorAll('.vd-srcbtn');
+    for (var i = 0; i < btns.length; i++) {
+      btns[i].addEventListener('click', function (ev) {
+        var id = ev.currentTarget.getAttribute('data-id');
+        var panel = document.getElementById('vdSrcPanel-' + id);
+        if (!panel) return;
+        if (panel.style.display === 'block') {
+          panel.style.display = 'none';
+          return;
+        }
+        panel.style.display = 'block';
+        if (panel.getAttribute('data-loaded')) return;
+        panel.innerHTML = '<div class="vd-loading" style="padding:8px;">読込中…</div>';
+        fetch(API_VOICE + '/cat-name-dictionary/' + id + '/sources', {
+          headers: apiHeaders(),
+          cache: 'no-store',
+        }).then(function (r) { return r.json(); })
+          .then(function (data) {
+            panel.setAttribute('data-loaded', '1');
+            var ent = data.entries || [];
+            if (!ent.length) {
+              panel.innerHTML = '<div class="vd-empty" style="padding:8px;">ログなし</div>';
+              return;
+            }
+            var html = '';
+            for (var j = 0; j < ent.length; j++) {
+              var L = ent[j];
+              html += '<div class="vd-src-line">';
+              html += '<span class="vd-src-id">#' + esc(String(L.id)) + '</span>';
+              html += '<span class="vd-src-raw">' + esc(L.raw_text) + '</span>';
+              html += '<span class="vd-src-when">' + esc(L.created_at || '') + '</span>';
+              html += '</div>';
+            }
+            panel.innerHTML = html;
+          }).catch(function () {
+            panel.innerHTML = '<div class="vd-err" style="padding:8px;">取得に失敗しました</div>';
+          });
+      });
+    }
   }
 
   function onDeleteEntry(ev) {

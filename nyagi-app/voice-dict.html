@@ -1,0 +1,152 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
+  <meta http-equiv="Pragma" content="no-cache">
+  <script>
+  (function(){if(!navigator.serviceWorker)return;navigator.serviceWorker.getRegistrations().then(function(r){for(var i=0;i<r.length;i++){r[i].update();if(r[i].waiting)r[i].waiting.postMessage({type:'SKIP_WAITING'})}});var f=!1;navigator.serviceWorker.addEventListener('controllerchange',function(){if(!f){f=!0;location.reload()}})})();
+  </script>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+  <title>NYAGI 猫名辞書（音声）</title>
+  <link rel="manifest" href="manifest.json?v=215">
+  <meta name="theme-color" content="#1a1a2e">
+  <link rel="stylesheet" href="style.css?v=209">
+  <script src="js/nyagi-fixed-header.js?v=209" defer></script>
+  <script src="js/nyagi-cache-clear.js?v=209" defer></script>
+  <style>
+    .vd-tabbar { display: flex; gap: 8px; margin: 12px 0 16px; }
+    .vd-tab {
+      flex: 1; text-align: center; padding: 10px; border-radius: 8px; border: none;
+      background: var(--surface); color: var(--text-dim); font-size: 13px; font-weight: 600; cursor: pointer;
+    }
+    .vd-tab.active { background: var(--primary); color: #fff; }
+    .vd-toolbar { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin-bottom: 12px; }
+    .vd-toolbar label { font-size: 12px; color: var(--text-dim); }
+    .vd-select {
+      background: var(--surface); border: 1px solid var(--surface-alt); border-radius: 6px;
+      padding: 6px 10px; color: var(--text); font-size: 13px;
+    }
+    .vd-row {
+      display: flex; flex-wrap: wrap; align-items: center; gap: 6px 10px;
+      padding: 10px 12px; margin-bottom: 6px; background: var(--surface); border-radius: 8px; font-size: 13px;
+    }
+    .vd-cat-head { font-weight: 700; font-size: 14px; margin: 14px 0 6px; color: var(--primary); }
+    .vd-variant { flex: 1; min-width: 100px; font-weight: 600; word-break: break-word; }
+    .vd-badge { font-size: 10px; padding: 2px 8px; border-radius: 4px; background: rgba(167,139,250,0.2); color: #c4b5fd; }
+    .vd-pri { font-size: 11px; color: var(--text-dim); }
+    .vd-btn {
+      border: none; border-radius: 6px; padding: 6px 12px; font-size: 12px; cursor: pointer;
+      background: var(--surface-alt); color: var(--text);
+    }
+    .vd-btn--danger { background: rgba(248,113,113,0.2); color: #f87171; }
+    .vd-add-box {
+      background: rgba(0,0,0,0.12); border-radius: 10px; padding: 12px; margin-bottom: 16px;
+    }
+    .vd-add-box h3 { margin: 0 0 10px; font-size: 14px; }
+    .vd-field { margin-bottom: 8px; }
+    .vd-field label { display: block; font-size: 11px; color: var(--text-dim); margin-bottom: 4px; }
+    .vd-input {
+      width: 100%; box-sizing: border-box; padding: 8px 10px; border-radius: 6px;
+      border: 1px solid var(--surface-alt); background: var(--surface); color: var(--text); font-size: 13px;
+    }
+    .vd-log-row {
+      display: flex; flex-wrap: wrap; align-items: center; gap: 8px;
+      padding: 10px; margin-bottom: 6px; background: var(--surface); border-radius: 8px;
+    }
+    .vd-token { font-weight: 700; flex: 1; min-width: 80px; }
+    .vd-cnt { font-size: 12px; color: var(--text-dim); }
+    .vd-hint { font-size: 12px; color: var(--text-dim); line-height: 1.45; margin-bottom: 10px; }
+    .vd-loading, .vd-empty, .vd-err { padding: 20px; text-align: center; color: var(--text-dim); }
+    .vd-err { color: #f87171; }
+    .vd-msg { font-size: 12px; margin-top: 8px; padding: 8px; border-radius: 6px; display: none; }
+    .vd-msg--ok { background: rgba(74,222,128,0.15); color: #4ade80; display: block; }
+    .vd-msg--err { background: rgba(248,113,113,0.15); color: #f87171; display: block; }
+    .vd-msg--warn { background: rgba(251,191,36,0.15); color: #fbbf24; display: block; }
+    .dim { color: var(--text-dim); font-weight: 400; }
+  </style>
+</head>
+<body>
+
+  <div class="app-sticky-top">
+    <div class="header">
+      <h1>NYAGI</h1>
+      <p>猫名辞書・誤認識ログ（音声入力用）</p>
+      <nav class="header-nav">
+        <a href="dashboard.html">ダッシュボード</a>
+        <a href="cats.html">猫一覧</a>
+        <a href="tasks.html">タスク</a>
+        <a href="foods.html">フード</a>
+        <a href="medicines.html">薬</a>
+        <a href="voice-dict.html" class="nav-current">🎤 辞書</a>
+        <a href="manual.html">📖 マニュアル</a>
+      </nav>
+    </div>
+  </div>
+
+  <div id="loginGate" style="display:none;"></div>
+
+  <div id="vdMain" class="page-scroll" style="display:none;padding:0 16px 80px;">
+    <div class="vd-tabbar">
+      <button type="button" class="vd-tab active" id="tabDict">辞書一覧</button>
+      <button type="button" class="vd-tab" id="tabLog">誤認識ログ</button>
+    </div>
+
+    <div id="panelDict">
+      <div class="vd-toolbar">
+        <label for="vdLocation">拠点</label>
+        <select id="vdLocation" class="vd-select">
+          <option value="all">全拠点</option>
+          <option value="cafe">BAKENEKO CAFE</option>
+          <option value="nekomata">猫又療養所</option>
+          <option value="endo">遠藤宅</option>
+          <option value="azukari">預かり隊</option>
+        </select>
+      </div>
+
+      <div class="vd-add-box">
+        <h3>手動で辞書に追加</h3>
+        <p class="vd-hint" style="margin-top:0;">音声でよく出る表記（誤変換・略称など）を、正しい猫に紐づけます。</p>
+        <div class="vd-field">
+          <label for="vdCatSelect">猫</label>
+          <select id="vdCatSelect" class="vd-input"></select>
+        </div>
+        <div class="vd-field">
+          <label for="vdNewVariant">辞書に登録する表記</label>
+          <input type="text" id="vdNewVariant" class="vd-input" placeholder="例: 誤変換された文字のまま">
+        </div>
+        <button type="button" class="btn btn-primary" id="vdBtnAdd">追加</button>
+        <div id="vdAddMsg" class="vd-msg"></div>
+      </div>
+
+      <div id="vdDictBody"></div>
+    </div>
+
+    <div id="panelLog" style="display:none;">
+      <p class="vd-hint">猫名が解決できなかったときの先頭トークンが集計されます。「ログから辞書へ」で手動紐づけできます。</p>
+      <button type="button" class="btn btn-outline" id="vdBtnRepair" style="margin-bottom:14px;width:100%;">誤認識から自動追加を実行（サーバー条件）</button>
+      <div id="vdRepairMsg" class="vd-msg"></div>
+
+      <div class="vd-add-box">
+        <h3>ログから辞書へ</h3>
+        <div class="vd-field">
+          <label for="vdPromoToken">誤認識トークン（先頭の名前部分）</label>
+          <input type="text" id="vdPromoToken" class="vd-input" placeholder="集計行の「フォームに入れる」で転記可">
+        </div>
+        <div class="vd-field">
+          <label for="vdPromoCat">紐づける猫</label>
+          <select id="vdPromoCat" class="vd-input"></select>
+        </div>
+        <button type="button" class="btn btn-primary" id="vdBtnPromo">辞書に追加してログ処理済み化</button>
+        <div id="vdPromoMsg" class="vd-msg"></div>
+      </div>
+
+      <div id="vdLogBody"></div>
+    </div>
+  </div>
+
+  <script src="config.js?v=215"></script>
+  <script src="js/nyagi-boot-overlay.js?v=215"></script>
+  <script src="js/voice-dict.js?v=1"></script>
+</body>
+</html>

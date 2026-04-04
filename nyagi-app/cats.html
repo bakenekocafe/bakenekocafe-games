@@ -460,13 +460,31 @@
     .ov-feed-two-cols {
       margin-top: 4px;
     }
-    .ov-feed-slot-body > .ov-feed-line:first-of-type {
+    .ov-feed-slot-body > .ov-feed-plan-block:first-of-type > .ov-feed-line {
       border-top: none;
       padding-top: 0;
     }
-    .ov-feed-other .ov-feed-line:first-of-type {
+    /* 「その他」は見出し div の次が献立ブロック */
+    .ov-feed-other .ov-med-slot-head-sub + .ov-feed-plan-block > .ov-feed-line {
       border-top: none;
       padding-top: 0;
+    }
+    .ov-feed-plan-block {
+      margin-bottom: 2px;
+    }
+    .ov-feed-plan-block:last-child {
+      margin-bottom: 0;
+    }
+    .ov-feed-intake-row {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      gap: 4px 6px;
+      padding: 5px 0 3px 0;
+      margin-top: 1px;
+      border-top: 1px dashed rgba(255, 255, 255, 0.08);
+      font-size: 11px;
+      box-sizing: border-box;
     }
     .ov-med-slot-other {
       width: 100%;
@@ -566,15 +584,36 @@
     .ov-feed-toolbar {
       display: flex;
       flex-wrap: wrap;
-      align-items: flex-start;
-      justify-content: flex-start;
-      gap: 6px;
-      margin-bottom: 4px;
+      align-items: stretch;
+      justify-content: stretch;
+      gap: 8px;
+      margin-bottom: 8px;
       width: 100%;
     }
     .ov-feed-toolbar .btn,
     .ov-feed-toolbar a.btn {
       flex: 0 0 auto !important;
+    }
+    /* ごはんカード：献立追加・残し記録のメインボタン（大きく・横並びで等分） */
+    .ov-feed-block .ov-feed-toolbar .ov-feed-toolbar-btn-main {
+      flex: 1 1 calc(50% - 4px) !important;
+      min-width: 132px;
+      min-height: 48px;
+      padding: 10px 10px !important;
+      font-size: 13px !important;
+      font-weight: 700 !important;
+      line-height: 1.25 !important;
+      border-radius: 10px !important;
+      border-width: 2px !important;
+      box-sizing: border-box;
+      white-space: normal;
+      text-align: center;
+    }
+    @media (max-width: 360px) {
+      .ov-feed-block .ov-feed-toolbar .ov-feed-toolbar-btn-main {
+        flex: 1 1 100% !important;
+        min-width: 0;
+      }
     }
     .ov-feed-line {
       display: flex;
@@ -615,6 +654,10 @@
     .ov-feed-status a.btn {
       flex: 0 0 auto !important;
       width: auto !important;
+    }
+    /* 本日献立（.ov-feed-block）内のみ: 旧バンドルやキャッシュで「取消」が残っても非表示。取り消しは ov-feed-fed-cb のチェックのみ */
+    .ov-feed-block .btn-ov-feed-undofed {
+      display: none !important;
     }
     /* ごはん: 1行目＝枠＋献立、2行目＝ステータス・ボタン（横長ボタン防止） */
     .item-card-body .ov-feed-line {
@@ -937,7 +980,8 @@
       overflow-wrap: anywhere;
       line-height: 1.35;
     }
-    .ov-med-log-cb {
+    .ov-med-log-cb,
+    .ov-feed-fed-cb {
       flex-shrink: 0;
       width: 20px; height: 20px;
       margin: 0;
@@ -1042,6 +1086,121 @@
       margin-top: 16px;
     }
     .modal-actions .btn { flex: 1; }
+
+    /* 献立追加モーダル：フード検索＋候補 */
+    #ovAddPlanModal .ov-ap-food-list {
+      max-height: 200px;
+      overflow-y: auto;
+      margin-top: 8px;
+      border-radius: 8px;
+      border: 1px solid rgba(255,255,255,0.12);
+      background: var(--surface);
+      -webkit-overflow-scrolling: touch;
+    }
+    #ovAddPlanModal .ov-ap-food-row {
+      display: block;
+      width: 100%;
+      box-sizing: border-box;
+      margin: 0;
+      padding: 10px 12px;
+      border: none;
+      border-bottom: 1px solid rgba(255,255,255,0.06);
+      background: transparent;
+      color: inherit;
+      font-size: 13px;
+      line-height: 1.35;
+      text-align: left;
+      cursor: pointer;
+    }
+    #ovAddPlanModal .ov-ap-food-row:last-child { border-bottom: none; }
+    #ovAddPlanModal .ov-ap-food-row:active { background: rgba(255,255,255,0.08); }
+
+    /* 🥄残しモーダル（猫一覧）：コンパクト・昨日/昨夜のみ */
+    #ovLeftoverModal .ov-lo-modal-box {
+      max-width: 360px;
+      padding: 12px 12px 10px;
+    }
+    #ovLeftoverModal .modal-title {
+      font-size: 15px;
+      margin-bottom: 6px;
+    }
+    #ovLeftoverModal #ovLoHint {
+      font-size: 10px;
+      line-height: 1.35;
+      margin: 0 0 6px;
+    }
+    #ovLeftoverModal #ovLoBody {
+      max-height: 52vh;
+      overflow-y: auto;
+      font-size: 11px;
+      -webkit-overflow-scrolling: touch;
+    }
+    /* 残し行：.btn は全局 width:100% のため auto ＋ 入力とボタン群を2ブロックに分割 */
+    #ovLeftoverModal #ovLoBody .ov-lo-row {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      gap: 6px 8px;
+      margin-top: 2px;
+    }
+    #ovLeftoverModal #ovLoBody .ov-lo-row-fill {
+      display: flex;
+      align-items: center;
+      gap: 4px;
+      flex: 1 1 120px;
+      min-width: 0;
+    }
+    #ovLeftoverModal #ovLoBody .ov-lo-lbl {
+      font-size: 10px;
+      flex-shrink: 0;
+    }
+    #ovLeftoverModal #ovLoBody .ov-lo-actions {
+      display: inline-flex;
+      flex-wrap: nowrap;
+      align-items: center;
+      gap: 4px;
+      flex: 0 0 auto;
+      margin-left: auto;
+    }
+    #ovLeftoverModal #ovLoBody .ov-lo-act {
+      width: auto !important;
+      max-width: none !important;
+      display: inline-flex !important;
+      box-sizing: border-box;
+      font-size: 9px !important;
+      font-weight: 600;
+      padding: 2px 8px !important;
+      line-height: 1.25 !important;
+      border-radius: 4px !important;
+      min-height: 0 !important;
+      flex: 0 0 auto;
+      border-width: 1px !important;
+    }
+    #ovLeftoverModal #ovLoBody .ov-lo-ginp {
+      width: 52px !important;
+      max-width: 52px;
+      flex: 0 0 auto;
+      font-size: 11px;
+      padding: 2px 4px !important;
+      border-radius: 4px;
+    }
+    #ovLeftoverModal #ovLoBody .btn-ov-feed-undofed {
+      width: auto !important;
+      display: inline-flex !important;
+      font-size: 9px !important;
+      padding: 2px 8px !important;
+      line-height: 1.25 !important;
+      border-radius: 4px !important;
+      min-height: 0 !important;
+      border-width: 1px !important;
+    }
+    #ovLeftoverModal .modal-actions {
+      margin-top: 10px;
+    }
+    #ovLeftoverModal .modal-actions .btn {
+      font-size: 12px;
+      padding: 8px 10px;
+    }
     .form-group { margin-bottom: 12px; }
     .form-label { font-size: 12px; color: var(--text-dim); margin-bottom: 4px; display: block; }
     .form-input, .form-select {
@@ -1199,10 +1358,10 @@
         </select>
       </div>
       <div class="form-group">
-        <label class="form-label">フード</label>
-        <select id="ovApFoodId" class="form-select" style="width:100%;">
-          <option value="">-- 選択 --</option>
-        </select>
+        <label class="form-label" for="ovApFoodSearch">フード</label>
+        <input type="hidden" id="ovApFoodId" value="">
+        <input type="text" id="ovApFoodSearch" class="form-input" placeholder="名前・ブランドで検索して候補をタップ" autocomplete="off" autocapitalize="off" spellcheck="false">
+        <div id="ovApFoodList" class="ov-ap-food-list" role="listbox" aria-label="フード候補"></div>
       </div>
       <div class="form-group">
         <label class="form-label">量 (g)</label>
@@ -1335,7 +1494,7 @@
   <script src="js/login-gate.js?v=214"></script>
   <script src="js/nyagi-jst.js?v=1"></script>
   <script src="js/app.js?v=225"></script>
-  <script src="js/cats-overview.js?v=311"></script>
+  <script src="js/cats-overview.js?v=321"></script>
   <script src="js/voice-console.js?v=216"></script>
 </body>
 </html>

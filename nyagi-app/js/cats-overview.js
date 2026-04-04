@@ -69,6 +69,16 @@
     return pct;
   }
 
+  /** feeding_logs.id の摂取率を更新（一覧インライン・完食／残し反映用） */
+  function ovPutFedLogEatenPct(logId, eatenPct) {
+    return fetch(feedingApiBase() + '/logs/' + encodeURIComponent(logId), {
+      method: 'PUT',
+      headers: apiHeaders(),
+      cache: 'no-store',
+      body: JSON.stringify({ eaten_pct: eatenPct }),
+    }).then(function (r) { return r.json(); });
+  }
+
   /** JST の HH:mm */
   function nowJstHm() {
     return new Date().toLocaleTimeString('en-GB', {
@@ -202,6 +212,8 @@
   var _ovFoodsCache = null;
   var _ovFoodsSpecies = null;
   var _ovEditingPlanId = null;
+  var _ovApFoodPickerBound = false;
+  var _ovApFoodsForPicker = [];
 
   function feedingApiBase() {
     return apiOpsBase() + '/feeding';
@@ -258,6 +270,128 @@
     });
   }
 
+  function ovFoodPickerLabel(f) {
+    if (!f) return '';
+    return (f.brand ? f.brand + ' ' : '') + (f.name || f.id);
+  }
+
+  function ovFoodPickerHaystack(f) {
+    var parts = [f.name, f.brand, f.id];
+    if (f.product_code != null && String(f.product_code) !== '') parts.push(String(f.product_code));
+    return parts.join(' ').toLowerCase();
+  }
+
+  function ovApplyAddPlanFoodPick(foodId, label) {
+    var hid = document.getElementById('ovApFoodId');
+    var inp = document.getElementById('ovApFoodSearch');
+    if (hid) hid.value = foodId != null ? String(foodId) : '';
+    if (inp) {
+      inp.value = label != null ? String(label) : '';
+      if (label) inp.setAttribute('data-ov-selected-label', String(label));
+      else inp.removeAttribute('data-ov-selected-label');
+    }
+    var list = document.getElementById('ovApFoodList');
+    if (list) list.innerHTML = '';
+  }
+
+  function ovRenderAddPlanFoodList(query) {
+    var list = document.getElementById('ovApFoodList');
+    if (!list) return;
+    var q = String(query || '').trim().toLowerCase();
+    list.innerHTML = '';
+    if (!q) {
+      var hint = document.createElement('div');
+      hint.className = 'dim';
+      hint.style.cssText = 'padding:10px 12px;font-size:12px;line-height:1.4;';
+      hint.textContent = 'フード名・ブランドなどで入力すると候補が表示されます。';
+      list.appendChild(hint);
+      return;
+    }
+    var foods = _ovApFoodsForPicker;
+    var matched = [];
+    for (var i = 0; i < foods.length; i++) {
+      if (ovFoodPickerHaystack(foods[i]).indexOf(q) >= 0) matched.push(foods[i]);
+      if (matched.length >= 80) break;
+    }
+    if (!matched.length) {
+      var empty = document.createElement('div');
+      empty.className = 'dim';
+      empty.style.cssText = 'padding:10px 12px;font-size:12px;';
+      empty.textContent = '該当するフードがありません。';
+      list.appendChild(empty);
+      return;
+    }
+    for (var j = 0; j < matched.length; j++) {
+      var f = matched[j];
+      var fid = String(f.id);
+      var lbl = ovFoodPickerLabel(f);
+      var btn = document.createElement('button');
+      btn.type = 'button';
+      btn.className = 'ov-ap-food-row';
+      btn.setAttribute('data-food-id', fid);
+      btn.textContent = lbl;
+      btn.addEventListener('click', function (ev) {
+        var el = ev.currentTarget;
+        ovApplyAddPlanFoodPick(el.getAttribute('data-food-id'), el.textContent);
+      });
+      list.appendChild(btn);
+    }
+  }
+
+  function ovBindAddPlanFoodPicker() {
+    if (_ovApFoodPickerBound) return;
+    var inp = document.getElementById('ovApFoodSearch');
+    if (!inp) return;
+    _ovApFoodPickerBound = true;
+    inp.addEventListener('input', function () {
+      var hid = document.getElementById('ovApFoodId');
+      var selL = inp.getAttribute('data-ov-selected-label') || '';
+      if (hid && selL && String(inp.value) !== selL) hid.value = '';
+      ovRenderAddPlanFoodList(inp.value);
+    });
+    inp.addEventListener('focus', function () {
+      ovRenderAddPlanFoodList(inp.value);
+    });
+  }
+
+  /** 献立追加・プリセット項目編集モーダル用。presetFoodId があれば選択状態を復元 */
+  function ovFillAddPlanFoodPicker(presetFoodId) {
+    ovBindAddPlanFoodPicker();
+    ovEnsureFoods(function (foods) {
+      _ovApFoodsForPicker = foods || [];
+      var hid = document.getElementById('ovApFoodId');
+      var inp = document.getElementById('ovApFoodSearch');
+      var list = document.getElementById('ovApFoodList');
+      if (hid) hid.value = '';
+      if (inp) {
+        inp.value = '';
+        inp.removeAttribute('data-ov-selected-label');
+      }
+      if (list) list.innerHTML = '';
+      if (presetFoodId != null && String(presetFoodId) !== '') {
+        var fid = String(presetFoodId);
+        var found = null;
+        for (var i = 0; i < foods.length; i++) {
+          if (String(foods[i].id) === fid) {
+            found = foods[i];
+            break;
+          }
+        }
+        if (found) {
+          ovApplyAddPlanFoodPick(found.id, ovFoodPickerLabel(found));
+        } else {
+          if (hid) hid.value = fid;
+          if (inp) {
+            var fallback = '（ID: ' + fid + '）';
+            inp.value = fallback;
+            inp.setAttribute('data-ov-selected-label', fallback);
+          }
+        }
+      }
+      ovRenderAddPlanFoodList(inp ? inp.value : '');
+    });
+  }
+
   function ovOpenAddPlanModal(catId, defaultSlot, editPlanId) {
     var c = ovFindCat(catId);
     if (!c) return;
@@ -289,9 +423,7 @@
       if (document.getElementById('ovApAmount')) document.getElementById('ovApAmount').value = editP.amount_g != null ? String(editP.amount_g) : '';
       if (document.getElementById('ovApNotes')) document.getElementById('ovApNotes').value = editP.notes || '';
     }
-    ovFillFoodSelect('ovApFoodId', function (sel) {
-      if (editP && editP.food_id && sel) sel.value = String(editP.food_id);
-    });
+    ovFillAddPlanFoodPicker(editP && editP.food_id ? editP.food_id : null);
     var m = document.getElementById('ovAddPlanModal');
     if (m) m.classList.add('open');
   }
@@ -509,7 +641,7 @@
       }).catch(function () { alert('保存に失敗しました'); });
   }
 
-  /** カンマ区切りの feeding_logs.id を順に削除。1件のみは確認なし（✅タップ取り消し用）、複数は確認 */
+  /** カンマ区切りの feeding_logs.id を順に削除。1件のみは確認なし（チェック外し取り消し用）、複数は確認 */
   function ovUndoFedLogs(idCsv) {
     var ids = String(idCsv || '').split(',').map(function (x) { return parseInt(x.trim(), 10); }).filter(function (n) { return !isNaN(n); });
     if (ids.length === 0) return;
@@ -656,44 +788,49 @@
 
     var isLoMuted = !!(log && ovFeedPctNonZero(log.eaten_pct));
     var loCol = isLoMuted ? '#6b7280' : '#4ade80';
-    var html = '<div style="background:rgba(0,0,0,.04);border-radius:8px;padding:8px 10px;margin-bottom:6px;' + (isLoMuted ? 'color:#6b7280;' : '') + '">';
-    html += '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px;">';
-    html += '<span style="font-weight:600;font-size:13px;">' + esc(foodName) + '</span>';
-    if (offG) html += '<span class="dim" style="font-size:11px;' + (isLoMuted ? 'color:#6b7280;' : '') + '">提供 ' + esc(String(offG)) + 'g</span>';
+    var html = '<div style="background:rgba(0,0,0,.04);border-radius:6px;padding:5px 7px;margin-bottom:4px;' + (isLoMuted ? 'color:#6b7280;' : '') + '">';
+    html += '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:2px;gap:6px;">';
+    html += '<span style="font-weight:600;font-size:12px;line-height:1.25;">' + esc(foodName) + '</span>';
+    if (offG) html += '<span class="dim" style="font-size:10px;' + (isLoMuted ? 'color:#6b7280;' : '') + '">提供 ' + esc(String(offG)) + 'g</span>';
     html += '</div>';
 
     if (log && log.eaten_pct !== null && log.eaten_pct !== undefined && log.eaten_pct < 100) {
       var leftG = Math.round(offG * (100 - log.eaten_pct) / 100 * 10) / 10;
       var ateG = Math.round(offG * log.eaten_pct / 100 * 10) / 10;
-      html += '<div style="font-size:11px;color:' + loCol + ';margin-bottom:4px;">✅ ' + log.eaten_pct + '% 食べた（' + ateG + 'g） / 残り ' + leftG + 'g</div>';
+      html += '<div style="font-size:10px;color:' + loCol + ';margin-bottom:2px;line-height:1.3;">✅ ' + log.eaten_pct + '% 食べた（' + ateG + 'g） / 残り ' + leftG + 'g</div>';
     } else if (log && log.eaten_pct === 100) {
-      html += '<div style="font-size:11px;color:' + loCol + ';margin-bottom:4px;">✅ 完食</div>';
+      html += '<div style="font-size:10px;color:' + loCol + ';margin-bottom:2px;line-height:1.3;">✅ 完食</div>';
     } else if (log && (log.eaten_pct === null || log.eaten_pct === undefined)) {
-      html += '<div style="font-size:11px;color:#fbbf24;margin-bottom:4px;">摂取 0%（未確認）</div>';
+      html += '<div style="font-size:10px;color:#fbbf24;margin-bottom:2px;line-height:1.3;">摂取 0%（未確認）</div>';
     }
 
-    html += '<div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;margin-top:4px;">';
-    html += '<label class="dim" style="font-size:11px;' + (isLoMuted ? 'color:#6b7280;' : '') + '">残り</label>';
-    html += '<input type="number" id="' + escAttr(inputId) + '" class="form-input" style="width:64px;font-size:12px;padding:2px 4px;' + (isLoMuted ? 'color:var(--text-main);' : '') + '" min="0" step="0.1" placeholder="g"';
+    html += '<div class="ov-lo-row">';
+    html += '<div class="ov-lo-row-fill">';
+    html += '<label class="dim ov-lo-lbl" style="' + (isLoMuted ? 'color:#6b7280;' : '') + '">残り</label>';
+    html += '<input type="number" id="' + escAttr(inputId) + '" class="form-input ov-lo-ginp" style="' + (isLoMuted ? 'color:var(--text-main);' : '') + '" min="0" step="0.1" placeholder="g"';
     if (offG) html += ' max="' + escAttr(String(offG)) + '"';
     html += ' value="' + escAttr(prefillLeft) + '">';
-
+    html += '</div>';
     if (logId) {
-      html += '<button type="button" class="btn btn-outline ov-lo-save-log" style="font-size:10px;padding:2px 8px;" data-log-id="' + escAttr(logId) + '" data-offered-g="' + escAttr(String(offG)) + '" data-input-id="' + escAttr(inputId) + '">保存</button>';
-      html += '<button type="button" class="btn btn-outline ov-lo-complete-log" style="font-size:10px;padding:2px 8px;" data-log-id="' + escAttr(logId) + '">完食</button>';
+      html += '<div class="ov-lo-actions">';
+      html += '<button type="button" class="btn btn-outline ov-lo-act ov-lo-save-log" data-log-id="' + escAttr(logId) + '" data-offered-g="' + escAttr(String(offG)) + '" data-input-id="' + escAttr(inputId) + '">保存</button>';
+      html += '<button type="button" class="btn btn-outline ov-lo-act ov-lo-complete-log" data-log-id="' + escAttr(logId) + '">完食</button>';
+      html += '</div>';
     } else if (planId) {
-      html += '<button type="button" class="btn btn-outline ov-lo-save-plan" style="font-size:10px;padding:2px 8px;" data-plan-id="' + escAttr(planId) + '" data-offered-g="' + escAttr(String(offG)) + '" data-log-date="' + escAttr(logDateStr) + '" data-input-id="' + escAttr(inputId) + '">保存</button>';
-      html += '<button type="button" class="btn btn-outline ov-lo-complete-plan" style="font-size:10px;padding:2px 8px;" data-plan-id="' + escAttr(planId) + '" data-log-date="' + escAttr(logDateStr) + '">完食</button>';
+      html += '<div class="ov-lo-actions">';
+      html += '<button type="button" class="btn btn-outline ov-lo-act ov-lo-save-plan" data-plan-id="' + escAttr(planId) + '" data-offered-g="' + escAttr(String(offG)) + '" data-log-date="' + escAttr(logDateStr) + '" data-input-id="' + escAttr(inputId) + '">保存</button>';
+      html += '<button type="button" class="btn btn-outline ov-lo-act ov-lo-complete-plan" data-plan-id="' + escAttr(planId) + '" data-log-date="' + escAttr(logDateStr) + '">完食</button>';
+      html += '</div>';
     }
     html += '</div></div>';
     return html;
   }
 
   function ovRenderLeftoverSection(label, items, logDateStr, secKey) {
-    var html = '<div style="margin-bottom:14px;">';
-    html += '<div style="font-weight:700;font-size:13px;margin-bottom:6px;border-bottom:1px solid rgba(0,0,0,.08);padding-bottom:4px;">' + esc(label) + '</div>';
+    var html = '<div style="margin-bottom:8px;">';
+    html += '<div style="font-weight:700;font-size:11px;margin-bottom:4px;border-bottom:1px solid rgba(255,255,255,0.08);padding-bottom:3px;">' + esc(label) + '</div>';
     if (items.length === 0) {
-      html += '<div class="dim" style="font-size:12px;padding:4px 0;">献立・ログともにありません</div>';
+      html += '<div class="dim" style="font-size:10px;padding:2px 0;line-height:1.35;">献立・ログともにありません</div>';
     } else {
       for (var ri = 0; ri < items.length; ri++) {
         html += ovRenderLeftoverItemRow(items[ri], logDateStr, secKey, ri);
@@ -706,8 +843,8 @@
   /** 昨日（JST）の feeding_logs 一覧＋取消（猫一覧には出さず 🥄残し モーダル内のみ） */
   function ovRenderYesterdayFedUndoFromLogs(yLogsAll) {
     if (!yLogsAll || yLogsAll.length === 0) return '';
-    var h = '<div class="ov-yesterday-fed-in-modal" style="margin-bottom:14px;padding:8px 10px;background:rgba(251,191,36,0.08);border-radius:8px;border-left:3px solid rgba(251,191,36,0.45);">';
-    h += '<div style="font-weight:700;font-size:13px;margin-bottom:6px;color:var(--text-main);">📅 昨日のあげた記録 <span class="dim" style="font-weight:500;font-size:11px;">（誤りは取消）</span></div>';
+    var h = '<div class="ov-yesterday-fed-in-modal" style="margin-bottom:8px;padding:6px 8px;background:rgba(251,191,36,0.08);border-radius:8px;border-left:3px solid rgba(251,191,36,0.45);">';
+    h += '<div style="font-weight:700;font-size:11px;margin-bottom:4px;color:var(--text-main);line-height:1.3;">📅 昨日のあげた <span class="dim" style="font-weight:500;font-size:10px;">（取消）</span></div>';
     for (var yi = 0; yi < yLogsAll.length; yi++) {
       var lg = yLogsAll[yi];
       var lid = lg.id != null ? String(lg.id) : (lg.log_id != null ? String(lg.log_id) : '');
@@ -716,7 +853,7 @@
       var pct = lg.eaten_pct != null && lg.eaten_pct !== '' ? String(lg.eaten_pct) + '%' : '';
       var offG = lg.offered_g != null && lg.offered_g !== '' ? String(lg.offered_g) + 'g' : '';
       var st = lg.served_time ? ovFmtFedServedTime(lg.served_time) : '';
-      h += '<div class="ov-feed-line" style="margin-bottom:4px;">';
+      h += '<div class="ov-feed-line" style="margin-bottom:2px;font-size:11px;">';
       h += '<span class="ov-feed-slot">' + feedingMealSlotLabelJp(lg.meal_slot) + '</span>';
       h += '<span class="ov-feed-menu">' + esc(fn) + (offG ? ' <strong>' + esc(offG) + '</strong>' : '') + '</span>';
       h += '<span class="ov-feed-status">';
@@ -738,43 +875,30 @@
     var body = document.getElementById('ovLoBody');
     if (!body) return;
     if (!c) {
-      body.innerHTML = '<p style="text-align:center;color:#c44;padding:16px;">猫データがありません</p>';
+      body.innerHTML = '<p style="text-align:center;color:#c44;padding:10px;font-size:11px;">猫データがありません</p>';
       return;
     }
 
-    var todayStr = todayJstYmd();
     var yesterdayStr = yesterdayJstYmd();
     var base = feedingApiBase() + '/logs?cat_id=' + encodeURIComponent(catId);
     var allPlans = c.feeding_plan || [];
 
-    Promise.all([
-      fetch(base + '&date=' + yesterdayStr, { headers: apiHeaders(), cache: 'no-store' }).then(function (r) { return r.json(); }),
-      fetch(base + '&date=' + todayStr, { headers: apiHeaders(), cache: 'no-store' }).then(function (r) { return r.json(); })
-    ]).then(function (results) {
-      var yLogsAll = results[0].logs || [];
-      var tLogsAll = results[1].logs || [];
+    fetch(base + '&date=' + yesterdayStr, { headers: apiHeaders(), cache: 'no-store' })
+      .then(function (r) { return r.json(); })
+      .then(function (yRes) {
+      var yLogsAll = yRes.logs || [];
 
       var prevNightPlans = ovFilterPlansBySlot(allPlans, ovIsEveningMealSlot);
       var prevNightLogs = ovFilterLogsBySlot(yLogsAll, ovIsEveningMealSlot);
       var itemsPrev = ovBuildLeftoverItems(prevNightPlans, prevNightLogs);
 
-      var dayPlans = ovFilterPlansBySlot(allPlans, ovIsDaytimeMealSlot);
-      var dayLogs = ovFilterLogsBySlot(tLogsAll, ovIsDaytimeMealSlot);
-      var itemsDay = ovBuildLeftoverItems(dayPlans, dayLogs);
-
-      var evePlans = ovFilterPlansBySlot(allPlans, ovIsEveningMealSlot);
-      var eveLogs = ovFilterLogsBySlot(tLogsAll, ovIsEveningMealSlot);
-      var itemsEve = ovBuildLeftoverItems(evePlans, eveLogs);
-
       var html = '';
-      html += '<p class="dim" style="font-size:11px;line-height:1.45;margin:0 0 10px;padding:0 4px;">業務終了で献立が変わっても、昨日の「あげた」はログに残るため下記で残りgを入力できます。</p>';
+      html += '<p class="dim" style="font-size:10px;line-height:1.35;margin:0 0 6px;padding:0 2px;">昨日の「あげた」の取消と、<strong>昨夜分</strong>の残りg。当日分は一覧の献立から入力してください。</p>';
       html += ovRenderYesterdayFedUndoFromLogs(yLogsAll);
-      html += ovRenderLeftoverSection('🌙 前日夜（昨夜の夜ごはんと同じ）', itemsPrev, yesterdayStr, 'prev');
-      html += ovRenderLeftoverSection('☀️ 当日朝・昼', itemsDay, todayStr, 'day');
-      html += ovRenderLeftoverSection('🌙 当日夜', itemsEve, todayStr, 'eve');
+      html += ovRenderLeftoverSection('🌙 昨夜の夜ごはん', itemsPrev, yesterdayStr, 'prev');
       body.innerHTML = html;
     }).catch(function () {
-      body.innerHTML = '<p style="text-align:center;color:#c44;padding:16px;">読込失敗</p>';
+      body.innerHTML = '<p style="text-align:center;color:#c44;padding:10px;font-size:11px;">読込失敗</p>';
     });
   }
 
@@ -785,7 +909,7 @@
     var t = document.getElementById('ovLoTitle');
     if (t) t.textContent = '🥄 残し記録 — ' + catName;
     var body = document.getElementById('ovLoBody');
-    if (body) body.innerHTML = '<p style="text-align:center;color:#aaa;padding:16px;">読込中…</p>';
+    if (body) body.innerHTML = '<p style="text-align:center;color:#aaa;padding:10px;font-size:11px;">読込中…</p>';
     var m = document.getElementById('ovLeftoverModal');
     if (m) m.classList.add('open');
     ovFillLeftoverModalBody(catId);
@@ -914,6 +1038,7 @@
     if (c1 && !c1._ovBound) { c1._ovBound = true; c1.addEventListener('click', ovCloseAddPlanModal); }
     var s1 = document.getElementById('ovSubmitAddPlanBtn');
     if (s1 && !s1._ovBound) { s1._ovBound = true; s1.addEventListener('click', ovSubmitAddPlan); }
+    ovBindAddPlanFoodPicker();
     var c2 = document.getElementById('ovCloseFlBtn');
     if (c2 && !c2._ovBound) { c2._ovBound = true; c2.addEventListener('click', ovCloseFlModal); }
     var s2 = document.getElementById('ovSubmitFlBtn');
@@ -1395,9 +1520,7 @@
     if (slotSel) slotSel.value = it.meal_slot || 'morning';
     if (document.getElementById('ovApAmount')) document.getElementById('ovApAmount').value = it.amount_g != null ? String(it.amount_g) : '';
     if (document.getElementById('ovApNotes')) document.getElementById('ovApNotes').value = it.notes || '';
-    ovFillFoodSelect('ovApFoodId', function (sel) {
-      if (it.food_id && sel) sel.value = String(it.food_id);
-    });
+    ovFillAddPlanFoodPicker(it.food_id || null);
     var presetM = document.getElementById('ovPresetApplyModal');
     if (presetM) presetM.classList.remove('open');
     var m = document.getElementById('ovAddPlanModal');
@@ -1969,12 +2092,38 @@
         if (elid) ovOpenEditLogModal(elid, elfn, elog, elep != null ? elep : '', elst);
         return;
       }
-      var ftap = ev.target.closest && ev.target.closest('.btn-ov-feed-tapundo');
-      if (ftap) {
+      var finc = ev.target.closest && ev.target.closest('.btn-ov-feed-intake-complete');
+      if (finc) {
         ev.preventDefault();
         ev.stopPropagation();
-        var idsTap = ftap.getAttribute('data-log-ids');
-        if (idsTap) ovUndoFedLogs(idsTap);
+        var lidC = finc.getAttribute('data-log-id');
+        if (!lidC) return;
+        ovPutFedLogEatenPct(lidC, 100)
+          .then(function (data) {
+            if (data && data.error) { alert('エラー: ' + (data.message || data.error)); return; }
+            fetchCatsDataSilent();
+          })
+          .catch(function () { alert('保存に失敗しました'); });
+        return;
+      }
+      var filr = ev.target.closest && ev.target.closest('.btn-ov-feed-intake-leftover');
+      if (filr) {
+        ev.preventDefault();
+        ev.stopPropagation();
+        var lidL = filr.getAttribute('data-log-id');
+        var inpIdL = filr.getAttribute('data-input-id');
+        var offGL = parseFloat(filr.getAttribute('data-offered-g'));
+        var inpL = inpIdL ? document.getElementById(inpIdL) : null;
+        if (!lidL || !inpL) return;
+        var pctL = ovEatenPctFromOfferedLeftover(offGL, inpL.value);
+        if (pctL === null) { alert('残り量（g）を入力してください'); return; }
+        if (pctL === -1) { alert('残した量が提供量を超えています'); return; }
+        ovPutFedLogEatenPct(lidL, pctL)
+          .then(function (data) {
+            if (data && data.error) { alert('エラー: ' + (data.message || data.error)); return; }
+            fetchCatsDataSilent();
+          })
+          .catch(function () { alert('保存に失敗しました'); });
         return;
       }
       var fund = ev.target.closest && ev.target.closest('.btn-ov-feed-undofed');
@@ -1992,15 +2141,6 @@
         var pd = fdel.getAttribute('data-plan-id');
         var cn = fdel.getAttribute('data-cat-name') || '';
         if (pd) ovDeletePlan(pd, cn);
-        return;
-      }
-      var fed = ev.target.closest && ev.target.closest('.btn-ov-feed-editplan');
-      if (fed) {
-        ev.preventDefault();
-        ev.stopPropagation();
-        var cide = fed.getAttribute('data-cat-id');
-        var pide = fed.getAttribute('data-plan-id');
-        if (cide && pide) ovOpenAddPlanModal(cide, null, pide);
         return;
       }
       var flft = ev.target.closest && ev.target.closest('.btn-ov-feed-leftover');
@@ -2175,7 +2315,30 @@
         if (_vomitRecentCache) ovRenderVomitRecent(_vomitRecentCache, catId || null);
         return;
       }
-      if (cb.type !== 'checkbox' || !cb.classList || !cb.classList.contains('ov-med-log-cb')) return;
+      if (!cb.classList) return;
+      if (cb.type === 'checkbox' && cb.classList.contains('ov-feed-fed-cb')) {
+        if (!cb.checked) {
+          var idsCsv = cb.getAttribute('data-log-ids');
+          if (!idsCsv) {
+            cb.checked = true;
+            return;
+          }
+          var idArr = String(idsCsv).split(',').map(function (x) { return parseInt(String(x).trim(), 10); }).filter(function (n) { return !isNaN(n); });
+          if (idArr.length === 0) {
+            cb.checked = true;
+            return;
+          }
+          if (idArr.length > 1) {
+            if (!confirm('この献立の本日の「あげた」記録が ' + idArr.length + ' 件あります。まとめて取り消しますか？')) {
+              cb.checked = true;
+              return;
+            }
+          }
+          ovUndoFedLogs(idsCsv);
+        }
+        return;
+      }
+      if (cb.type !== 'checkbox' || !cb.classList.contains('ov-med-log-cb')) return;
       if (cb.closest && cb.closest('.pcc-med-block')) return;
       var logId = cb.getAttribute('data-log-id');
       if (!logId) return;
@@ -3172,18 +3335,17 @@
     return esc(raw);
   }
 
-  /** 残量確認済みログに基づく食いつき（overview API の food_preference_summary） */
+  /** 残量確認済みログに基づく食いつき（overview API の food_preference_summary）— 一覧は G/H/D でコンパクト */
   function ovHtmlFoodPreferenceBlock(c) {
     var s = c.food_preference_summary;
     var boxStyle =
-      'margin:0 0 10px;padding:10px 12px;background:rgba(34,197,94,0.08);border-radius:10px;border-left:3px solid rgba(34,197,94,0.45);';
+      'margin:0 0 6px;padding:6px 8px;background:rgba(34,197,94,0.08);border-radius:8px;border-left:3px solid rgba(34,197,94,0.45);';
     if (!s || !s.has_data) {
       return (
         '<div class="nyagi-fp-wrap" style="' +
         boxStyle +
-        '">' +
-        '<div style="font-size:12px;font-weight:700;color:#4ade80;margin-bottom:4px;">🍽 食いつき傾向</div>' +
-        '<div class="dim" style="font-size:11px;line-height:1.4;">摂取率が記録された給餌ログが1件でもあれば表示（最大90日遡り）。</div>' +
+        '" title="摂取率が記録された給餌ログが1件でもあれば表示（最大90日遡り）">' +
+        '<div class="dim" style="font-size:10px;line-height:1.35;">🍽 食いつき：データなし（摂取率記録で表示）</div>' +
         '</div>'
       );
     }
@@ -3204,14 +3366,21 @@
     if (span != null && span > 0 && maxD && span < maxD) {
       subTit = '記録' + span + '暦日/最大' + maxD + '日';
     }
+    var titleFull = '食いつき傾向（' + subTit + '）';
+    var headShort = '🍽 ' + maxD + '日 · 傾向';
     var h = '<div class="nyagi-fp-wrap" style="' + boxStyle + '">';
-    h += '<div style="font-size:12px;font-weight:700;color:#4ade80;margin-bottom:4px;">🍽 食いつき傾向（' + subTit + '）</div>';
     h +=
-      '<div class="dim" style="font-size:10px;margin-bottom:6px;line-height:1.45;">' +
+      '<div style="font-size:11px;font-weight:700;color:#4ade80;margin-bottom:2px;line-height:1.3;" title="' +
+      escAttr(titleFull) +
+      '">' +
+      headShort +
+      '</div>';
+    h +=
+      '<div class="dim" style="font-size:10px;margin-bottom:3px;line-height:1.35;">' +
       esc(s.summary_line || '') +
       '</div>';
     if (metaParts.length) {
-      h += '<div style="font-size:10px;color:var(--text-main);margin-bottom:8px;line-height:1.5;">' + metaParts.join(' · ') + '</div>';
+      h += '<div style="font-size:10px;color:var(--text-main);margin-bottom:4px;line-height:1.35;">' + metaParts.join(' · ') + '</div>';
     }
     var tops = s.top_foods || [];
     for (var i = 0; i < tops.length; i++) {
@@ -3220,36 +3389,30 @@
       var dStr = '';
       if (d != null) {
         if (d > 0) {
-          dStr = '<span style="color:#4ade80;font-weight:700;">+' + d + 'pt</span>';
+          dStr = '<span style="color:#4ade80;font-weight:600;">+' + d + 'pt</span>';
         } else if (d < 0) {
-          dStr = '<span style="color:#f87171;font-weight:700;">' + d + 'pt</span>';
+          dStr = '<span style="color:#f87171;font-weight:600;">' + d + 'pt</span>';
         } else {
           dStr = '<span class="dim">±0</span>';
         }
       }
       var rel =
         tf.reliability === 'low'
-          ? ' <span class="dim" style="font-size:9px;">（参考）</span>'
+          ? '<span class="dim" style="font-size:9px;">（参考）</span>'
           : tf.reliability === 'mid'
-            ? ' <span class="dim" style="font-size:9px;">（2回）</span>'
+            ? '<span class="dim" style="font-size:9px;">（2回）</span>'
             : '';
-      h += '<div style="display:flex;align-items:flex-start;justify-content:space-between;gap:8px;padding:8px 0;border-top:1px solid rgba(255,255,255,0.06);">';
+      h += '<div style="display:flex;flex-wrap:wrap;align-items:baseline;gap:2px 8px;font-size:10px;line-height:1.35;padding:2px 0;margin:0;">';
       h +=
-        '<div style="flex:1;min-width:0;font-size:12px;line-height:1.35;font-weight:600;word-break:break-word;">' +
+        '<span style="font-weight:600;flex:1;min-width:6em;word-break:break-word;">' +
         esc(String(tf.name || '—')) +
         rel +
-        '</div>';
-      h += '<div style="flex-shrink:0;text-align:right;">';
-      h +=
-        '<div style="font-size:16px;font-weight:800;line-height:1.1;">' +
-        (tf.avg_eaten_pct != null ? tf.avg_eaten_pct : '—') +
-        '<span style="font-size:11px;font-weight:600;">%</span></div>';
-      h += '<div style="font-size:10px;margin-top:2px;color:var(--text-dim);">';
-      if (dStr) {
-        h += dStr + ' · ';
-      }
-      h += (tf.times_served || 0) + '回</div>';
-      h += '</div></div>';
+        '</span>';
+      h += '<span style="white-space:nowrap;flex-shrink:0;">';
+      h += '<strong>' + (tf.avg_eaten_pct != null ? tf.avg_eaten_pct : '—') + '%</strong>';
+      if (dStr) h += ' · ' + dStr;
+      h += ' <span class="dim">' + (tf.times_served || 0) + '回</span>';
+      h += '</span></div>';
     }
     h += '</div>';
     return h;
@@ -3336,7 +3499,7 @@
     var fedTm = p.fed_served_time ? ovFmtFedServedTime(p.fed_served_time) : '';
     if (p.fed_today) {
       if (logIdsCsv) {
-        st = '<button type="button" class="btn-ov-feed-tapundo" data-log-ids="' + escAttr(logIdsCsv) + '" title="もう一度タップで取り消し" style="font-size:18px;background:none;border:none;cursor:pointer;padding:0;line-height:1;color:#4ade80;">✅</button>';
+        st = '<input type="checkbox" class="ov-feed-fed-cb" data-log-ids="' + escAttr(logIdsCsv) + '" checked title="あげた／チェックを外すと取り消し">';
       } else {
         st = '<span class="feed-done">✅</span>';
       }
@@ -3348,7 +3511,6 @@
       }
       if (logIdsCsv) {
         st += '<button type="button" class="btn btn-outline btn-ov-feed-editlog" data-log-id="' + escAttr(logIdStr || logIdsCsv.split(',')[0]) + '" data-food-name="' + escAttr(p.food_name || '') + '" data-offered-g="' + escAttr(offeredGLogStr || String(p.amount_g || '')) + '" data-eaten-pct="' + escAttr(p.eaten_pct_today != null && p.eaten_pct_today !== '' ? String(p.eaten_pct_today) : '') + '" data-served-time="' + escAttr(fedTm || '') + '">✏️</button> ';
-        st += '<button type="button" class="btn btn-outline btn-ov-feed-undofed" data-log-ids="' + escAttr(logIdsCsv) + '">取消</button> ';
       }
     } else if (pidStr) {
       st = '<button type="button" class="btn btn-primary btn-ov-feed-markfed" data-plan-id="' + escAttr(pidStr) + '" data-food-name="' + escAttr(p.food_name || '') + '" data-amount-g="' + escAttr(String(p.amount_g || '')) + '">あげた</button> ';
@@ -3356,7 +3518,6 @@
       st = '<span class="feed-pending">⬜</span> ';
     }
     if (pidStr && cidStr) {
-      st += '<button type="button" class="btn btn-outline btn-ov-feed-editplan" style="font-size:11px;padding:4px 8px;" data-cat-id="' + escAttr(cidStr) + '" data-plan-id="' + escAttr(pidStr) + '" title="献立を編集">✏️</button> ';
       st += '<button type="button" class="btn btn-outline btn-ov-feed-delplan" style="font-size:11px;padding:4px 8px;" data-plan-id="' + escAttr(pidStr) + '" data-cat-name="' + escAttr(cnameStr) + '" title="献立から削除">🗑</button> ';
     }
     var linePctClass = '';
@@ -3365,10 +3526,35 @@
       if (!isNaN(epRow2) && epRow2 !== 0) linePctClass = ' ov-feed-line--has-eaten-pct';
     }
     var out = '<div class="ov-feed-line' + linePctClass + '"><span class="ov-feed-slot">' + feedingMealSlotLabelJp(p.meal_slot) + '</span><span class="ov-feed-menu">' + menu + '</span><span class="ov-feed-status">' + st + '</span></div>';
-    if (p.notes && String(p.notes).trim()) {
-      out += '<div class="ov-feed-line-note" style="font-size:10px;color:var(--text-dim);margin:-2px 0 6px 0;padding:4px 8px 4px 28px;background:rgba(255,255,255,0.04);border-radius:4px;line-height:1.35;">📝 ' + esc(String(p.notes).trim()) + '</div>';
+
+    var intakeHtml = '';
+    if (p.fed_today && logIdsCsv) {
+      var idArrLo = String(logIdsCsv).split(',').map(function (x) { return parseInt(String(x).trim(), 10); }).filter(function (n) { return !isNaN(n); });
+      if (idArrLo.length === 1) {
+        var sidLo = String(idArrLo[0]);
+        var offGStrLo = offeredGLogStr || String(p.amount_g || '');
+        var ogNumLo = parseFloat(offGStrLo);
+        var safePid = String(pidStr || 'x').replace(/[^a-zA-Z0-9_-]/g, '_');
+        var loInpId = 'ov-feed-lo-' + sidLo + '-' + safePid;
+        var prefillLo = ovLeftoverGFromOfferedPct(offGStrLo, p.eaten_pct_today);
+        intakeHtml = '<div class="ov-feed-intake-row">';
+        intakeHtml += '<button type="button" class="btn btn-outline btn-ov-feed-intake-complete" style="font-size:10px;padding:3px 8px;" data-log-id="' + escAttr(sidLo) + '" title="あげた後の記録を完食（100%）に更新">完食</button>';
+        if (!isNaN(ogNumLo) && ogNumLo > 0) {
+          intakeHtml += '<span class="dim" style="font-size:10px;">残り</span>';
+          intakeHtml += '<input type="number" id="' + loInpId + '" class="form-input ov-feed-leftover-g-inp" min="0" step="0.1" placeholder="g" style="width:52px;font-size:11px;padding:2px 4px;" max="' + escAttr(String(ogNumLo)) + '" value="' + escAttr(prefillLo) + '">';
+          intakeHtml += '<button type="button" class="btn btn-outline btn-ov-feed-intake-leftover" style="font-size:10px;padding:3px 8px;" data-log-id="' + escAttr(sidLo) + '" data-offered-g="' + escAttr(String(ogNumLo)) + '" data-input-id="' + escAttr(loInpId) + '">残し反映</button>';
+        } else {
+          intakeHtml += '<span class="dim" style="font-size:10px;margin-left:4px;">提供量未設定のため残りgは✏️</span>';
+        }
+        intakeHtml += '</div>';
+      }
     }
-    return out;
+
+    var noteBlock = '';
+    if (p.notes && String(p.notes).trim()) {
+      noteBlock = '<div class="ov-feed-line-note" style="font-size:10px;color:var(--text-dim);margin:-2px 0 6px 0;padding:4px 8px 4px 28px;background:rgba(255,255,255,0.04);border-radius:4px;line-height:1.35;">📝 ' + esc(String(p.notes).trim()) + '</div>';
+    }
+    return '<div class="ov-feed-plan-block">' + out + intakeHtml + noteBlock + '</div>';
   }
 
   function ovHtmlFeedPlanLinesFromArr(arr, c) {
@@ -3386,21 +3572,20 @@
     var html = '<div class="item-card">';
     html += '<div class="item-card-title">🍚 ごはん <small class="dim">あげた・残し</small></div>';
     html += '<div class="item-card-body">';
-    html += '<div class="ov-feed-hint" style="font-size:11px;color:var(--text-dim);margin-bottom:6px;line-height:1.4;">ここは<strong>本日の献立</strong>のみ（各行の✏️・🗑で編集・削除、＋献立で追加）。プリセットの定義・紐づけ・一括適用は猫の<strong>詳細</strong>から。<strong>業務終了の一括処理</strong>では、プリセットで有効な品だけが入れ替わり、それ以外の当日行は消えることがあります。<strong>本日分は ✅ をタップ</strong>で取り消せます。昨日の取消は「🥄残し」から。</div>';
+    html += '<div class="ov-feed-hint" style="font-size:11px;color:var(--text-dim);margin-bottom:8px;line-height:1.4;">上の<strong>大きい2ボタン</strong>で<strong>献立の追加</strong>と<strong>昨夜の残し記録</strong>。ここは<strong>本日の献立</strong>のみ。まず<strong>あげた</strong>のあと、<strong>完食</strong>・<strong>残りg＋残し反映</strong>で摂取を記録（✏️はログ編集）。🗑は献立削除。プリセットの編集は猫の<strong>詳細ページ</strong>を別途開いてください。<strong>業務終了の一括処理</strong>では献立が入れ替わることがあります。<strong>「あげた」の取り消しは左のチェック</strong>。複数ログは✏️で調整。</div>';
     var feedCats = orderCatsForFeedingCard();
     for (var i = 0; i < feedCats.length; i++) {
       var c = feedCats[i];
       var plan = c.feeding_plan || [];
       var inner = '';
       var toolbar = '<div class="ov-feed-toolbar">' +
-        '<button type="button" class="btn btn-outline btn-ov-feed-addplan" data-cat-id="' + escAttr(String(c.id)) + '">＋献立</button>' +
-        '<button type="button" class="btn btn-outline btn-ov-feed-leftover" data-cat-id="' + escAttr(String(c.id)) + '">🥄残し</button>' +
-        '<a href="' + catLink(c.id, 'feedingArea') + '" class="btn btn-outline" style="text-decoration:none;">詳細</a>' +
+        '<button type="button" class="btn btn-outline btn-ov-feed-addplan ov-feed-toolbar-btn-main" data-cat-id="' + escAttr(String(c.id)) + '" title="この猫に本日の献立の行を追加します">＋ 献立を追加</button>' +
+        '<button type="button" class="btn btn-outline btn-ov-feed-leftover ov-feed-toolbar-btn-main" data-cat-id="' + escAttr(String(c.id)) + '" title="昨日・昨夜分の残り量・あげた取消はここから">🥄 残し記録</button>' +
         '</div>';
       var prefBlock = ovHtmlFoodPreferenceBlock(c);
       var memoBlock = ovHtmlFeedingSyncedMemos(c);
       if (plan.length === 0) {
-        inner = prefBlock + memoBlock + '<span class="dim">献立なし（「＋献立」または詳細で追加）</span>';
+        inner = prefBlock + memoBlock + '<span class="dim">献立なし（上の「献立を追加」から登録）</span>';
       } else {
         inner = prefBlock + memoBlock;
         var amP = [];

@@ -249,6 +249,7 @@
 
     html += renderFeedingIncompleteSection(m.feeding_incomplete);
     html += renderMedIncompleteSection(m.medication_incomplete);
+    html += renderCareDailySummarySection(m.care_daily_summary);
 
     // 5. 📋 未完了アクション
     var overdueActions = m.overdue_actions || [];
@@ -659,7 +660,7 @@
 
   /** 未保存時に「開いたまま」にするセクション（それ以外はデフォルトで折りたたみ） */
   function dashFoldDefaultExpanded(key) {
-    return key === 'healthScore' || key === 'vetSchedule';
+    return key === 'healthScore' || key === 'vetSchedule' || key === 'careDaily';
   }
 
   function loadDashFolds() {
@@ -681,6 +682,65 @@
 
   function saveDashFolds(map) {
     try { localStorage.setItem(DASH_FOLD_KEY, JSON.stringify(map)); } catch (_) {}
+  }
+
+  /** 今日のケア進捗カード（朝API care_daily_summary） */
+  function renderCareDailySummarySection(careRows) {
+    if (!careRows || careRows.length === 0) return '';
+    var html =
+      '<div class="section-title dash-fold-title" data-fold="careDaily" data-default-expanded="1">🪮 今日のケア進捗' +
+      ' <small class="dim" style="font-weight:500;font-size:11px;">（5項目・未完了が多い順）</small></div>';
+    html += '<div class="dash-fold-body" data-fold-target="careDaily">';
+    html += '<div class="card">';
+    html +=
+      '<p class="dim" style="font-size:11px;line-height:1.45;margin:0 0 10px;">ブラシ・アゴ・耳・お尻・目ヤニ拭き（一覧の「5項目まとめて記録」と同じ。爪切り・肉球は含みません）。当日に「実施」の記録がある項目を数えます。</p>';
+    html +=
+      '<a href="cats.html" style="display:inline-block;font-size:12px;color:var(--primary);margin-bottom:10px;text-decoration:none;">猫一覧（ケア入力）→</a>';
+    for (var i = 0; i < careRows.length; i++) {
+      var cr = careRows[i];
+      var cid = cr.cat_id || '';
+      var done = cr.items_done != null ? cr.items_done : 0;
+      var tot = cr.items_total != null ? cr.items_total : 5;
+      var pct = cr.items_pct != null ? cr.items_pct : 0;
+      var miss = cr.missing_labels || [];
+      var missStr = miss.length ? miss.join('・') : '';
+      var col = pct >= 80 ? '#4ade80' : pct >= 50 ? '#facc15' : '#f87171';
+      var border = i < careRows.length - 1 ? 'border-bottom:1px solid rgba(255,255,255,0.06);' : '';
+      html += '<div style="padding:8px 0;' + border + 'font-size:13px;">';
+      html += '<div style="display:flex;align-items:flex-start;gap:8px;flex-wrap:wrap;">';
+      if (cid) {
+        html +=
+          '<a href="cat.html?id=' +
+          encodeURIComponent(cid) +
+          '" style="color:inherit;text-decoration:none;font-weight:600;flex:1;min-width:120px;">' +
+          escapeHtml(cr.cat_name || '') +
+          '</a>';
+      } else {
+        html += '<span style="font-weight:600;flex:1;min-width:120px;">' + escapeHtml(cr.cat_name || '') + '</span>';
+      }
+      html +=
+        '<span style="color:' +
+        col +
+        ';font-weight:700;white-space:nowrap;">' +
+        done +
+        '/' +
+        tot +
+        ' <span style="font-size:12px;opacity:0.95;">(' +
+        pct +
+        '%)</span></span>';
+      html += '</div>';
+      if (missStr) {
+        html +=
+          '<div style="font-size:11px;color:var(--text-dim);margin-top:4px;padding-left:2px;">未実施: ' +
+          escapeHtml(missStr) +
+          '</div>';
+      } else {
+        html += '<div style="font-size:11px;color:#4ade80;margin-top:4px;">✓ すべて実施済</div>';
+      }
+      html += '</div>';
+    }
+    html += '</div></div>';
+    return html;
   }
 
   /** true: 折りたたみ表示。キー未設定時は healthScore・病院スケジュールは開く。title に data-default-expanded / data-default-collapsed 可 */

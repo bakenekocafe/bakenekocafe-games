@@ -2598,6 +2598,23 @@ function closeCatDetailFoldSection(btn) {
     var html = '<div class="detail-section">';
     html += '<div class="detail-title">💊 お薬管理</div>';
 
+    var medPresetName = currentCatData && currentCatData.assigned_medication_preset_name;
+    var medPresetIdDisp = currentCatData && currentCatData.assigned_medication_preset_id;
+    html += '<div style="background:var(--surface);border-radius:8px;padding:8px 12px;margin-bottom:10px;display:flex;justify-content:space-between;align-items:center;">';
+    html += '<div style="font-size:12px;color:var(--text-dim);">';
+    html += '🔗 紐づけ投薬プリセット: ';
+    if (medPresetName) {
+      html += '<b style="color:var(--primary, #a78bfa);">' + escapeHtml(medPresetName) + '</b>';
+    } else if (medPresetIdDisp != null && String(medPresetIdDisp).trim() !== '') {
+      html += '<b style="color:var(--primary, #a78bfa);">ID ' + escapeHtml(String(medPresetIdDisp)) + '</b>';
+    } else {
+      html += '<span style="color:var(--text-dim);">未設定</span>';
+    }
+    html += '</div>';
+    html += '<button class="btn-outline" style="font-size:11px;padding:3px 8px;" onclick="openAssignMedPresetModal()">変更</button>';
+    html += '</div>';
+    html += '<div style="font-size:10px;color:var(--text-dim);line-height:1.4;margin:-6px 0 10px;padding:0 2px;">業務終了・朝5時(JST)の自動入替はこの紐づけとプリセットの「対象」行に従います。スケジュールをすぐ更新する場合は 📋 プリセット の「全て適用」を使います。</div>';
+
     // ── タブ ──
     html += '<div class="med-tabs">';
     html += '<div class="med-tab' + (_medActiveTab === 'schedule' ? ' active' : '') + '" onclick="switchMedTab(\'schedule\')">💊 スケジュール</div>';
@@ -4100,6 +4117,7 @@ function closeCatDetailFoldSection(btn) {
     if (ctx === 'apply') _fillPresetApplyModal(loc);
     else if (ctx === 'manage') _fillPresetManageModal(loc);
     else if (ctx === 'assign') _fillPresetAssignModal(loc);
+    else if (ctx === 'medassign') _fillMedPresetAssignModal(loc);
     else if (ctx === 'med') loadMedicationSchedule();
   };
 
@@ -4154,6 +4172,96 @@ function closeCatDetailFoldSection(btn) {
         modal.innerHTML = innerHtml;
       }).catch(function () { alert('プリセットの読み込みに失敗しました'); closePresetApplyModal(); });
   }
+
+  function _fillMedPresetAssignModal(loc) {
+    var modal = document.getElementById('presetApplyModal');
+    if (!modal) return;
+    setStoredPresetLocation(loc);
+    fetch(medicationPresetsListUrl(loc), { headers: apiHeaders(), cache: 'no-store' })
+      .then(function (r) { return r.json(); })
+      .then(function (data) {
+        var presets = data.presets || [];
+        var currentId = currentCatData && currentCatData.assigned_medication_preset_id;
+        var innerHtml = '<div class="modal-box" style="max-height:85vh;overflow-y:auto;">';
+        innerHtml += '<div class="modal-title">🔗 投薬プリセット紐づけ</div>';
+        innerHtml += '<p style="font-size:12px;color:var(--text-dim);margin:0 0 10px;">業務終了・朝の自動入替で、<b>有効な薬</b>だけがスケジュールに反映されます（紐づけのみの変更ではスケジュールはそのままです）。<br>』全て適用』でその場で入れ替えることもできます。</p>';
+        innerHtml += renderPresetLocationSwitcher(loc, 'medassign');
+
+        innerHtml += '<div style="margin-bottom:8px;">';
+        innerHtml += '<div class="preset-assign-item' + (!currentId ? ' active' : '') + '" onclick="assignMedPreset(null)" style="cursor:pointer;padding:10px 12px;border-radius:8px;margin-bottom:4px;background:' + (!currentId ? 'rgba(168,139,250,0.15)' : 'var(--surface)') + ';border:1px solid ' + (!currentId ? 'var(--primary,#a78bfa)' : 'var(--border,rgba(255,255,255,0.08))') + ';">';
+        innerHtml += '<div style="font-size:13px;font-weight:600;color:var(--text-main);">紐づけ解除（なし）</div>';
+        innerHtml += '</div>';
+
+        for (var i = 0; i < presets.length; i++) {
+          var ps = presets[i];
+          var isActive = currentId != null && String(currentId) === String(ps.id);
+          var takenByOther = ps.assigned_cat && String(ps.assigned_cat.id) !== String(catId);
+          var rowClick = takenByOther ? '' : ' onclick="assignMedPreset(' + ps.id + ')"';
+          var rowCur = takenByOther ? 'not-allowed' : 'pointer';
+          var rowOp = takenByOther ? '0.72' : '1';
+          innerHtml += '<div class="preset-assign-item' + (isActive ? ' active' : '') + '"' + rowClick + ' style="cursor:' + rowCur + ';padding:10px 12px;border-radius:8px;margin-bottom:4px;opacity:' + rowOp + ';background:' + (isActive ? 'rgba(168,139,250,0.15)' : 'var(--surface)') + ';border:1px solid ' + (isActive ? 'var(--primary,#a78bfa)' : 'var(--border,rgba(255,255,255,0.08))') + ';">';
+          innerHtml += '<div style="display:flex;justify-content:space-between;align-items:flex-start;flex-wrap:wrap;gap:8px;width:100%;max-width:100%;box-sizing:border-box;">';
+          innerHtml += '<div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;flex:1;min-width:0;max-width:100%;">' + presetLocationBadgeHtml(ps.location_id) + '<b style="font-size:13px;"><span style="color:var(--text-main);">💊 </span>' + escapeHtml(ps.name || '') + '</b></div>';
+          if (isActive) innerHtml += '<span style="font-size:11px;color:var(--primary,#a78bfa);font-weight:600;flex-shrink:0;">✔ 現在</span>';
+          innerHtml += '</div>';
+          if (ps.description && String(ps.description).trim()) {
+            innerHtml += '<div style="font-size:10px;color:var(--text-dim);margin-top:4px;line-height:1.35;">' + escapeHtml(String(ps.description).trim()) + '</div>';
+          }
+          if (takenByOther) {
+            innerHtml += '<div style="font-size:11px;color:#f87171;margin:4px 0 0;">他の猫（' + escapeHtml(String(ps.assigned_cat.name || '')) + '）に割当済みです</div>';
+          }
+          innerHtml += '<div style="font-size:11px;color:var(--text-dim);margin-top:6px;">有効 <b>' + (ps.item_count || 0) + '</b> 件の薬</div>';
+          innerHtml += '</div>';
+        }
+        innerHtml += '</div>';
+        innerHtml += '<div class="modal-actions"><button class="btn btn-outline" onclick="closePresetApplyModal()">閉じる</button></div>';
+        innerHtml += '</div>';
+        modal.innerHTML = innerHtml;
+      }).catch(function () { alert('投薬プリセットの読み込みに失敗しました'); closePresetApplyModal(); });
+  }
+
+  window.openAssignMedPresetModal = function () {
+    var modal = document.getElementById('presetApplyModal');
+    if (!modal) return;
+    var loc = effectivePresetLocationForApply();
+    setStoredPresetLocation(loc);
+    modal.innerHTML = '<div class="modal-box"><div class="modal-title">🔗 投薬プリセット紐づけ</div><div class="loading" style="padding:16px;">読み込み中...</div><div class="modal-actions"><button class="btn btn-outline" onclick="closePresetApplyModal()">閉じる</button></div></div>';
+    modal.classList.add('open');
+    _fillMedPresetAssignModal(loc);
+  };
+
+  window.assignMedPreset = function (presetId) {
+    fetch(API_BASE + '/cats/' + encodeURIComponent(catId), {
+      method: 'PUT',
+      headers: apiHeaders(), cache: 'no-store',
+      body: JSON.stringify({ assigned_medication_preset_id: presetId }),
+    }).then(function (r) {
+      return r.json().then(function (data) {
+        return { ok: r.ok, status: r.status, data: data };
+      });
+    })
+      .then(function (res) {
+        var data = res.data;
+        if (!res.ok) {
+          var msg = (data && (data.message || data.error)) || '保存に失敗しました';
+          if (res.status === 409) msg = (data && data.message) || 'この投薬プリセットは別の猫に割当済みです';
+          alert('エラー: ' + msg);
+          return;
+        }
+        if (data.error) { alert('エラー: ' + (data.message || data.error)); return; }
+        closePresetApplyModal();
+        fetch(API_BASE + '/cats/' + encodeURIComponent(catId), { headers: apiHeaders(), cache: 'no-store' })
+          .then(function (r) { return r.json(); })
+          .then(function (d) {
+            if (d.cat && currentCatData) {
+              currentCatData.assigned_medication_preset_id = d.cat.assigned_medication_preset_id;
+              currentCatData.assigned_medication_preset_name = d.cat.assigned_medication_preset_name;
+            }
+            loadMedicationSchedule();
+          })
+          .catch(function () { loadMedicationSchedule(); });
+      }).catch(function () { alert('紐づけの保存に失敗しました'); });
+  };
 
   window.openAssignPresetModal = function () {
     var modal = document.getElementById('presetApplyModal');

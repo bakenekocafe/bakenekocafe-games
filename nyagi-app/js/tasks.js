@@ -1562,6 +1562,65 @@
   //  業務終了フロー
   // ══════════════════════════════════════════════════════════════════════════════
 
+  /**
+   * fetch + AbortController が不安定な端末向け。timeout で必ず結果を返す。
+   */
+  function nyagiXhrPostJson(url, headers, bodyObj, timeoutMs) {
+    var bodyStr = JSON.stringify(bodyObj);
+    return new Promise(function (resolve, reject) {
+      var x = new XMLHttpRequest();
+      var done = false;
+      var t = setTimeout(function () {
+        if (done) return;
+        done = true;
+        try {
+          x.abort();
+        } catch (_) {}
+        var te = new Error('timeout');
+        te.name = 'AbortError';
+        reject(te);
+      }, timeoutMs);
+      x.onreadystatechange = function () {
+        if (x.readyState !== 4) return;
+        if (done) return;
+        done = true;
+        clearTimeout(t);
+        var text = x.responseText || '';
+        if (x.status === 0 && !text) {
+          reject(new Error('ネットワークエラー'));
+          return;
+        }
+        var data = {};
+        if (text && String(text).trim()) {
+          try {
+            data = JSON.parse(text);
+          } catch (parseErr) {
+            reject(new Error('サーバー応答が解釈できません (HTTP ' + x.status + ')'));
+            return;
+          }
+        }
+        if (x.status < 200 || x.status >= 300) {
+          reject(new Error(data.message || data.error || 'HTTP ' + x.status));
+          return;
+        }
+        resolve(data);
+      };
+      x.onerror = function () {
+        if (done) return;
+        done = true;
+        clearTimeout(t);
+        reject(new Error('ネットワークエラー'));
+      };
+      x.open('POST', url, true);
+      for (var hk in headers) {
+        if (Object.prototype.hasOwnProperty.call(headers, hk)) {
+          x.setRequestHeader(hk, headers[hk]);
+        }
+      }
+      x.send(bodyStr);
+    });
+  }
+
   var closeDayData = null;
 
   window.startCloseDay = function () {
@@ -2126,65 +2185,16 @@
     confirmBtn.disabled = true;
     confirmBtn.textContent = '送信中...';
 
-    var closeDayFetchMs = 120000;
-    var ac = typeof AbortController !== 'undefined' ? new AbortController() : null;
-    var closeDayTimerId = null;
-
-    function clearCloseDayClientTimer() {
-      if (closeDayTimerId != null) {
-        clearTimeout(closeDayTimerId);
-        closeDayTimerId = null;
-      }
-    }
+    var closeDayPostMs = 90000;
 
     function resetCloseDayBtn() {
-      clearCloseDayClientTimer();
       try {
         confirmBtn.disabled = false;
         confirmBtn.textContent = '送信して業務終了';
       } catch (_) {}
     }
 
-    var timeoutPromise = new Promise(function (_resolve, reject) {
-      closeDayTimerId = setTimeout(function () {
-        closeDayTimerId = null;
-        if (ac) {
-          try {
-            ac.abort();
-          } catch (_) {}
-        }
-        var te = new Error('timeout');
-        te.name = 'AbortError';
-        reject(te);
-      }, closeDayFetchMs);
-    });
-
-    var fetchInit = {
-      method: 'POST',
-      headers: apiHeaders(),
-      cache: 'no-store',
-      body: JSON.stringify(payload),
-    };
-    if (ac) fetchInit.signal = ac.signal;
-
-    Promise.race([fetch(API_BASE + '/tasks/close-day', fetchInit), timeoutPromise])
-      .then(function (r) {
-        clearCloseDayClientTimer();
-        return r.text().then(function (text) {
-          var data = {};
-          if (text && String(text).trim()) {
-            try {
-              data = JSON.parse(text);
-            } catch (parseErr) {
-              throw new Error('サーバー応答が解釈できません (HTTP ' + r.status + ')');
-            }
-          }
-          if (!r.ok) {
-            throw new Error(data.message || data.error || 'HTTP ' + r.status);
-          }
-          return data;
-        });
-      })
+    nyagiXhrPostJson(API_BASE + '/tasks/close-day', apiHeaders(), payload, closeDayPostMs)
       .then(function (data) {
         if (data && data.error) {
           alert('エラー: ' + (data.message || data.error));
@@ -2193,7 +2203,7 @@
         }
         try {
           closeCloseDayModal();
-          showToast('業務終了しました（Slack送信済み）');
+          showToast('業務終了を記録しました。Slack投稿はサーバー側で続行します。');
           loadTasks();
         } catch (afterErr) {
           alert('業務終了は成功した可能性があります。画面を再読み込みしてください。: ' + (afterErr.message || afterErr));
@@ -2204,7 +2214,7 @@
         var name = err && err.name ? String(err.name) : '';
         var msg =
           name === 'AbortError'
-            ? 'タイムアウト（' + closeDayFetchMs / 1000 + '秒）で中断しました。サーバーで処理済みの場合は重複終了になることがあります。しばらくしてからタスク画面を開き直してください。'
+            ? 'タイムアウト（' + closeDayPostMs / 1000 + '秒）で中断しました。処理が完了している可能性があります。タスク画面を再読み込みして状態を確認してください。'
             : err && err.message
               ? err.message
               : String(err || 'unknown');
@@ -2219,6 +2229,10 @@
   };
 
   // ── 初期化（全関数定義後に実行） ─────────────────────────────────────────────
+  try {
+    if (window.NYAGI_BUILD_ID) console.log('[NYAGI tasks]', window.NYAGI_BUILD_ID);
+  } catch (_) {}
+
   if (credentials) {
     var today = todayJstYmd();
     document.getElementById('filterDate').value = today;

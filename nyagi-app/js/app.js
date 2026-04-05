@@ -40,7 +40,7 @@
   // ── Service Worker 登録（本番のみ・毎回更新チェック） ──
   if ('serviceWorker' in navigator && location.hostname !== 'localhost' && location.hostname !== '127.0.0.1') {
     /** HTML の ?v= と sw.js 内 CACHE_NAME と揃えて更新（エッジが sw を掴む対策） */
-    navigator.serviceWorker.register('sw.js?v=326', { updateViaCache: 'none' }).then(function (reg) {
+    navigator.serviceWorker.register('sw.js?v=328', { updateViaCache: 'none' }).then(function (reg) {
       console.log('SW registered:', reg.scope);
       reg.update();
     }).catch(function (err) {

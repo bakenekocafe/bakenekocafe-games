@@ -7,7 +7,7 @@
  */
 
 /** HTML/CSS/JS のキャッシュバストと合わせて更新すること */
-var CACHE_NAME = 'nyagi-v327';
+var CACHE_NAME = 'nyagi-v328';
 
 self.addEventListener('message', function (event) {
   if (event.data && event.data.type === 'SKIP_WAITING') {

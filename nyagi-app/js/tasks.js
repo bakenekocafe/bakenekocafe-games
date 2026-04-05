@@ -1600,7 +1600,9 @@
           }
         }
         if (x.status < 200 || x.status >= 300) {
-          reject(new Error(data.message || data.error || 'HTTP ' + x.status));
+          var errParts = [data.message || data.error || 'HTTP ' + x.status];
+          if (data.debug) errParts.push(String(data.debug));
+          reject(new Error(errParts.join(' — ')));
           return;
         }
         resolve(data);

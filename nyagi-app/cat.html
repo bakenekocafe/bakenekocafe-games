@@ -617,6 +617,123 @@
       padding: 12px;
       margin-bottom: 10px;
     }
+    /* プリセット由来（献立のプリセット行と同系: バイオレットアクセント） */
+    .med-schedule-card--preset {
+      background: rgba(167, 139, 250, 0.07);
+      border: 1px solid rgba(167, 139, 250, 0.22);
+      border-left: 3px solid rgba(167, 139, 250, 0.65);
+      box-shadow: 0 1px 0 rgba(0, 0, 0, 0.04);
+    }
+    .med-schedule-card--preset.med-schedule-card--inactive {
+      opacity: 1;
+      border-left-color: rgba(100, 116, 139, 0.55);
+      background: rgba(15, 23, 42, 0.45);
+      border-color: rgba(100, 116, 139, 0.28);
+    }
+    /* 終了したプリセット行: 一覧をすっきり、操作は右下に集約 */
+    .med-schedule-card--preset-archived .med-schedule-name {
+      font-size: 13px;
+    }
+    .med-schedule-card--preset-archived .med-schedule-meta {
+      font-size: 10px;
+      opacity: 0.9;
+    }
+    .med-preset-badge--archived {
+      background: rgba(71, 85, 105, 0.35);
+      color: #94a3b8;
+      border-color: rgba(148, 163, 184, 0.28);
+      font-weight: 600;
+    }
+    .med-preset-archived-actions {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      gap: 8px;
+      margin-top: 10px;
+      padding-top: 8px;
+      border-top: 1px solid rgba(148, 163, 184, 0.15);
+      justify-content: flex-end;
+    }
+    .med-preset-archived-note {
+      flex: 1;
+      min-width: 160px;
+      font-size: 10px;
+      line-height: 1.4;
+      color: var(--text-dim);
+      margin-right: auto;
+    }
+    .btn-med-archived-delete {
+      font-size: 11px;
+      font-weight: 600;
+      padding: 6px 12px;
+      border-radius: 6px;
+      cursor: pointer;
+      border: 1px solid rgba(248, 113, 113, 0.5);
+      background: rgba(248, 113, 113, 0.12);
+      color: #f87171;
+    }
+    .btn-med-archived-delete:active {
+      opacity: 0.85;
+    }
+    .med-preset-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 3px;
+      font-size: 10px;
+      font-weight: 700;
+      padding: 3px 8px;
+      border-radius: 999px;
+      background: rgba(168, 139, 250, 0.22);
+      color: #c4b5fd;
+      border: 1px solid rgba(196, 181, 253, 0.35);
+      letter-spacing: 0.02em;
+    }
+    .med-preset-lockbar {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      gap: 8px;
+      margin-top: 10px;
+      padding: 10px 11px;
+      border-radius: 8px;
+      background: rgba(0, 0, 0, 0.12);
+      border: 1px dashed rgba(196, 181, 253, 0.35);
+    }
+    .med-preset-lockbar__hint {
+      flex: 1;
+      min-width: 140px;
+      font-size: 11px;
+      line-height: 1.45;
+      color: var(--text-dim);
+    }
+    .btn-med-preset-link {
+      flex-shrink: 0;
+      font-size: 11px;
+      font-weight: 600;
+      padding: 6px 12px;
+      border-radius: 6px;
+      cursor: pointer;
+      border: 1px solid rgba(167, 139, 250, 0.45);
+      background: rgba(167, 139, 250, 0.14);
+      color: #c4b5fd;
+    }
+    .btn-med-preset-link:active {
+      opacity: 0.85;
+    }
+    .btn-med-preset-remove {
+      flex-shrink: 0;
+      font-size: 11px;
+      font-weight: 600;
+      padding: 6px 10px;
+      border-radius: 6px;
+      cursor: pointer;
+      border: 1px solid rgba(248, 113, 113, 0.45);
+      background: rgba(248, 113, 113, 0.08);
+      color: #f87171;
+    }
+    .btn-med-preset-remove:active {
+      opacity: 0.85;
+    }
     .med-schedule-head {
       display: flex;
       justify-content: space-between;
@@ -1292,7 +1409,7 @@
       <div class="cat-detail-fold__panel"><div id="urineArea"></div><button type="button" class="cat-detail-fold__close">▲ 閉じる</button></div>
     </div>
     <div class="cat-detail-fold cat-detail-fold--collapsed">
-      <button type="button" class="cat-detail-fold__toggle" aria-expanded="false"><span class="cat-detail-fold__toggle-main"><span class="cat-detail-fold__chev" aria-hidden="true">▶</span><span>💊 お薬管理</span></span><span class="cat-detail-fold__hint" aria-hidden="true">タップで開く</span></button>
+      <button type="button" class="cat-detail-fold__toggle" aria-expanded="false" title="開くと先頭に「紐づけ投薬プリセット」と変更ボタンがあります"><span class="cat-detail-fold__toggle-main"><span class="cat-detail-fold__chev" aria-hidden="true">▶</span><span>💊 お薬管理</span></span><span class="cat-detail-fold__hint" aria-hidden="true">タップで開く · プリセットは展開先頭</span></button>
       <div class="cat-detail-fold__panel"><div id="medicationScheduleArea"></div><button type="button" class="cat-detail-fold__close">▲ 閉じる</button></div>
     </div>
     <div class="cat-detail-fold cat-detail-fold--collapsed">
@@ -2084,7 +2201,7 @@
   <script src="js/app.js?v=220"></script>
   <script src="js/nyagi-scroll-restore.js?v=217"></script>
   <script src="js/nyagi-search-normalize.js?v=1"></script>
-  <script src="js/cat-detail.js?v=298"></script>
+  <script src="js/cat-detail.js?v=304"></script>
   <script src="js/voice-console.js?v=216"></script>
 </body>
 </html>

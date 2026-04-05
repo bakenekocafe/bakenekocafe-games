@@ -395,13 +395,33 @@ function closeCatDetailFoldSection(btn) {
     });
   })();
 
-  /** プリセット管理: 献立オンオフは委譲（インライン onclick より確実） */
+  /** #presetApplyModal: 投薬紐づけ・献立オンオフ等（インライン onclick / CSP 非依存） */
   (function bindPresetManageMenuToggleClicks() {
     var modal = document.getElementById('presetApplyModal');
     if (!modal || !modal.addEventListener) return;
     modal.addEventListener('click', function (ev) {
       var t = ev.target;
       if (!t || !t.closest) return;
+      var assignMedSlot = t.closest('[data-nyagi-assign-med-preset]');
+      if (assignMedSlot && modal.contains(assignMedSlot)) {
+        ev.preventDefault();
+        var rawAm = assignMedSlot.getAttribute('data-nyagi-assign-med-preset');
+        if (rawAm == null || String(rawAm) === '') {
+          if (typeof window.assignMedPreset === 'function') window.assignMedPreset(null);
+        } else {
+          var pidAm = parseInt(rawAm, 10);
+          if (!isNaN(pidAm) && typeof window.assignMedPreset === 'function') window.assignMedPreset(pidAm);
+        }
+        return;
+      }
+      var medManage = t.closest('[data-nyagi-med-preset-manage]');
+      if (medManage && modal.contains(medManage)) {
+        ev.preventDefault();
+        if (typeof window.openMedPresetManageFromAssignModal === 'function') {
+          window.openMedPresetManageFromAssignModal();
+        }
+        return;
+      }
       var btn = t.closest('[data-preset-menu-toggle]');
       if (!btn || !modal.contains(btn)) return;
       ev.preventDefault();
@@ -415,6 +435,21 @@ function closeCatDetailFoldSection(btn) {
       if (isNaN(pid) || isNaN(iid) || isNaN(nxt)) return;
       if (typeof window.togglePresetItemMenuActive === 'function') {
         window.togglePresetItemMenuActive(pid, iid, nxt, ret);
+      }
+    });
+    modal.addEventListener('keydown', function (ev) {
+      if (ev.key !== 'Enter' && ev.key !== ' ') return;
+      var t = ev.target;
+      if (!t || !t.closest) return;
+      var assignMedSlot = t.closest('[data-nyagi-assign-med-preset]');
+      if (!assignMedSlot || !modal.contains(assignMedSlot)) return;
+      ev.preventDefault();
+      var rawAm = assignMedSlot.getAttribute('data-nyagi-assign-med-preset');
+      if (rawAm == null || String(rawAm) === '') {
+        if (typeof window.assignMedPreset === 'function') window.assignMedPreset(null);
+      } else {
+        var pidAm = parseInt(rawAm, 10);
+        if (!isNaN(pidAm) && typeof window.assignMedPreset === 'function') window.assignMedPreset(pidAm);
       }
     });
   })();
@@ -2584,6 +2619,15 @@ function closeCatDetailFoldSection(btn) {
     });
   }
 
+  function expandMedicationScheduleFold() {
+    if (!medicationScheduleArea) return;
+    var fold = medicationScheduleArea.closest('.cat-detail-fold');
+    if (!fold) return;
+    fold.classList.remove('cat-detail-fold--collapsed');
+    var tg = fold.querySelector('.cat-detail-fold__toggle');
+    if (tg) tg.setAttribute('aria-expanded', 'true');
+  }
+
   window.onMedLogDateChange = function () {
     var inp = document.getElementById('medLogDate');
     if (inp && inp.value) loadMedicationSchedule(inp.value);
@@ -2597,6 +2641,7 @@ function closeCatDetailFoldSection(btn) {
 
     var html = '<div class="detail-section">';
     html += '<div class="detail-title">💊 お薬管理</div>';
+    html += '<p id="nyagiMedPresetWhereHint" style="font-size:11px;color:var(--text-dim);margin:0 0 10px;line-height:1.45;">まずページ内の <b>▶ 💊 お薬管理</b> 行をタップしてこのセクションを開いてください。開くと一番上に <b>🔗 紐づけ投薬プリセット</b>（未設定／プリセット名）があり、右の「<b>変更</b>」を押すと一覧から選べます。<b>📋 プリセット</b> タブでは中身の編集や「全て適用」があります。</p>';
 
     var medPresetName = currentCatData && currentCatData.assigned_medication_preset_name;
     var medPresetIdDisp = currentCatData && currentCatData.assigned_medication_preset_id;
@@ -2656,7 +2701,11 @@ function closeCatDetailFoldSection(btn) {
         var med = medications[i];
         var medInactive = med.active === 0 || med.active === false || String(med.active) === '0';
         var planPreset = med.plan_type === 'preset';
-        html += '<div class="med-schedule-card"' + (medInactive ? ' style="opacity:0.9;"' : '') + '>';
+        var cardClass = 'med-schedule-card';
+        if (planPreset) cardClass += ' med-schedule-card--preset';
+        if (medInactive) cardClass += ' med-schedule-card--inactive';
+        if (planPreset && medInactive) cardClass += ' med-schedule-card--preset-archived';
+        html += '<div class="' + cardClass + '">';
         html += '<div class="med-schedule-head"><div>';
         html += '<div class="med-schedule-name" style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;">';
         html += '<span>' + escapeHtml(med.medicine_name || '') + '</span>';
@@ -2664,9 +2713,15 @@ function closeCatDetailFoldSection(btn) {
           html += '<span style="font-size:10px;padding:2px 6px;border-radius:4px;background:rgba(248,113,113,0.2);color:#f87171;font-weight:700;">終了</span>';
         }
         if (planPreset) {
-          html += '<span style="font-size:10px;padding:2px 6px;border-radius:4px;background:rgba(74,222,128,0.15);color:#4ade80;font-weight:600;">プリセット</span>';
+          html += '<span class="med-preset-badge' + (medInactive ? ' med-preset-badge--archived' : '') + '" title="' + (medInactive ? '終了したプリセット由来。一覧から削除できます。' : 'プリセットで管理（個別編集は 📋 へ）') + '">' +
+            (medInactive ? '📦 履歴' : '🔒 プリセット') + '</span>';
         } else if (!medInactive) {
-          html += '<span style="font-size:10px;padding:2px 6px;border-radius:4px;background:rgba(148,163,184,0.12);color:#94a3b8;font-weight:600;">手動</span>';
+          var fromPresetOne = med.preset_item_id != null && med.preset_item_id !== '' && String(med.plan_type || 'staff') !== 'preset';
+          if (fromPresetOne) {
+            html += '<span style="font-size:10px;padding:2px 6px;border-radius:4px;background:rgba(167,139,250,0.15);color:#c4b5fd;font-weight:600;" title="プリセットの「1件追加」で載せた行です。この画面から編集・削除できます。">＋ 1件追加</span>';
+          } else {
+            html += '<span style="font-size:10px;padding:2px 6px;border-radius:4px;background:rgba(148,163,184,0.12);color:#94a3b8;font-weight:600;">手動</span>';
+          }
         }
         html += '</div>';
         html += '<div class="med-schedule-meta">';
@@ -2708,10 +2763,27 @@ function closeCatDetailFoldSection(btn) {
           html += '</div>';
         }
 
-        html += '<div class="med-card-actions">';
-        html += '<button class="btn-med-edit" onclick="openMedScheduleModal(' + med.id + ')">編集</button>';
-        html += '<button class="btn-med-stop" style="color:#f87171;" onclick="deleteMedSchedule(' + med.id + ')">削除</button>';
-        html += '</div></div>';
+        if (planPreset) {
+          if (!medInactive) {
+            html += '<div class="med-preset-lockbar">';
+            html += '<span class="med-preset-lockbar__hint"><strong style="color:#c4b5fd;">プリセット同期中</strong> — 通常は 📋 の「対象」または「全て適用」で変えます。編集はできません。</span>';
+            html += '<button type="button" class="btn-med-preset-link" onclick="switchMedTab(\'preset\')">📋 プリセットへ</button>';
+            html += '<button type="button" class="btn-med-preset-remove" onclick="deleteMedSchedule(' + med.id + ')" title="この猫のスケジュール行をDBから削除（ログも消えます）">🗑 削除</button>';
+            html += '</div>';
+          } else {
+            html += '<div class="med-preset-archived-actions">';
+            html += '<span class="med-preset-archived-note">入れ替えで残った終了行です。不要なら削除してリストを整理できます（関連ログも残りません）。</span>';
+            html += '<button type="button" class="btn-med-preset-link" onclick="switchMedTab(\'preset\')">📋 プリセット</button>';
+            html += '<button type="button" class="btn-med-archived-delete" onclick="deleteMedSchedule(' + med.id + ')">🗑 削除</button>';
+            html += '</div>';
+          }
+        } else {
+          html += '<div class="med-card-actions">';
+          html += '<button class="btn-med-edit" onclick="openMedScheduleModal(' + med.id + ')">編集</button>';
+          html += '<button class="btn-med-stop" style="color:#f87171;" onclick="deleteMedSchedule(' + med.id + ')">削除</button>';
+          html += '</div>';
+        }
+        html += '</div>';
       }
     }
     html += '</div>';
@@ -2770,7 +2842,7 @@ function closeCatDetailFoldSection(btn) {
         if (takenByOther) {
           html += '<span class="btn-med-edit" style="opacity:0.5;cursor:not-allowed;font-size:11px;">全て適用</span>';
         } else {
-          html += '<button class="btn-med-edit" style="background:rgba(74,222,128,0.18);color:#4ade80;font-size:11px;" onclick="applyMedPresetDirect(' + p.id + ',' + (p.item_count || 0) + ')" title="プリセット由来のお薬だけ入れ替え（手動登録は残す）">全て適用</button>';
+          html += '<button class="btn-med-edit" style="background:rgba(167,139,250,0.2);color:#c4b5fd;font-size:11px;" onclick="applyMedPresetDirect(' + p.id + ',' + (p.item_count || 0) + ')" title="この猫の投薬をプリセットの有効行のみに入れ替え（手動登録も含め一旦すべて無効化）">全て適用</button>';
         }
         html += '</div></div>';
       }
@@ -2800,14 +2872,14 @@ function closeCatDetailFoldSection(btn) {
       alert('このプリセットには薬が登録されていません。先に編集で薬を追加してください。');
       return;
     }
-    if (!confirm('プリセット由来のお薬を、プリセットの内容で入れ替えます（手動で登録したお薬はそのまま残ります）。よろしいですか？')) return;
+    if (!confirm('この猫の投薬スケジュールを、プリセットの有効なお薬だけに入れ替えます（手動で登録したお薬もいったんすべて無効化されます）。よろしいですか？')) return;
     fetch(API_BASE + '/health/medication-presets/' + presetId + '/apply', {
       method: 'POST', headers: apiHeaders(), cache: 'no-store',
       body: JSON.stringify({ cat_id: catId }),
     }).then(function (r) { return r.json(); })
     .then(function (data) {
       if (data.error) { alert('エラー: ' + (data.message || data.error)); return; }
-      alert(data.count + ' 件の投薬スケジュールを追加しました');
+      alert(data.count + ' 件の投薬スケジュールに入れ替えました');
       _medActiveTab = 'schedule';
       loadMedicationSchedule();
     }).catch(function () { alert('適用に失敗しました'); });
@@ -2968,6 +3040,11 @@ function closeCatDetailFoldSection(btn) {
           if (_medicationsList[i].id === editId) { med = _medicationsList[i]; break; }
         }
         if (!med) { alert('スケジュールが見つかりません'); return; }
+        if (med.plan_type === 'preset') {
+          alert('このお薬はプリセット由来です。個別の「編集」は使えません。\n📋 プリセット タブで「対象」のオンオフや内容を変えたうえで「全て適用」を押してください。');
+          switchMedTab('preset');
+          return;
+        }
 
         populateMedicineSelect(medicines, med.medicine_id);
         document.getElementById('msMedicineId').disabled = true;
@@ -3126,13 +3203,34 @@ function closeCatDetailFoldSection(btn) {
   };
 
   window.deleteMedSchedule = function (medId) {
-    if (!confirm('この投薬スケジュールと関連する投薬ログをすべて削除しますか？\nこの操作は取り消せません。')) return;
+    var target = null;
+    for (var di = 0; di < _medicationsList.length; di++) {
+      if (_medicationsList[di].id === medId) { target = _medicationsList[di]; break; }
+    }
+    if (target && target.plan_type === 'preset') {
+      var presInactive = target.active === 0 || target.active === false || String(target.active) === '0';
+      if (!presInactive) {
+        if (!confirm(
+          'このプリセット由来の行を削除します（紐づく投薬ログもすべて消えます）。\n\n' +
+          '※ プリセットの「対象」がオンで残っていると、業務終了・朝の自動入替や「全て適用」で同じ薬が再び入ることがあります。誤登録なら削除したあと 📋 で「対象」をオフにしてください。\n\n削除しますか？'
+        )) return;
+      } else if (!confirm('この終了済みの行と、紐づく投薬ログをすべて削除しますか？\n（プリセットから再適用すれば復元できます）')) return;
+    } else if (!confirm('この投薬スケジュールと関連する投薬ログをすべて削除しますか？\nこの操作は取り消せません。')) return;
+
     fetch(API_BASE + '/health/medications/' + medId, {
       method: 'DELETE',
       headers: apiHeaders(), cache: 'no-store',
-    }).then(function (r) { return r.json(); })
-    .then(function (data) {
-      if (data.error) { alert('削除エラー: ' + (data.message || data.error)); return; }
+    }).then(function (r) {
+      return r.json().then(function (data) {
+        return { ok: r.ok, data: data };
+      });
+    })
+    .then(function (res) {
+      var data = res.data;
+      if (!res.ok || data.error) {
+        alert('削除エラー: ' + (data && (data.message || data.error) ? (data.message || data.error) : '通信エラー'));
+        return;
+      }
       loadMedicationSchedule();
     }).catch(function () { alert('削除に失敗しました'); });
   };
@@ -4185,10 +4283,11 @@ function closeCatDetailFoldSection(btn) {
         var innerHtml = '<div class="modal-box" style="max-height:85vh;overflow-y:auto;">';
         innerHtml += '<div class="modal-title">🔗 投薬プリセット紐づけ</div>';
         innerHtml += '<p style="font-size:12px;color:var(--text-dim);margin:0 0 10px;">業務終了・朝の自動入替で、<b>有効な薬</b>だけがスケジュールに反映されます（紐づけのみの変更ではスケジュールはそのままです）。<br>📋 プリセットタブの「全て適用」でその場で入れ替えることもできます。</p>';
+        innerHtml += '<div style="margin:0 0 10px;text-align:center;"><button type="button" class="btn btn-outline" style="font-size:12px;width:100%;max-width:100%;" data-nyagi-med-preset-manage="1">⚙️ 投薬プリセットの作成・編集</button></div>';
         innerHtml += renderPresetLocationSwitcher(loc, 'medassign');
 
         innerHtml += '<div style="margin-bottom:8px;">';
-        innerHtml += '<div class="preset-assign-item' + (!currentId ? ' active' : '') + '" onclick="assignMedPreset(null)" style="cursor:pointer;padding:10px 12px;border-radius:8px;margin-bottom:4px;background:' + (!currentId ? 'rgba(168,139,250,0.15)' : 'var(--surface)') + ';border:1px solid ' + (!currentId ? 'var(--primary,#a78bfa)' : 'var(--border,rgba(255,255,255,0.08))') + ';">';
+        innerHtml += '<div class="preset-assign-item' + (!currentId ? ' active' : '') + '" data-nyagi-assign-med-preset="" role="button" tabindex="0" style="cursor:pointer;padding:10px 12px;border-radius:8px;margin-bottom:4px;background:' + (!currentId ? 'rgba(168,139,250,0.15)' : 'var(--surface)') + ';border:1px solid ' + (!currentId ? 'var(--primary,#a78bfa)' : 'var(--border,rgba(255,255,255,0.08))') + ';">';
         innerHtml += '<div style="font-size:13px;font-weight:600;color:var(--text-main);">紐づけ解除（なし）</div>';
         innerHtml += '</div>';
 
@@ -4196,10 +4295,10 @@ function closeCatDetailFoldSection(btn) {
           var ps = presets[i];
           var isActive = currentId != null && String(currentId) === String(ps.id);
           var takenByOther = ps.assigned_cat && String(ps.assigned_cat.id) !== String(catId);
-          var rowClick = takenByOther ? '' : ' onclick="assignMedPreset(' + ps.id + ')"';
+          var rowData = takenByOther ? '' : ' data-nyagi-assign-med-preset="' + String(ps.id) + '" role="button" tabindex="0"';
           var rowCur = takenByOther ? 'not-allowed' : 'pointer';
           var rowOp = takenByOther ? '0.72' : '1';
-          innerHtml += '<div class="preset-assign-item' + (isActive ? ' active' : '') + '"' + rowClick + ' style="cursor:' + rowCur + ';padding:10px 12px;border-radius:8px;margin-bottom:4px;opacity:' + rowOp + ';background:' + (isActive ? 'rgba(168,139,250,0.15)' : 'var(--surface)') + ';border:1px solid ' + (isActive ? 'var(--primary,#a78bfa)' : 'var(--border,rgba(255,255,255,0.08))') + ';">';
+          innerHtml += '<div class="preset-assign-item' + (isActive ? ' active' : '') + '"' + rowData + ' style="cursor:' + rowCur + ';padding:10px 12px;border-radius:8px;margin-bottom:4px;opacity:' + rowOp + ';background:' + (isActive ? 'rgba(168,139,250,0.15)' : 'var(--surface)') + ';border:1px solid ' + (isActive ? 'var(--primary,#a78bfa)' : 'var(--border,rgba(255,255,255,0.08))') + ';">';
           innerHtml += '<div style="display:flex;justify-content:space-between;align-items:flex-start;flex-wrap:wrap;gap:8px;width:100%;max-width:100%;box-sizing:border-box;">';
           innerHtml += '<div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;flex:1;min-width:0;max-width:100%;">' + presetLocationBadgeHtml(ps.location_id) + '<b style="font-size:13px;"><span style="color:var(--text-main);">💊 </span>' + escapeHtml(ps.name || '') + '</b></div>';
           if (isActive) innerHtml += '<span style="font-size:11px;color:var(--primary,#a78bfa);font-weight:600;flex-shrink:0;">✔ 現在</span>';
@@ -4212,6 +4311,9 @@ function closeCatDetailFoldSection(btn) {
           }
           innerHtml += '<div style="font-size:11px;color:var(--text-dim);margin-top:6px;">有効 <b>' + (ps.item_count || 0) + '</b> 件の薬</div>';
           innerHtml += '</div>';
+        }
+        if (presets.length === 0) {
+          innerHtml += '<div class="empty-msg" style="margin-top:4px;">この拠点に表示できる投薬プリセットがありません。拠点を切り替えるか、上の「作成・編集」で 📋 プリセット を開いて追加してください。</div>';
         }
         innerHtml += '</div>';
         innerHtml += '<div class="modal-actions"><button class="btn btn-outline" onclick="closePresetApplyModal()">閉じる</button></div>';
@@ -4230,13 +4332,50 @@ function closeCatDetailFoldSection(btn) {
     _fillMedPresetAssignModal(loc);
   };
 
+  /** 紐づけモーダルから 📋 プリセット（管理・作成）へ誘導（給餌の「プリセット管理」相当） */
+  window.openMedPresetManageFromAssignModal = function () {
+    closePresetApplyModal();
+    expandMedicationScheduleFold();
+    _medActiveTab = 'preset';
+    var pr = loadMedicationSchedule();
+    if (!pr || typeof pr.then !== 'function') return;
+    pr.then(function () {
+      setTimeout(function () {
+        var area = document.getElementById('medicationScheduleArea');
+        if (!area || !document.getElementById('medTabPreset')) return;
+        area.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        var inp = document.getElementById('mpNewNameInline');
+        if (inp) { try { inp.focus(); } catch (_) {} }
+      }, 120);
+    });
+  };
+
   window.assignMedPreset = function (presetId) {
+    if (!credentials || !credentials.adminKey || !credentials.staffId) {
+      alert('ログイン情報がありません。再ログインしてください。');
+      return;
+    }
+    if (!catId) {
+      alert('猫IDがありません');
+      return;
+    }
+    var medPresetBodyVal = presetId == null ? null : Number(presetId);
+    if (medPresetBodyVal != null && isNaN(medPresetBodyVal)) {
+      alert('プリセットIDが不正です');
+      return;
+    }
     fetch(API_BASE + '/cats/' + encodeURIComponent(catId), {
       method: 'PUT',
       headers: apiHeaders(), cache: 'no-store',
-      body: JSON.stringify({ assigned_medication_preset_id: presetId }),
+      body: JSON.stringify({ assigned_medication_preset_id: medPresetBodyVal }),
     }).then(function (r) {
-      return r.json().then(function (data) {
+      return r.text().then(function (text) {
+        var data = {};
+        if (text) {
+          try { data = JSON.parse(text); } catch (_) {
+            data = { error: 'parse', message: 'サーバー応答の解析に失敗しました' };
+          }
+        }
         return { ok: r.ok, status: r.status, data: data };
       });
     })
@@ -4249,17 +4388,19 @@ function closeCatDetailFoldSection(btn) {
           return;
         }
         if (data.error) { alert('エラー: ' + (data.message || data.error)); return; }
+        if (data.cat && currentCatData) {
+          currentCatData.assigned_medication_preset_id = data.cat.assigned_medication_preset_id;
+          currentCatData.assigned_medication_preset_name = data.cat.assigned_medication_preset_name;
+        } else if (currentCatData && data.assigned_medication_preset_id !== undefined) {
+          currentCatData.assigned_medication_preset_id = data.assigned_medication_preset_id;
+          currentCatData.assigned_medication_preset_name = data.assigned_medication_preset_name;
+        }
         closePresetApplyModal();
-        fetch(API_BASE + '/cats/' + encodeURIComponent(catId), { headers: apiHeaders(), cache: 'no-store' })
-          .then(function (r) { return r.json(); })
-          .then(function (d) {
-            if (d.cat && currentCatData) {
-              currentCatData.assigned_medication_preset_id = d.cat.assigned_medication_preset_id;
-              currentCatData.assigned_medication_preset_name = d.cat.assigned_medication_preset_name;
-            }
-            loadMedicationSchedule();
-          })
-          .catch(function () { loadMedicationSchedule(); });
+        if (typeof window.loadCatDetail === 'function') {
+          window.loadCatDetail();
+        } else {
+          loadMedicationSchedule();
+        }
       }).catch(function () { alert('紐づけの保存に失敗しました'); });
   };
 

@@ -2122,31 +2122,95 @@
       special_notes: document.getElementById('closeDayNotes').value.trim(),
     };
 
-    document.getElementById('closeDayConfirmBtn').disabled = true;
-    document.getElementById('closeDayConfirmBtn').textContent = '送信中...';
+    var confirmBtn = document.getElementById('closeDayConfirmBtn');
+    confirmBtn.disabled = true;
+    confirmBtn.textContent = '送信中...';
 
-    fetch(API_BASE + '/tasks/close-day', {
-      method: 'POST',
-      headers: apiHeaders(), cache: 'no-store',
-      body: JSON.stringify(payload),
-    })
-    .then(function (r) { return r.json(); })
-    .then(function (data) {
-      if (data.error) {
-        alert('エラー: ' + (data.message || data.error));
-        document.getElementById('closeDayConfirmBtn').disabled = false;
-        document.getElementById('closeDayConfirmBtn').textContent = '送信して業務終了';
-        return;
+    var closeDayFetchMs = 120000;
+    var ac = typeof AbortController !== 'undefined' ? new AbortController() : null;
+    var closeDayTimerId = null;
+
+    function clearCloseDayClientTimer() {
+      if (closeDayTimerId != null) {
+        clearTimeout(closeDayTimerId);
+        closeDayTimerId = null;
       }
-      closeCloseDayModal();
-      showToast('業務終了しました（Slack送信済み）');
-      loadTasks();
-    })
-    .catch(function (err) {
-      alert('送信に失敗: ' + err.message);
-      document.getElementById('closeDayConfirmBtn').disabled = false;
-      document.getElementById('closeDayConfirmBtn').textContent = '送信して業務終了';
+    }
+
+    function resetCloseDayBtn() {
+      clearCloseDayClientTimer();
+      try {
+        confirmBtn.disabled = false;
+        confirmBtn.textContent = '送信して業務終了';
+      } catch (_) {}
+    }
+
+    var timeoutPromise = new Promise(function (_resolve, reject) {
+      closeDayTimerId = setTimeout(function () {
+        closeDayTimerId = null;
+        if (ac) {
+          try {
+            ac.abort();
+          } catch (_) {}
+        }
+        var te = new Error('timeout');
+        te.name = 'AbortError';
+        reject(te);
+      }, closeDayFetchMs);
     });
+
+    var fetchInit = {
+      method: 'POST',
+      headers: apiHeaders(),
+      cache: 'no-store',
+      body: JSON.stringify(payload),
+    };
+    if (ac) fetchInit.signal = ac.signal;
+
+    Promise.race([fetch(API_BASE + '/tasks/close-day', fetchInit), timeoutPromise])
+      .then(function (r) {
+        clearCloseDayClientTimer();
+        return r.text().then(function (text) {
+          var data = {};
+          if (text && String(text).trim()) {
+            try {
+              data = JSON.parse(text);
+            } catch (parseErr) {
+              throw new Error('サーバー応答が解釈できません (HTTP ' + r.status + ')');
+            }
+          }
+          if (!r.ok) {
+            throw new Error(data.message || data.error || 'HTTP ' + r.status);
+          }
+          return data;
+        });
+      })
+      .then(function (data) {
+        if (data && data.error) {
+          alert('エラー: ' + (data.message || data.error));
+          resetCloseDayBtn();
+          return;
+        }
+        try {
+          closeCloseDayModal();
+          showToast('業務終了しました（Slack送信済み）');
+          loadTasks();
+        } catch (afterErr) {
+          alert('業務終了は成功した可能性があります。画面を再読み込みしてください。: ' + (afterErr.message || afterErr));
+        }
+        resetCloseDayBtn();
+      })
+      .catch(function (err) {
+        var name = err && err.name ? String(err.name) : '';
+        var msg =
+          name === 'AbortError'
+            ? 'タイムアウト（' + closeDayFetchMs / 1000 + '秒）で中断しました。サーバーで処理済みの場合は重複終了になることがあります。しばらくしてからタスク画面を開き直してください。'
+            : err && err.message
+              ? err.message
+              : String(err || 'unknown');
+        alert('送信に失敗: ' + msg);
+        resetCloseDayBtn();
+      });
   };
 
   window.closeCloseDayModal = function () {

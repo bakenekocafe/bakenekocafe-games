@@ -697,13 +697,13 @@
     .item-values-excretion {
       display: flex;
       flex-direction: column;
-      gap: 6px;
+      gap: 4px;
       flex: 1;
       min-width: 0;
       width: 100%;
     }
     .ov-ex-row {
-      padding: 4px 0;
+      padding: 3px 0;
       border-bottom: 1px dashed rgba(255,255,255,0.06);
     }
     .ov-ex-row:last-child { border-bottom: none; }
@@ -716,20 +716,36 @@
       align-items: center;
       gap: 6px;
     }
+    /* 一覧カード内: 1行目＝本文、2行目＝操作ボタン（横全幅ストレッチしない） */
     .item-card-body .ov-ex-display {
-      flex-direction: column;
+      flex-direction: row;
+      flex-wrap: wrap;
       align-items: flex-start;
-      gap: 6px;
+      gap: 4px 8px;
+    }
+    .item-card-body .ov-ex-text {
+      flex: 1 1 140px;
+      min-width: 0;
+      width: auto;
+      max-width: 100%;
+      font-size: 11px;
+      line-height: 1.35;
+    }
+    .item-card-body .ov-ex-display .ov-ex-actions {
+      display: inline-flex;
+      flex-wrap: wrap;
+      align-items: center;
+      gap: 4px;
+      flex: 0 0 auto;
+      max-width: 100%;
     }
     .item-card-body .ov-ex-display .btn-ov-hr-edit,
     .item-card-body .ov-ex-display .btn-ov-hr-del {
-      align-self: flex-start;
+      flex: 0 0 auto;
+      width: auto !important;
+      align-self: center;
     }
     .ov-ex-text { flex: 1 1 140px; min-width: 0; font-size: 12px; line-height: 1.35; }
-    .item-card-body .ov-ex-text {
-      width: 100%;
-      flex: none;
-    }
     .btn-ov-hr-edit, .btn-ov-hr-del, .btn-ov-hr-cancel {
       font-size: 10px !important;
       padding: 2px 8px !important;
@@ -742,13 +758,47 @@
       margin-top: 6px;
     }
     .item-card-body .ov-ex-edit {
-      flex-direction: column;
-      align-items: stretch;
+      flex-direction: row;
+      flex-wrap: wrap;
+      align-items: center;
+      gap: 6px 8px;
+      margin-top: 4px;
+    }
+    .item-card-body .ov-ex-edit .ov-inline-select,
+    .item-card-body .ov-ex-edit .ov-inline-date {
+      flex: 0 1 auto;
+      width: auto;
+      min-width: 6.5rem;
+      max-width: 11rem;
+      box-sizing: border-box;
     }
     .item-card-body .ov-ex-edit .btn,
     .item-card-body .ov-ex-edit .btn-primary {
+      flex: 0 0 auto !important;
       width: auto !important;
-      align-self: flex-start;
+      max-width: none;
+      align-self: center;
+    }
+    /* 排便・排尿ブロックの「新規追加」行: 42% 伸びをやめて内容幅ベース */
+    .item-card-body .item-row-editable:has(.item-values-excretion) .item-inline-edit .inline-form {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      gap: 6px 8px;
+    }
+    .item-card-body .item-row-editable:has(.item-values-excretion) .item-inline-edit .inline-form .ov-inline-select,
+    .item-card-body .item-row-editable:has(.item-values-excretion) .item-inline-edit .inline-form .ov-inline-date {
+      flex: 0 1 auto;
+      width: auto;
+      min-width: 6.5rem;
+      max-width: 11rem;
+      box-sizing: border-box;
+    }
+    .item-card-body .item-row-editable:has(.item-values-excretion) .item-inline-edit .inline-form .btn,
+    .item-card-body .item-row-editable:has(.item-values-excretion) .item-inline-edit .inline-form .btn-primary {
+      flex: 0 0 auto !important;
+      width: auto !important;
+      min-height: 30px;
     }
     .ov-ex-row.is-editing .ov-ex-display { display: none; }
     .ov-ex-row.is-editing .ov-ex-edit { display: flex; }
@@ -956,6 +1006,103 @@
       color: var(--text-dim);
       margin-top: 4px;
       padding-top: 6px;
+    }
+    .item-card-title .item-card-title-sub {
+      font-weight: 500;
+      font-size: clamp(10px, 2.8vw, 12px);
+    }
+    /* 項目ごと・ケア実施: チップ・フォームをコンパクト化（横全幅ストレッチを避ける） */
+    .item-card-body .ov-care-row-chips {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      gap: 4px 6px;
+      max-width: 100%;
+    }
+    .item-card-body .ov-care-row-chips .care-chip {
+      flex: 0 0 auto;
+      cursor: pointer;
+    }
+    .item-card-body .ov-care-inline-form:not(.pcc-care-inline) {
+      flex-direction: row;
+      flex-wrap: wrap;
+      align-items: center;
+      gap: 6px 8px;
+      width: 100%;
+      box-sizing: border-box;
+    }
+    .item-card-body .ov-care-bulk-block {
+      flex: 1 1 100%;
+      padding: 4px 0 6px;
+    }
+    .item-card-body .ov-care-bulk-hint {
+      font-size: 10px;
+      line-height: 1.35;
+      margin-bottom: 4px;
+      font-weight: 600;
+      color: var(--text-main);
+    }
+    .item-card-body .ov-care-bulk-note {
+      font-size: 9px;
+      margin: 4px 0 0;
+      line-height: 1.35;
+    }
+    .item-card-body .ov-care-bulk-actions {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      gap: 6px;
+    }
+    .item-card-body .ov-care-bulk-actions .ov-inline-date {
+      flex: 0 0 auto;
+    }
+    .item-card-body .ov-care-bulk-actions .btn-ov-care-bundle-save {
+      flex: 0 1 auto !important;
+      min-width: 0 !important;
+      max-width: 100%;
+      width: auto !important;
+      font-size: 11px !important;
+      padding: 5px 10px !important;
+      min-height: 30px;
+      white-space: normal;
+    }
+    .item-card-body .ov-care-inline-form:not(.pcc-care-inline) > .ov-care-sep {
+      flex: 1 1 100%;
+      margin: 2px 0 0;
+      padding-top: 4px;
+      font-size: 10px;
+    }
+    .item-card-body .ov-care-inline-form:not(.pcc-care-inline) > .ov-inline-select,
+    .item-card-body .ov-care-inline-form:not(.pcc-care-inline) > .ov-inline-date {
+      flex: 0 1 auto;
+      width: auto;
+      min-width: 6.5rem;
+      max-width: 11rem;
+      box-sizing: border-box;
+    }
+    .item-card-body .ov-care-inline-form:not(.pcc-care-inline) > .btn,
+    .item-card-body .ov-care-inline-form:not(.pcc-care-inline) > .btn-primary {
+      flex: 0 0 auto !important;
+      width: auto !important;
+      min-height: 30px;
+      padding: 5px 12px !important;
+      font-size: 11px !important;
+    }
+    .item-card-body .pcc-care-inline-row {
+      flex-wrap: wrap;
+      gap: 6px;
+    }
+    .item-card-body .pcc-care-inline .ov-inline-select,
+    .item-card-body .pcc-care-inline .ov-inline-date {
+      flex: 0 1 auto;
+      min-width: 6.5rem;
+      max-width: 11rem;
+    }
+    .item-card-body .pcc-care-inline .btn,
+    .item-card-body .pcc-care-inline .btn-primary {
+      flex: 0 0 auto !important;
+      width: auto !important;
+      min-height: 30px;
     }
     .med-item-done { color: #4ade80; }
     .med-item-skip { color: #facc15; text-decoration: line-through; opacity: 0.7; }
@@ -1480,7 +1627,7 @@
   <div id="ovLeftoverModal" class="modal-overlay">
     <div class="modal-box" style="max-width:400px;">
       <div class="modal-title" id="ovLoTitle">🥄 残し記録</div>
-      <p id="ovLoHint" class="dim" style="font-size:11px;margin:-4px 12px 8px;line-height:1.45;">上段：昨日の「あげた」記録はここから取り消し。下段：残し入力は猫詳細の「昨夜の夜ごはん」と同じ feeding_logs に保存され、献立・手動記録と連動します。</p>
+      <p id="ovLoHint" class="dim" style="font-size:11px;margin:-4px 12px 8px;line-height:1.45;">上段（あるとき）：昨日の朝・昼の「あげた」取り消し。夜は下段「昨夜の夜ごはん」にまとめて表示（取消も下段）。下段の残しは猫詳細の昨夜と同じ feeding_logs に保存され、献立・手動記録と連動します。</p>
       <div id="ovLoBody" style="max-height:60vh;overflow-y:auto;"></div>
       <div class="modal-actions">
         <button type="button" class="btn btn-outline" id="ovCloseLoBtn">閉じる</button>
@@ -1495,7 +1642,7 @@
   <script src="js/login-gate.js?v=214"></script>
   <script src="js/nyagi-jst.js?v=1"></script>
   <script src="js/app.js?v=225"></script>
-  <script src="js/cats-overview.js?v=321"></script>
+  <script src="js/cats-overview.js?v=326"></script>
   <script src="js/voice-console.js?v=216"></script>
 </body>
 </html>

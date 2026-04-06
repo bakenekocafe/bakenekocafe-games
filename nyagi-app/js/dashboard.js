@@ -224,8 +224,131 @@
     );
   }
 
+  /** 朝・夜の献立スロットを plans_total で重み付けした平均％（お薬・給餌サマリー共通） */
+  function dashWeightedFedPctFromSummary(list) {
+    if (!list || list.length === 0) return null;
+    var wSum = 0;
+    var num = 0;
+    for (var i = 0; i < list.length; i++) {
+      var row = list[i];
+      var mo = row.morning || {};
+      var ev = row.evening || {};
+      var mPl = mo.plans_total != null ? mo.plans_total : 0;
+      if (mPl > 0) {
+        var mPct = mo.fed_pct != null ? mo.fed_pct : Math.round(((mo.fed_count || 0) / mPl) * 100);
+        wSum += mPct * mPl;
+        num += mPl;
+      }
+      var ePl = ev.plans_total != null ? ev.plans_total : 0;
+      if (ePl > 0) {
+        var ePct = ev.fed_pct != null ? ev.fed_pct : Math.round(((ev.fed_count || 0) / ePl) * 100);
+        wSum += ePct * ePl;
+        num += ePl;
+      }
+    }
+    if (num <= 0) return null;
+    return Math.round(wSum / num);
+  }
+
+  function dashCareAvgPct(rows) {
+    if (!rows || rows.length === 0) return null;
+    var sum = 0;
+    for (var i = 0; i < rows.length; i++) {
+      var p = rows[i].items_pct != null ? rows[i].items_pct : 0;
+      sum += p;
+    }
+    return Math.round(sum / rows.length);
+  }
+
+  function dashUrineRecordPct(rows) {
+    rows = rows || [];
+    if (rows.length === 0) return null;
+    var nOk = 0;
+    for (var i = 0; i < rows.length; i++) {
+      var sDone = rows[i].has_today_record === true || (rows[i].record_count || 0) > 0;
+      if (sDone) nOk++;
+    }
+    return Math.round((nOk / rows.length) * 100);
+  }
+
+  function dashProgressPctColor(pct) {
+    if (pct == null || isNaN(pct)) return '#94a3b8';
+    if (pct >= 80) return '#4ade80';
+    if (pct >= 50) return '#facc15';
+    return '#f87171';
+  }
+
+  function renderDashProgressStripRow(labelHtml, pct, jumpId, foldKey, optSub) {
+    optSub = optSub || '';
+    var isNA = pct == null;
+    var displayPct = isNA ? '—' : String(pct) + '%';
+    var barW = isNA ? 0 : Math.max(0, Math.min(100, Number(pct)));
+    var col = isNA ? 'rgba(255,255,255,0.06)' : dashProgressPctColor(pct);
+    var plain = String(labelHtml).replace(/<[^>]+>/g, '').replace(/\s+/g, ' ').trim();
+    var aria = plain + (isNA ? ' 対象なし' : ' ' + pct + 'パーセント');
+    var subHtml = optSub ? '<div class="dash-progress-strip-subl dim">' + escapeHtml(optSub) + '</div>' : '';
+    return (
+      '<button type="button" class="dash-progress-strip-row" data-dash-jump="' +
+      escapeHtml(jumpId) +
+      '" data-dash-fold="' +
+      escapeHtml(foldKey) +
+      '" aria-label="' +
+      escapeHtml(aria) +
+      '">' +
+      '<div class="dash-progress-strip-row-top">' +
+      '<span class="dash-progress-strip-label">' +
+      labelHtml +
+      '</span>' +
+      '<span class="dash-progress-strip-pct' +
+      (isNA ? ' is-na' : '') +
+      '" style="color:' +
+      (isNA ? 'var(--text-dim)' : col) +
+      ';">' +
+      displayPct +
+      '</span>' +
+      '</div>' +
+      '<div class="dash-progress-strip-bar-bg"><div class="dash-progress-strip-bar-fill" style="width:' +
+      barW +
+      '%;background:' +
+      col +
+      ';"></div></div>' +
+      subHtml +
+      '</button>'
+    );
+  }
+
+  function renderDashProgressStrip(m, e) {
+    m = m || {};
+    e = e || {};
+    var tp = m.task_progress || {};
+    var taskPct =
+      tp.total > 0
+        ? tp.pct != null
+          ? tp.pct
+          : Math.round(((tp.done || 0) / tp.total) * 100)
+        : null;
+    var taskSub = tp.total > 0 ? (tp.done || 0) + '/' + tp.total + ' 完了' : '';
+    var medPct = dashWeightedFedPctFromSummary(m.medication_summary || []);
+    var feedPct = dashWeightedFedPctFromSummary(e.feeding_summary || []);
+    var carePct = dashCareAvgPct(m.care_daily_summary || []);
+    var urinePct = dashUrineRecordPct(m.urine_today_summary || []);
+
+    var block = '<div class="dash-progress-strip card" role="region" aria-label="今日の進捗概要">';
+    block +=
+      '<div class="dash-progress-strip-heading">📈 今日の進捗 <small class="dim" style="font-weight:500;font-size:11px;">タップで各カードへ</small></div>';
+    block += renderDashProgressStripRow('✅ タスク', taskPct, 'dash-jump-dashTasks', 'dashTasks', taskSub);
+    block += renderDashProgressStripRow('💊 お薬進捗', medPct, 'dash-jump-dashMed', 'dashMed', '');
+    block += renderDashProgressStripRow('🍽 給餌進捗', feedPct, 'dash-jump-dashFeeding', 'dashFeeding', '');
+    block += renderDashProgressStripRow('🪮 ケア進捗', carePct, 'dash-jump-careDaily', 'careDaily', '');
+    block += renderDashProgressStripRow('💧 排尿記録進捗', urinePct, 'dash-jump-dashUrineToday', 'dashUrineToday', '');
+    block += '</div>';
+    return block;
+  }
+
   function renderUnified(m, e) {
     var html = '';
+
+    html += renderDashProgressStrip(m, e);
 
     // 1. 🚨 今すぐ対応
     var crits = m.critical_cats || [];
@@ -253,6 +376,9 @@
 
     html += renderMedicationSummarySection(m.medication_summary);
     html += renderCareDailySummarySection(m.care_daily_summary);
+    html += renderCareItemGaps7dSection(
+      m.care_item_gaps_7d || { items: [], threshold_days: 7, as_of_date: m.date || '' }
+    );
     html += renderUrineTodaySummarySection(m.urine_today_summary);
 
     // 5. 📋 未完了アクション
@@ -321,11 +447,11 @@
       html += '</div>';
     }
 
-    // 8. 🍽 給餌サマリー（献立に対する「あげた」記録・朝／夜の2列）
+    // 8. 🍽 給餌進捗（献立に対する「あげた」記録・朝／夜の2列）
     var feedingSummary = e.feeding_summary || [];
     if (feedingSummary.length > 0) {
       html +=
-        '<div class="section-title dash-fold-title" id="dash-jump-dashFeeding" data-fold="dashFeeding">🍽 給餌サマリー <small class="dim" style="font-weight:500;font-size:11px;">（あげた記録・朝／夜）</small></div>';
+        '<div class="section-title dash-fold-title" id="dash-jump-dashFeeding" data-fold="dashFeeding">🍽 給餌進捗 <small class="dim" style="font-weight:500;font-size:11px;">（あげた記録・朝／夜）</small></div>';
       html += '<div class="dash-fold-body" data-fold-target="dashFeeding">';
       html += '<div class="card">';
       html +=
@@ -508,6 +634,7 @@
 
     dashView.innerHTML = html;
     bindDashFolds();
+    bindDashProgressStrip();
     bindTodayRecordAnomaly();
     bindVetBookButtons();
     bindVetScheduleSheet();
@@ -715,11 +842,11 @@
     saveDashFolds(map);
   }
 
-  /** お薬あげたサマリー（朝API medication_summary・給餌サマリーと同型・朝／夜） */
+  /** お薬あげた進捗（朝API medication_summary・給餌進捗と同型・朝／夜） */
   function renderMedicationSummarySection(medSummary) {
     if (!medSummary || medSummary.length === 0) return '';
     var html =
-      '<div class="section-title dash-fold-title" id="dash-jump-dashMed" data-fold="dashMed">💊 お薬サマリー <small class="dim" style="font-weight:500;font-size:11px;">（あげた記録・朝／夜）</small></div>';
+      '<div class="section-title dash-fold-title" id="dash-jump-dashMed" data-fold="dashMed">💊 お薬進捗 <small class="dim" style="font-weight:500;font-size:11px;">（あげた記録・朝／夜）</small></div>';
     html += '<div class="dash-fold-body" data-fold-target="dashMed">';
     html +=
       '<p class="dim" style="font-size:11px;line-height:1.45;margin:0 0 10px;padding:0 2px;">当日スケジュールの各帯について、<strong>実施（ログが done／administered）</strong> の件数を数えます。<strong>スキップは未実施</strong>です。必要時投薬は対象外。夜分＝昼・晩・その他の帯。</p>';
@@ -765,11 +892,11 @@
     return html;
   }
 
-  /** 当日の排尿記録サマリー（朝API urine_today_summary・全猫＋has_today_record） */
+  /** 当日の排尿記録進捗（朝API urine_today_summary・全猫＋has_today_record） */
   function renderUrineTodaySummarySection(rows) {
     rows = rows || [];
     var html =
-      '<div class="section-title dash-fold-title" id="dash-jump-dashUrineToday" data-fold="dashUrineToday">💧 排尿 <small class="dim" style="font-weight:600;font-size:11px;">（当日・全頭）</small></div>';
+      '<div class="section-title dash-fold-title" id="dash-jump-dashUrineToday" data-fold="dashUrineToday">💧 排尿記録進捗 <small class="dim" style="font-weight:600;font-size:11px;">（当日・全頭）</small></div>';
     html += '<div class="dash-fold-body" data-fold-target="dashUrineToday">';
     if (rows.length === 0) {
       html +=
@@ -908,6 +1035,75 @@
     return html;
   }
 
+  /** ケア項目別・最終実施から threshold 日以上（朝API care_item_gaps_7d・7日未満はAPI側で省略済み） */
+  function renderCareItemGaps7dSection(gapPayload) {
+    var payload = gapPayload || { items: [], threshold_days: 7, as_of_date: '' };
+    var items = payload.items || [];
+    var th = payload.threshold_days != null ? payload.threshold_days : 7;
+    var asOf = payload.as_of_date ? String(payload.as_of_date).slice(0, 10) : '';
+    var asOfMd = '';
+    if (asOf.length === 10) {
+      asOfMd = parseInt(asOf.slice(5, 7), 10) + '/' + parseInt(asOf.slice(8, 10), 10);
+    }
+    var html =
+      '<div class="section-title dash-fold-title" id="dash-jump-careGaps7d" data-fold="careGaps7d" data-default-expanded="1">🪮 ケア・最終実施の空き（' +
+      th +
+      '日以上のみ）</div>';
+    html += '<div class="dash-fold-body" data-fold-target="careGaps7d">';
+    html += '<div class="card" style="border-left:3px solid #64748b;">';
+    html +=
+      '<p class="dim" style="font-size:11px;line-height:1.45;margin:0 0 10px;">ブラシ・アゴ・耳・爪切り・肉球・お尻・目ヤニ拭き。業務終了レポートと同じ算定（×／ーは未実施扱い）。' +
+      (asOfMd ? ' 基準日: <strong>' + escapeHtml(asOfMd) + '</strong>' : '') +
+      '</p>';
+    html +=
+      '<a href="cats.html" style="display:inline-block;font-size:12px;color:var(--primary);margin-bottom:10px;text-decoration:none;">猫一覧（ケア入力）→</a>';
+    if (items.length === 0) {
+      html += '<div style="font-size:12px;color:var(--text-dim);margin-top:4px;">該当なし（' + th + '日以上の空きはありません）</div>';
+    } else {
+      for (var gi = 0; gi < items.length; gi++) {
+        var it = items[gi];
+        var border = gi < items.length - 1 ? 'border-bottom:1px solid rgba(255,255,255,0.06);' : '';
+        var cid = it.cat_id || '';
+        html += '<div style="padding:8px 0;' + border + 'font-size:13px;line-height:1.45;">';
+        html += '<div style="display:flex;flex-wrap:wrap;align-items:baseline;gap:6px;">';
+        if (cid) {
+          html +=
+            '<a href="cat.html?id=' +
+            encodeURIComponent(cid) +
+            '" style="color:inherit;text-decoration:none;font-weight:600;">' +
+            escapeHtml(it.cat_name || '') +
+            '</a>';
+        } else {
+          html += '<span style="font-weight:600;">' + escapeHtml(it.cat_name || '') + '</span>';
+        }
+        html += '<span style="color:var(--text-dim);font-size:12px;">— ' + escapeHtml(it.item_label || '') + '</span>';
+        html += '</div>';
+        if (it.no_record) {
+          html +=
+            '<div style="font-size:11px;color:var(--text-dim);margin-top:4px;">記録なし（猫マスタ登録から' +
+            (it.days_since_last != null ? it.days_since_last : '') +
+            '日）</div>';
+        } else {
+          var md =
+            it.last_record_date && String(it.last_record_date).length >= 10
+              ? parseInt(String(it.last_record_date).slice(5, 7), 10) +
+                '/' +
+                parseInt(String(it.last_record_date).slice(8, 10), 10)
+              : '';
+          html +=
+            '<div style="font-size:11px;color:var(--text-dim);margin-top:4px;">最終 ' +
+            escapeHtml(md) +
+            ' <span style="color:var(--text-main);">経過' +
+            (it.days_since_last != null ? it.days_since_last : '') +
+            '日</span></div>';
+        }
+        html += '</div>';
+      }
+    }
+    html += '</div></div>';
+    return html;
+  }
+
   /** true: 折りたたみ表示。キー未設定時は dashFoldDefaultExpanded / data-default-* に従う */
   function isDashFoldCollapsed(key, folds, titleEl) {
     if (Object.prototype.hasOwnProperty.call(folds, key)) {
@@ -920,6 +1116,21 @@
       return false;
     }
     return !dashFoldDefaultExpanded(key);
+  }
+
+  function bindDashProgressStrip() {
+    if (!dashView) return;
+    var rows = dashView.querySelectorAll('.dash-progress-strip-row[data-dash-jump]');
+    for (var i = 0; i < rows.length; i++) {
+      rows[i].addEventListener('click', function (ev) {
+        ev.preventDefault();
+        var jid = this.getAttribute('data-dash-jump');
+        var fk = this.getAttribute('data-dash-fold');
+        if (jid && typeof dashNavScrollToJump === 'function') {
+          dashNavScrollToJump(jid, fk || '');
+        }
+      });
+    }
   }
 
   function bindDashFolds() {
@@ -1216,13 +1427,14 @@
     { jumpId: 'dash-jump-healthScore', fold: 'healthScore', label: '🏥 健康スコア' },
     { jumpId: 'dash-jump-vomitSummary', fold: 'vomitSummary', label: '🤮 はき戻し' },
     { jumpId: 'dash-jump-dashTasks', fold: 'dashTasks', label: '✅ タスク' },
-    { jumpId: 'dash-jump-dashMed', fold: 'dashMed', label: '💊 お薬サマリー' },
+    { jumpId: 'dash-jump-dashMed', fold: 'dashMed', label: '💊 お薬進捗' },
     { jumpId: 'dash-jump-careDaily', fold: 'careDaily', label: '🪮 ケア進捗' },
-    { jumpId: 'dash-jump-dashUrineToday', fold: 'dashUrineToday', label: '💧 排尿' },
+    { jumpId: 'dash-jump-careGaps7d', fold: 'careGaps7d', label: '🪮 ケア空き7日+' },
+    { jumpId: 'dash-jump-dashUrineToday', fold: 'dashUrineToday', label: '💧 排尿記録進捗' },
     { jumpId: 'dash-jump-dashActions', fold: 'dashActions', label: '📋 未完了アクション' },
     { jumpId: 'dash-jump-dashAnomaly', fold: 'dashAnomaly', label: '⚠️ 昨夜からの異常' },
     { jumpId: 'dash-jump-dashToday', fold: 'dashToday', label: '📊 今日の記録' },
-    { jumpId: 'dash-jump-dashFeeding', fold: 'dashFeeding', label: '🍽 給餌サマリー' },
+    { jumpId: 'dash-jump-dashFeeding', fold: 'dashFeeding', label: '🍽 給餌進捗' },
     { jumpId: 'dash-jump-dashTomorrow', fold: 'dashTomorrow', label: '📅 明日の予定' },
     { jumpId: 'dash-jump-vetSchedule', fold: 'vetSchedule', label: '🏥 病院スケジュール' },
   ];

@@ -4,3 +4,8 @@
   Cache-Control: no-cache, no-store, must-revalidate
 /*.html
   Cache-Control: no-cache, no-store, must-revalidate
+/shortcuts/install.html
+  Cache-Control: no-cache, no-store, must-revalidate
+/shortcuts/*.plist
+  Content-Type: application/x-plist
+  Cache-Control: public, max-age=300

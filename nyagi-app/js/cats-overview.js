@@ -740,14 +740,151 @@
     return out;
   }
 
-  /** cat-detail renderLeftoverInput と同様：献立差し替え後も昨日ログを落とさない */
-  function ovBuildLeftoverItems(plans, logs) {
-    var logByPlanId = {};
-    for (var li = 0; li < logs.length; li++) {
-      if (logs[li].plan_id != null && logs[li].plan_id !== '') {
-        logByPlanId[String(logs[li].plan_id)] = logs[li];
+  /** 残しモーダル用：献立名の重複判定（手動ログの冗長行をまとめる） */
+  function ovNormFoodKeyForLeftover(name) {
+    return String(name == null ? '' : name).replace(/[\s\u3000]+/g, ' ').trim().toLowerCase();
+  }
+  function ovLeftoverOrphanDedupeKey(log) {
+    var st = log.served_time != null && log.served_time !== '' ? String(log.served_time) : '';
+    return ovNormFoodKeyForLeftover(log.food_name) + '\x1f' + String(log.offered_g != null && log.offered_g !== '' ? log.offered_g : '') + '\x1f' + st;
+  }
+
+  /** 夜献立の「同一メニュー」判定（プリセット重複で plan 行だけ8件あるケースを1行に潰す） */
+  function ovEveningPlanMenuKey(plan) {
+    var fid = plan.food_id != null && plan.food_id !== '' ? String(plan.food_id) : '';
+    var nm = ovNormFoodKeyForLeftover(plan.food_name);
+    var ag = plan.amount_g != null && plan.amount_g !== '' ? String(plan.amount_g) : '';
+    var st = plan.scheduled_time != null && plan.scheduled_time !== '' ? String(plan.scheduled_time) : '';
+    return fid + '\x1f' + nm + '\x1f' + ag + '\x1f' + st;
+  }
+
+  function ovMaxLogIdForPlan(logs, planIdStr) {
+    var m = -1;
+    for (var i = 0; i < logs.length; i++) {
+      if (logs[i].plan_id == null || String(logs[i].plan_id) !== planIdStr) continue;
+      var idn = Number(logs[i].id);
+      if (!isNaN(idn) && idn > m) m = idn;
+    }
+    return m;
+  }
+
+  /**
+   * 同一メニューの夜献立が複数行あるとき代表1行にまとめ、ログの plan_id をその献立に寄せる（表示・紐づけ用のコピーのみ。DBのログは変更しない）。
+   * 代表献立は「その plan に昨日の夜ログのうち最大 id がある行」を優先し、無ければ plan_id が小さい行。
+   */
+  function ovCollapseDuplicateEveningPlans(plans, logs) {
+    plans = plans || [];
+    logs = logs || [];
+    var groups = {};
+    var order = [];
+    for (var pi = 0; pi < plans.length; pi++) {
+      var pl = plans[pi];
+      var k = ovEveningPlanMenuKey(pl);
+      if (!groups[k]) {
+        groups[k] = [];
+        order.push(k);
+      }
+      groups[k].push(pl);
+    }
+    var remap = {};
+    var winners = [];
+    for (var oi = 0; oi < order.length; oi++) {
+      var key = order[oi];
+      var arr = groups[key];
+      if (arr.length === 1) {
+        winners.push(arr[0]);
+        continue;
+      }
+      var bestIdx = 0;
+      var bestScore = ovMaxLogIdForPlan(logs, String(arr[0].plan_id));
+      for (var j = 1; j < arr.length; j++) {
+        var sc = ovMaxLogIdForPlan(logs, String(arr[j].plan_id));
+        if (sc > bestScore) {
+          bestScore = sc;
+          bestIdx = j;
+        } else if (sc === bestScore && bestScore < 0) {
+          var idA = Number(arr[bestIdx].plan_id);
+          var idB = Number(arr[j].plan_id);
+          if (isNaN(idA)) idA = 0;
+          if (isNaN(idB)) idB = 0;
+          if (idB < idA) bestIdx = j;
+        }
+      }
+      var win = arr[bestIdx];
+      winners.push(win);
+      for (var t = 0; t < arr.length; t++) {
+        if (t === bestIdx) continue;
+        remap[String(arr[t].plan_id)] = win.plan_id;
       }
     }
+    var logsOut = [];
+    for (var li = 0; li < logs.length; li++) {
+      var L = logs[li];
+      var pid = L.plan_id != null && L.plan_id !== '' ? String(L.plan_id) : '';
+      if (pid && Object.prototype.hasOwnProperty.call(remap, pid)) {
+        var L2 = {};
+        for (var k in L) {
+          if (Object.prototype.hasOwnProperty.call(L, k)) L2[k] = L[k];
+        }
+        L2.plan_id = remap[pid];
+        logsOut.push(L2);
+      } else {
+        logsOut.push(L);
+      }
+    }
+    return { plansOut: winners, logsOut: logsOut };
+  }
+
+  /**
+   * 昨夜ブロック用：献立＋昨日ログを1行にまとめる。
+   * - 同一 plan_id に複数ログがあるときは id が最大の1件のみを献立行に使い、他は孤児行に出さない（二重表示の主因）。
+   * - plan_id なしで同一フード名・同一 offered_g のログが複数あるときは最新 id のみ残す（手動の重複記録想定）。猫詳細の1献立＝1ログの見え方に寄せる。
+   */
+  function ovBuildLeftoverItems(plans, logs) {
+    plans = plans || [];
+    logs = logs || [];
+    var skipLogIds = {};
+
+    var byPid = {};
+    for (var li = 0; li < logs.length; li++) {
+      var lg0 = logs[li];
+      if (lg0.plan_id == null || lg0.plan_id === '') continue;
+      var pk = String(lg0.plan_id);
+      if (!byPid[pk]) byPid[pk] = [];
+      byPid[pk].push(lg0);
+    }
+    var logByPlanId = {};
+    for (var pkk in byPid) {
+      var arrP = byPid[pkk];
+      if (arrP.length === 1) {
+        logByPlanId[pkk] = arrP[0];
+      } else {
+        arrP.sort(function (a, b) { return (Number(b.id) || 0) - (Number(a.id) || 0); });
+        logByPlanId[pkk] = arrP[0];
+        for (var tp = 1; tp < arrP.length; tp++) {
+          if (arrP[tp].id != null) skipLogIds[String(arrP[tp].id)] = true;
+        }
+      }
+    }
+
+    var byOrphan = {};
+    for (var lj = 0; lj < logs.length; lj++) {
+      var g0 = logs[lj];
+      if (g0.plan_id != null && g0.plan_id !== '') continue;
+      if (g0.id == null) continue;
+      var ok = ovLeftoverOrphanDedupeKey(g0);
+      if (!byOrphan[ok]) byOrphan[ok] = [];
+      byOrphan[ok].push(g0);
+    }
+    for (var okk in byOrphan) {
+      var oarr = byOrphan[okk];
+      if (oarr.length <= 1) continue;
+      oarr.sort(function (a, b) { return (Number(b.id) || 0) - (Number(a.id) || 0); });
+      for (var uo = 1; uo < oarr.length; uo++) {
+        if (oarr[uo].id != null) skipLogIds[String(oarr[uo].id)] = true;
+      }
+    }
+
     var items = [];
     var usedLogIds = {};
     for (var pi = 0; pi < plans.length; pi++) {
@@ -761,6 +898,7 @@
     for (var lli = 0; lli < logs.length; lli++) {
       var ent = logs[lli];
       var lid = ent.id != null ? String(ent.id) : '';
+      if (lid && skipLogIds[lid]) continue;
       if (!ent.plan_id) {
         items.push({ plan: null, log: ent });
         if (lid) usedLogIds[lid] = true;
@@ -815,6 +953,7 @@
       html += '<div class="ov-lo-actions">';
       html += '<button type="button" class="btn btn-outline ov-lo-act ov-lo-save-log" data-log-id="' + escAttr(logId) + '" data-offered-g="' + escAttr(String(offG)) + '" data-input-id="' + escAttr(inputId) + '">保存</button>';
       html += '<button type="button" class="btn btn-outline ov-lo-act ov-lo-complete-log" data-log-id="' + escAttr(logId) + '">完食</button>';
+      html += '<button type="button" class="btn btn-outline ov-lo-act btn-ov-feed-undofed" data-log-id="' + escAttr(logId) + '">取消</button>';
       html += '</div>';
     } else if (planId) {
       html += '<div class="ov-lo-actions">';
@@ -840,15 +979,18 @@
     return html;
   }
 
-  /** 昨日（JST）の feeding_logs 一覧＋取消（猫一覧には出さず 🥄残し モーダル内のみ） */
+  /** 昨日（JST）の feeding_logs 一覧＋取消（猫一覧には出さず 🥄残し モーダル内のみ）。夜枠は「昨夜の夜ごはん」に一本化し二重表示を避ける */
   function ovRenderYesterdayFedUndoFromLogs(yLogsAll) {
     if (!yLogsAll || yLogsAll.length === 0) return '';
     var h = '<div class="ov-yesterday-fed-in-modal" style="margin-bottom:8px;padding:6px 8px;background:rgba(251,191,36,0.08);border-radius:8px;border-left:3px solid rgba(251,191,36,0.45);">';
-    h += '<div style="font-weight:700;font-size:11px;margin-bottom:4px;color:var(--text-main);line-height:1.3;">📅 昨日のあげた <span class="dim" style="font-weight:500;font-size:10px;">（取消）</span></div>';
+    h += '<div style="font-weight:700;font-size:11px;margin-bottom:4px;color:var(--text-main);line-height:1.3;">📅 昨日のあげた <span class="dim" style="font-weight:500;font-size:10px;">（朝・昼・取消）</span></div>';
+    var any = false;
     for (var yi = 0; yi < yLogsAll.length; yi++) {
       var lg = yLogsAll[yi];
+      if (ovIsEveningMealSlot(lg.meal_slot)) continue;
       var lid = lg.id != null ? String(lg.id) : (lg.log_id != null ? String(lg.log_id) : '');
       if (!lid) continue;
+      any = true;
       var fn = lg.food_name ? String(lg.food_name) : '—';
       var pct = lg.eaten_pct != null && lg.eaten_pct !== '' ? String(lg.eaten_pct) + '%' : '';
       var offG = lg.offered_g != null && lg.offered_g !== '' ? String(lg.offered_g) + 'g' : '';
@@ -867,7 +1009,7 @@
       h += '</span></div>';
     }
     h += '</div>';
-    return h;
+    return any ? h : '';
   }
 
   function ovFillLeftoverModalBody(catId) {
@@ -881,16 +1023,14 @@
 
     var yesterdayStr = yesterdayJstYmd();
     var base = feedingApiBase() + '/logs?cat_id=' + encodeURIComponent(catId);
-    var allPlans = c.feeding_plan || [];
 
     fetch(base + '&date=' + yesterdayStr, { headers: apiHeaders(), cache: 'no-store' })
       .then(function (r) { return r.json(); })
       .then(function (yRes) {
       var yLogsAll = yRes.logs || [];
 
-      var prevNightPlans = ovFilterPlansBySlot(allPlans, ovIsEveningMealSlot);
       var prevNightLogs = ovFilterLogsBySlot(yLogsAll, ovIsEveningMealSlot);
-      var itemsPrev = ovBuildLeftoverItems(prevNightPlans, prevNightLogs);
+      var itemsPrev = ovBuildLeftoverItems([], prevNightLogs);
 
       var html = '';
       html += '<p class="dim" style="font-size:10px;line-height:1.35;margin:0 0 6px;padding:0 2px;">昨日の「あげた」の取消と、<strong>昨夜分</strong>の残りg。当日分は一覧の献立から入力してください。</p>';
@@ -2376,14 +2516,14 @@
   function buildCareInlineEdit(c) {
     return '<div class="inline-form ov-care-inline-form" data-cat-id="' + escAttr(c.id) + '">' +
       '<div class="ov-care-bulk-block">' +
-      '<div class="ov-care-bulk-hint" style="font-weight:600;color:var(--text-main);">ワンタップで5項目を実施済みに記録（ブラシ・アゴ・耳・お尻・目ヤニ拭き）</div>' +
-      '<div class="ov-care-bulk-actions" style="flex-wrap:wrap;">' +
+      '<div class="ov-care-bulk-hint">5項目まとめ（ブラシ・アゴ・耳・お尻・目ヤニ）</div>' +
+      '<div class="ov-care-bulk-actions">' +
       '<input type="date" class="ov-inline-date ov-inp-care-bulk-date" value="' + escAttr(todayJstYmd()) + '">' +
-      '<button type="button" class="btn btn-primary btn-ov-care-bundle-save" style="flex:1;min-width:11rem;font-size:13px;padding:10px 12px;">🪮 5項目をまとめて記録</button>' +
+      '<button type="button" class="btn btn-primary btn-ov-care-bundle-save">🪮 5項目まとめて記録</button>' +
       '</div>' +
-      '<p class="dim" style="font-size:10px;margin:6px 0 0;line-height:1.4;">その日付で未記録の項目だけ追加します（チェック不要）。爪切り・肉球は下の個別フォームから。</p>' +
+      '<p class="dim ov-care-bulk-note">未記録分のみ追加（爪切り・肉球は下の個別から）</p>' +
       '</div>' +
-      '<div class="ov-care-sep">個別記録（全項目・1件ずつ）</div>' +
+      '<div class="ov-care-sep">個別（1件ずつ）</div>' +
       '<select class="ov-inline-select ov-sel-care-type">' + OPT_CARE_TYPE + '</select>' +
       '<select class="ov-inline-select ov-sel-care-done">' + OPT_CARE_DONE + '</select>' +
       '<input type="date" class="ov-inline-date ov-inp-date" value="' + escAttr(todayJstYmd()) + '">' +
@@ -3069,15 +3209,17 @@
         var badgeSt = e.voice_input_id ? ' <small class="dim source-badge">音声</small>' : '';
         html += '<div class="ov-ex-row' + pastSt + '" data-record-id="' + escAttr(String(e.record_id)) + '" data-hr-value="' + escAttr(e.value_raw == null ? '' : String(e.value_raw)) + '" data-hr-details="' + escAttr(e.details_slot == null ? '' : String(e.details_slot)) + '" data-hr-date="' + escAttr(e.record_date == null ? '' : String(e.record_date)) + '" data-hr-kind="stool">';
         html += '<div class="ov-ex-display"><span class="ov-ex-text">' + esc(ovExcretionLineText(e)) + '</span>' + badgeSt;
+        html += '<div class="ov-ex-actions">';
         html += '<button type="button" class="btn btn-ov-hr-edit">編集</button>';
-        html += '<button type="button" class="btn btn-ov-hr-del">削除</button></div>';
+        html += '<button type="button" class="btn btn-ov-hr-del">削除</button></div></div>';
         html += excretionEditBlockStool();
         html += '</div>';
       } else if (e.voice_input_id) {
         html += '<div class="ov-ex-row ov-ex-voice-only' + pastSt + '" data-voice-input-id="' + escAttr(String(e.voice_input_id)) + '" data-hr-value="' + escAttr(e.value_raw == null ? '' : String(e.value_raw)) + '" data-hr-details="' + escAttr(e.details_slot == null ? '' : String(e.details_slot)) + '" data-hr-date="' + escAttr(e.record_date == null ? '' : String(e.record_date)) + '" data-hr-kind="stool">';
         html += '<div class="ov-ex-display"><span class="ov-ex-text">' + esc(ovExcretionLineText(e)) + '</span> <small class="dim source-badge">音声</small>';
+        html += '<div class="ov-ex-actions">';
         html += '<button type="button" class="btn btn-ov-hr-edit">編集</button>';
-        html += '<button type="button" class="btn btn-ov-hr-del">削除</button></div>';
+        html += '<button type="button" class="btn btn-ov-hr-del">削除</button></div></div>';
         html += excretionEditBlockStool();
         html += '</div>';
       }
@@ -3096,15 +3238,17 @@
         var badgeUr = e.voice_input_id ? ' <small class="dim source-badge">音声</small>' : '';
         html += '<div class="ov-ex-row' + pastUr + '" data-record-id="' + escAttr(String(e.record_id)) + '" data-hr-value="' + escAttr(e.value_raw == null ? '' : String(e.value_raw)) + '" data-hr-details="' + escAttr(e.details_slot == null ? '' : String(e.details_slot)) + '" data-hr-date="' + escAttr(e.record_date == null ? '' : String(e.record_date)) + '" data-hr-kind="urine">';
         html += '<div class="ov-ex-display"><span class="ov-ex-text">' + esc(ovExcretionLineText(e)) + '</span>' + badgeUr;
+        html += '<div class="ov-ex-actions">';
         html += '<button type="button" class="btn btn-ov-hr-edit">編集</button>';
-        html += '<button type="button" class="btn btn-ov-hr-del">削除</button></div>';
+        html += '<button type="button" class="btn btn-ov-hr-del">削除</button></div></div>';
         html += excretionEditBlockUrine();
         html += '</div>';
       } else if (e.voice_input_id) {
         html += '<div class="ov-ex-row ov-ex-voice-only' + pastUr + '" data-voice-input-id="' + escAttr(String(e.voice_input_id)) + '" data-hr-value="' + escAttr(e.value_raw == null ? '' : String(e.value_raw)) + '" data-hr-details="' + escAttr(e.details_slot == null ? '' : String(e.details_slot)) + '" data-hr-date="' + escAttr(e.record_date == null ? '' : String(e.record_date)) + '" data-hr-kind="urine">';
         html += '<div class="ov-ex-display"><span class="ov-ex-text">' + esc(ovExcretionLineText(e)) + '</span> <small class="dim source-badge">音声</small>';
+        html += '<div class="ov-ex-actions">';
         html += '<button type="button" class="btn btn-ov-hr-edit">編集</button>';
-        html += '<button type="button" class="btn btn-ov-hr-del">削除</button></div>';
+        html += '<button type="button" class="btn btn-ov-hr-del">削除</button></div></div>';
         html += excretionEditBlockUrine();
         html += '</div>';
       }
@@ -3618,7 +3762,7 @@
 
   function renderItemCard_Care() {
     var html = '<div class="item-card">';
-    html += '<div class="item-card-title">🩹 ケア実施 <small class="dim" style="font-weight:500;">各行「5項目をまとめて記録」で一括</small></div>';
+    html += '<div class="item-card-title">🩹 ケア実施 <small class="dim item-card-title-sub">展開枠で「5項目まとめて」</small></div>';
     html += '<div class="item-card-body">';
     for (var i = 0; i < catsData.length; i++) {
       var c = catsData[i];
@@ -3626,7 +3770,15 @@
 
       var careVals = '';
       if (care.length === 0) careVals = '<span class="dim">なし</span>';
-      else { for (var j = 0; j < care.length; j++) { var cls = care[j].done ? 'care-done' : 'care-skip'; var cIdAttr = care[j].id ? ' data-care-id="' + escAttr(String(care[j].id)) + '"' : ''; careVals += '<span class="care-chip care-chip-tap ' + cls + '"' + cIdAttr + ' style="font-size:11px;cursor:pointer;">' + esc(care[j].type) + (care[j].done && care[j].by ? '<small>' + esc(care[j].by) + '</small>' : '') + '</span>'; } }
+      else {
+        careVals += '<div class="ov-care-row-chips">';
+        for (var j = 0; j < care.length; j++) {
+          var cls = care[j].done ? 'care-done' : 'care-skip';
+          var cIdAttr = care[j].id ? ' data-care-id="' + escAttr(String(care[j].id)) + '"' : '';
+          careVals += '<span class="care-chip care-chip-tap ' + cls + '"' + cIdAttr + '>' + esc(care[j].type) + (care[j].done && care[j].by ? '<small>' + esc(care[j].by) + '</small>' : '') + '</span>';
+        }
+        careVals += '</div>';
+      }
       html += itemRowEditable(c, careVals, buildCareInlineEdit(c));
     }
     html += '</div></div>';

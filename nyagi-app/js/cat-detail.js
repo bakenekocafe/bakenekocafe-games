@@ -2694,11 +2694,20 @@ function closeCatDetailFoldSection(btn) {
       }
     }
 
-    if (medications.length === 0) {
+    /* スケジュールタブ: プリセット全面適用の「入れ替えで残った終了行」（plan_type=preset かつ inactive）だけ表示しない */
+    var scheduleMeds = [];
+    for (var sm = 0; sm < medications.length; sm++) {
+      var smed = medications[sm];
+      var smInactive = smed.active === 0 || smed.active === false || String(smed.active) === '0';
+      if (smed.plan_type === 'preset' && smInactive) continue;
+      scheduleMeds.push(smed);
+    }
+
+    if (scheduleMeds.length === 0) {
       html += '<div class="empty-msg">投薬スケジュールなし</div>';
     } else {
-      for (var i = 0; i < medications.length; i++) {
-        var med = medications[i];
+      for (var i = 0; i < scheduleMeds.length; i++) {
+        var med = scheduleMeds[i];
         var medInactive = med.active === 0 || med.active === false || String(med.active) === '0';
         var planPreset = med.plan_type === 'preset';
         var cardClass = 'med-schedule-card';

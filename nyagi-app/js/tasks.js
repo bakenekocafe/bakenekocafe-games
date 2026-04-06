@@ -1694,6 +1694,48 @@
       sectionHtml('排尿（2日以上未記録）', '🚽', exc.urine_gaps);
   }
 
+  function renderCloseDayCareGapBlock(care) {
+    var el = document.getElementById('closeDayCareGapBlock');
+    if (!el) return;
+    if (!care) {
+      el.innerHTML = '';
+      return;
+    }
+    var th = care.threshold_days != null ? care.threshold_days : 7;
+    var arr = care.items || [];
+    var h = '<div style="margin-bottom:10px;padding:8px;background:var(--surface-alt);border-radius:8px;border-left:3px solid #64748b;">';
+    h += '<div style="font-weight:700;margin-bottom:6px;color:var(--text-main);">🪮 ケア実施（項目別・実施から' + th + '日以上未記録）</div>';
+    h += '<div style="font-size:11px;color:var(--text-dim);margin-bottom:8px;line-height:1.45;">Slack レポートに同内容が載ります（×／ー は実施扱いにしません）。</div>';
+    if (arr.length === 0) {
+      h += '<div style="color:var(--text-dim);font-size:12px;">該当なし</div>';
+    } else {
+      h += '<ul style="margin:0;padding-left:18px;line-height:1.55;font-size:12px;color:var(--text-main);">';
+      for (var i = 0; i < arr.length; i++) {
+        var it = arr[i];
+        h += '<li>';
+        h += escapeHtml(it.cat_name || '') + ' — ' + escapeHtml(it.item_label || '');
+        if (it.no_record) {
+          h += ' <span style="color:var(--text-dim);">記録なし（猫マスタ登録から' + (it.days_since_last != null ? it.days_since_last : '') + '日）</span>';
+        } else {
+          var md =
+            it.last_record_date && String(it.last_record_date).length >= 10
+              ? parseInt(it.last_record_date.slice(5, 7), 10) + '/' + parseInt(it.last_record_date.slice(8, 10), 10)
+              : '';
+          h +=
+            ' <span style="color:var(--text-dim);">最終 ' +
+            escapeHtml(md) +
+            '・経過' +
+            (it.days_since_last != null ? it.days_since_last : '') +
+            '日</span>';
+        }
+        h += '</li>';
+      }
+      h += '</ul>';
+    }
+    h += '</div>';
+    el.innerHTML = h;
+  }
+
   function renderCloseDayWeightBlock(wloss) {
     var el = document.getElementById('closeDayWeightBlock');
     if (!el) return;
@@ -1779,6 +1821,7 @@
       (evOpen ? '　📅 追跡中イベント: <strong>' + evOpen + '</strong>件' : '');
 
     renderCloseDayExcretionBlock(data.excretion_close_day);
+    renderCloseDayCareGapBlock(data.care_item_gaps_close_day);
     renderCloseDayWeightBlock(data.weight_loss_close_day);
     renderCloseDayAppetiteBlock(data.appetite_low_close_day);
 
@@ -1948,6 +1991,45 @@
           else lines.push('  • ' + vx.cat_name + ' — 最終 ' + previewFmtMd(vx.last_record_date) + '（経過' + vx.days_since_last + '日）');
         }
         if (ug3.length > CLOSE_PREVIEW_MAX) lines.push('  … 他' + (ug3.length - CLOSE_PREVIEW_MAX) + '頭');
+      }
+      lines.push('');
+    }
+
+    var carePrev = closeDayData.care_item_gaps_close_day;
+    if (carePrev) {
+      var thC = carePrev.threshold_days != null ? carePrev.threshold_days : 7;
+      lines.push('🪮 ケア実施（項目別・実施から' + thC + '日以上未記録）');
+      var ciArr = carePrev.items || [];
+      if (ciArr.length === 0) {
+        lines.push('  該当なし');
+      } else {
+        for (var cix = 0; cix < ciArr.length && cix < CLOSE_PREVIEW_MAX; cix++) {
+          var cit = ciArr[cix];
+          if (cit.no_record) {
+            lines.push(
+              '  • ' +
+                cit.cat_name +
+                ' — ' +
+                cit.item_label +
+                ' 記録なし（猫マスタ登録から' +
+                (cit.days_since_last != null ? cit.days_since_last : '') +
+                '日）'
+            );
+          } else {
+            lines.push(
+              '  • ' +
+                cit.cat_name +
+                ' — ' +
+                cit.item_label +
+                ' 最終 ' +
+                previewFmtMd(cit.last_record_date) +
+                '（経過' +
+                cit.days_since_last +
+                '日）'
+            );
+          }
+        }
+        if (ciArr.length > CLOSE_PREVIEW_MAX) lines.push('  … 他' + (ciArr.length - CLOSE_PREVIEW_MAX) + '件');
       }
       lines.push('');
     }

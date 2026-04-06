@@ -1,0 +1,124 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>NYAGI 音声ショートカットを取り込む</title>
+  <style>
+    body { font-family: system-ui, -apple-system, sans-serif; background: #1a1a2e; color: #eee; margin: 0; padding: 16px; line-height: 1.5; }
+    h1 { font-size: 1.15rem; margin: 0 0 8px; }
+    .card { background: rgba(255,255,255,.06); border-radius: 12px; padding: 16px; margin: 14px 0; border: 1px solid rgba(255,255,255,.1); }
+    .btn {
+      display: block; text-align: center; padding: 14px 18px; margin: 10px 0;
+      background: #7c3aed; color: #fff; text-decoration: none; font-weight: 700; border-radius: 10px;
+      border: none; font-size: 16px; width: 100%; box-sizing: border-box;
+    }
+    .btn:active { opacity: .9; }
+    .dim { color: #94a3b8; font-size: 13px; }
+    .qr-wrap { text-align: center; margin: 16px 0; }
+    .qr-wrap img { max-width: 100%; height: auto; border-radius: 8px; background: #fff; padding: 8px; }
+    code { font-size: 12px; word-break: break-all; color: #c4b5fd; }
+    ol { padding-left: 1.2em; }
+    li { margin: 6px 0; }
+    .manual ol { margin: 8px 0 0; padding-left: 1.25em; }
+    .manual li { margin: 10px 0; }
+    .manual strong { color: #e2e8f0; }
+    .link-txt { color: #93c5fd; word-break: break-all; }
+  </style>
+</head>
+<body>
+  <h1>NYAGI 音声 → API</h1>
+  <p class="dim">ショートカットを取り込み → <strong>X-Admin-Key</strong> と <strong>X-Staff-Id</strong> をブロック内で自分用に書き換え → Siri で実行。</p>
+  <p class="dim" id="unsignedWarn" style="display:none;background:rgba(251,191,36,.15);border:1px solid rgba(251,191,36,.4);border-radius:8px;padding:10px 12px;color:#fcd34d;">
+    いまの QR はネット上の <strong>未署名</strong> 定義への取り込みです。<strong>iOS 15 以降</strong>では拒否されることが多いです。管理者が <code>install.html</code> 内の <code>NYAGI_ICLOUD_SHORTCUT</code> に iCloud 共有 URL を入れて再デプロイすると確実です。それまで <code>NYAGI-音声API-手順.txt</code> の手動作成を使ってください。
+  </p>
+
+  <div class="card">
+    <strong>① QR をスキャン（推奨）</strong>
+    <p class="dim">カメラで下の QR を読み取る。iCloud リンクのときは Safari で「ショートカットを追加」が開きます。</p>
+    <div class="qr-wrap" id="qrHost"></div>
+    <p class="dim" style="font-size:11px;margin-top:8px;">読み取れない場合は ② のボタンをタップ。</p>
+  </div>
+
+  <div class="card">
+    <strong>② このページから開く</strong>
+    <a class="btn" id="btnOpen" href="#">ショートカットを取り込む</a>
+    <p class="dim">Safari で開いてタップ。iCloud の場合はそのまま追加画面へ。未設定の場合のみ「ショートカット」アプリの取り込み URL になります。</p>
+  </div>
+
+  <div class="card manual">
+    <strong>③ 取り込めなかったとき（必ずできるやり方）</strong>
+    <p class="dim">Apple の制限で、ネットから未署名のショートカットを入れられないことがあります。その場合は<strong>ショートカットアプリでブロックを手動で足す</strong>だけで同じことができます（ファイル取り込みは不要）。</p>
+    <ol>
+      <li><strong>準備</strong>：NYAGI と同じ <code>X-Admin-Key</code> と <code>X-Staff-Id</code>（スタッフ ID）をメモ。</li>
+      <li><strong>新規ショートカット</strong>（＋）→ 名前を「NYAGI 音声送信」などに。</li>
+      <li><strong>「テキストを聞き取る」</strong>を追加（言語：日本語）。</li>
+      <li><strong>「辞書」</strong>を追加。キー <code>text</code>、値に「聞き取ったテキスト」。</li>
+      <li><strong>「URL のコンテンツを取得」</strong>：POST、URL は<br><code style="font-size:11px;">https://api.bakenekocafe.studio/api/ops/voice/shortcut/voice</code><br>ヘッダーに <code>Content-Type: application/json</code>、<code>X-Admin-Key</code>、<code>X-Staff-Id</code>。本文は JSON で、さきほどの辞書ブロック全体。</li>
+      <li><strong>「辞書の値を取得」×2</strong>：1回目のキー <code>shortcut</code>（入力は URL 取得の結果）→ 2回目のキー <code>speak</code>（入力はその出力）。</li>
+      <li><strong>「テキストを話す」</strong>に最後の結果を指定（または「結果を表示」）。</li>
+    </ol>
+    <p class="dim" style="margin-top:12px;">画面の説明つきの全文は次のテキストにあります（Safari で開いて共有・コピー可）。</p>
+    <p><a class="link-txt" id="manualTxtLink" href="#">NYAGI-音声API-手順.txt を開く</a></p>
+  </div>
+
+  <p class="dim" style="font-size:12px;margin-top:20px;">取り込みに成功した場合も、「URL のコンテンツを取得」内の <code>ここにADMIN_KEYを貼る</code> / <code>ここにスタッフIDを貼る</code> を自分用の値に直してください。</p>
+
+  <!--
+    運用で「ショートカット」→ 共有 → iCloud のリンクを取得したら、下の NYAGI_ICLOUD_SHORTCUT に貼ると
+    QR / ボタンは HTTPS の iCloud になり、端末差が最も少ないです（公式の取り込みフロー）。
+    空のままだと plist を shortcuts://import-shortcut で取り込もうとします（iOS 15+ は未署名で失敗しがち）。
+  -->
+  <script>
+(function () {
+  /** @type {string} 例: https://www.icloud.com/shortcuts/xxxxxxxxxxxx */
+  var NYAGI_ICLOUD_SHORTCUT = '';
+
+  var origin = (location.origin && location.protocol === 'https:') ? location.origin : 'https://nyagi.bakenekocafe.studio';
+  var plistUrl = origin + '/shortcuts/nyagi-voice-api-unsigned.plist';
+  var manualTxt = origin + '/shortcuts/NYAGI-%E9%9F%B3%E5%A3%B0API-%E6%89%8B%E9%A0%86.txt';
+  var aManual = document.getElementById('manualTxtLink');
+  if (aManual) { aManual.setAttribute('href', manualTxt); }
+
+  /**
+   * Apple 公式: shortcuts://import-shortcut?url=[.shortcut の URL]&name=[任意]
+   * x-callback-url 形式は「URL が無効」になることがあります。
+   * name は日本語より ASCII のほうがトラブルが少ないので省略（ファイル名を使わせる）。
+   */
+  function buildImportShortcutUrl(remoteFileUrl) {
+    return 'shortcuts://import-shortcut?url=' + encodeURIComponent(remoteFileUrl);
+  }
+
+  var openHref;
+  var qrLabel;
+  if (NYAGI_ICLOUD_SHORTCUT && /^https:\/\/www\.icloud\.com\/shortcuts\//i.test(NYAGI_ICLOUD_SHORTCUT.trim())) {
+    openHref = NYAGI_ICLOUD_SHORTCUT.trim();
+    qrLabel = 'iCloud';
+  } else {
+    openHref = buildImportShortcutUrl(plistUrl);
+    qrLabel = 'import-shortcut';
+    var w = document.getElementById('unsignedWarn');
+    if (w) { w.style.display = 'block'; }
+  }
+
+  var btn = document.getElementById('btnOpen');
+  btn.setAttribute('href', openHref);
+
+  var qrData = openHref;
+  var qrImg = document.createElement('img');
+  qrImg.alt = 'QR';
+  qrImg.width = 280;
+  qrImg.height = 280;
+  qrImg.src = 'https://quickchart.io/qr?size=280&text=' + encodeURIComponent(qrData);
+  document.getElementById('qrHost').appendChild(qrImg);
+
+  var p = document.createElement('p');
+  p.className = 'dim';
+  p.style.fontSize = '10px';
+  p.style.wordBreak = 'break-all';
+  p.textContent = 'QR種別: ' + qrLabel + ' / 内容: ' + qrData;
+  document.getElementById('qrHost').appendChild(p);
+})();
+  </script>
+</body>
+</html>

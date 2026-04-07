@@ -4,6 +4,7 @@
   <meta charset="UTF-8">
   <script async src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-5189561379756793" crossorigin="anonymous"></script>
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <link rel="canonical" href="https://www.bakenekocafe.studio/">
   <title>BAKENEKO GAMES｜保護猫活動を応援するブラウザゲーム</title>
   <meta name="description" content="BAKENEKO GAMESは一般社団法人新宿租界の無料ブラウザゲームポータル。保護猫カフェ「化猫茶屋」との連動、世界ランキング、任意の広告視聴による応援、こはだ日記・遊び方ガイド・利用規約を掲載。">
   <meta property="og:title" content="BAKENEKO GAMES｜保護猫活動を応援するブラウザゲーム">
@@ -20,7 +21,42 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Noto+Serif+JP:wght@400;700;900&family=Share+Tech+Mono&family=Zen+Old+Mincho:wght@400;700;900&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="portal.css?v=20260407a">
+  <link rel="stylesheet" href="portal.css?v=20260408a">
+  <script type="application/ld+json">
+  {
+    "@context": "https://schema.org",
+    "@graph": [
+      {
+        "@type": "Organization",
+        "@id": "https://www.bakenekocafe.studio/#organization",
+        "name": "一般社団法人 新宿租界",
+        "alternateName": ["BAKENEKO GAMES", "BAKENEKO CAFE 化猫茶屋"],
+        "url": "https://www.bakenekocafe.studio/",
+        "description": "東京都新宿区を拠点とする一般社団法人。保護猫カフェの運営と、ブラウザゲームポータル BAKENEKO GAMES を運営しています。",
+        "sameAs": [
+          "https://bakeneko-cafe.tokyo/",
+          "https://bakeneko-cafe.tokyo/operating/"
+        ],
+        "contactPoint": [{
+          "@type": "ContactPoint",
+          "email": "info@bakeneko-cafe.tokyo",
+          "contactType": "customer support",
+          "availableLanguage": "ja"
+        }]
+      },
+      {
+        "@type": "WebSite",
+        "@id": "https://www.bakenekocafe.studio/#website",
+        "url": "https://www.bakenekocafe.studio/",
+        "name": "BAKENEKO GAMES",
+        "alternateName": "保護猫活動を応援するブラウザゲーム",
+        "inLanguage": "ja",
+        "publisher": { "@id": "https://www.bakenekocafe.studio/#organization" },
+        "description": "無料のブラウザゲーム、こはだ日記、遊び方ガイドを掲載する公式ポータル。広告視聴は任意で、ポイ活ではありません。"
+      }
+    ]
+  }
+  </script>
 </head>
 <body>
 
@@ -63,6 +99,7 @@
     <nav class="portal-nav">
       <a href="#games">ゲーム</a>
       <a href="#about-site">サイトについて</a>
+      <a href="#first-visit">初めての方</a>
       <a href="#diary">日記</a>
       <a href="#support">猫支援</a>
       <a href="#updates">更新</a>
@@ -157,6 +194,23 @@
           <p>掲載しているゲームは、スマートフォンやPCのブラウザから<strong>会員登録なしで</strong>遊べます。スコアは<strong>世界ランキング</strong>に送信できるタイトルもあり、記録を競う楽しみ方も用意しています。リザルト画面などに表示される広告は<strong>Google AdSense 等の第三者配信</strong>によるもので、<strong>視聴は任意</strong>です。広告を見なくてもゲームは最後までプレイでき、利用者への<strong>金銭・ポイント・景品の付与は行っていません</strong>（いわゆるポイ活サイトではありません）。収益の一部は運営および保護猫に関わる活動に活用しています。仕組みの詳細は<a href="support.html">広告とサイトの仕組み</a>をご覧ください。</p>
           <p>コンテンツは、リリース中・開発中の<strong>オリジナルゲーム</strong>に加え、カフェの猫スタッフの視点で綴る<strong><a href="diary/">こはだ日記</a></strong>、遊び方や画面の見方をまとめた<strong><a href="howto.html">遊び方ガイド</a></strong>、運営情報の<strong><a href="about.html">About</a></strong>などで構成しています。サイトの利用条件・免責、お子様のご利用、個人情報の取扱いは<a href="terms.html">利用規約</a>および<a href="privacy.html">プライバシーポリシー</a>に記載しています。ご質問は<a href="contact.html">お問い合わせ</a>から受け付けています。</p>
           <p>当ポータルは継続的にページやゲームを更新しています。直近の変更は下記の<strong>更新履歴</strong>からもご確認いただけます。</p>
+        </div>
+      </section>
+
+      <!-- ═══ 初めての方へ ═══ -->
+      <section class="portal-section first-visit-section" id="first-visit" aria-labelledby="first-visit-title">
+        <h2 class="section-title" id="first-visit-title">初めての方へ</h2>
+        <div class="first-visit-inner">
+          <p class="first-visit-lead">会員登録やアプリのインストールは不要です。次の順で読むと、サイトの全体像とルールが把握しやすくなります。</p>
+          <ol class="first-visit-steps">
+            <li><strong>このサイトについて</strong>（上段）で目的・広告の扱い・主要ページへのリンクを確認する。</li>
+            <li><strong><a href="#games">ゲームを選ぶ</a></strong>からタイトルを開き、ニックネームは任意でプレイする。</li>
+            <li>操作やコツは<strong><a href="howto.html">遊び方ガイド</a></strong>にまとめています（こはだジャンプ・なめこバランス）。</li>
+            <li>リザルトの広告は<strong>任意</strong>です。仕組み・収益の使途は<strong><a href="support.html">広告とサイトの仕組み</a></strong>、利用条件は<strong><a href="terms.html">利用規約</a></strong>と<strong><a href="privacy.html">プライバシーポリシー</a></strong>をご覧ください。</li>
+            <li>カフェの活動や猫スタッフの紹介は<strong><a href="about.html">About</a></strong>、猫視点の記事は<strong><a href="diary/">こはだ日記</a></strong>（毎日21時頃更新）です。</li>
+            <li>不具合・取材・その他のご相談は<strong><a href="contact.html">お問い合わせ</a></strong>から（件名に「BAKENEKO GAMES」とご記載ください）。</li>
+          </ol>
+          <p class="first-visit-note">正規のサイトURLは <strong>https://www.bakenekocafe.studio</strong> です。<code>ads.txt</code> はルートに配置し、掲載広告の正当性を示しています。</p>
         </div>
       </section>
 
@@ -310,6 +364,10 @@
         <h2 class="section-title">更新履歴</h2>
         <ul class="update-history-list">
           <li class="update-item">
+            <span class="update-date">2026-04-08</span>
+            <span class="update-body">審査・クロール向けに<strong>初めての方へ</strong>（サイト内ガイド）、<strong>JSON-LD</strong>（Organization / WebSite）、主要ページの<strong>canonical</strong>を追加。<a href="support.html">広告とサイトの仕組み</a>のFAQを拡充、<a href="howto.html">遊び方ガイド</a>・<a href="contact.html">お問い合わせ</a>に説明文を追記。</span>
+          </li>
+          <li class="update-item">
             <span class="update-date">2026-04-07</span>
             <span class="update-body">トップページ冒頭に<strong>「このサイトについて」</strong>を追加。運営目的・ゲームと広告の扱い・主要ページへの導線を文章で明示（サイトの独自性・説明性の強化）。</span>
           </li>
@@ -377,6 +435,6 @@
     </footer>
   </main>
 
-  <script src="portal.js?v=20260407a"></script>
+  <script src="portal.js?v=20260408a"></script>
 </body>
 </html>

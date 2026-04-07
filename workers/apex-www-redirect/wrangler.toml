@@ -1,0 +1,8 @@
+# apex のみ Worker が先に処理し、www は Cloudflare Pages のまま。
+name = "bakeneko-apex-www-redirect"
+main = "src/index.js"
+compatibility_date = "2024-04-01"
+
+[[routes]]
+pattern = "bakenekocafe.studio/*"
+zone_name = "bakenekocafe.studio"

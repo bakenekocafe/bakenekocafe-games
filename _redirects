@@ -1,5 +1,5 @@
-# apex → www は Cloudflare ダッシュボードの「Bulk Redirects」または
-# ドメインのリダイレクトルールで設定してください（Pages の _redirects はホスト名を選べません）。
+# apex → www は Cloudflare ゾーンの Redirect Rule で設定（手順: docs/公開前_ユーザー操作が必要な項目.md「1.5」）。
+# Pages の _redirects ではホスト名を条件にできません。
 
 # ルート (/) を必ず index.html（ポータル）として配信
 /    /index.html   200

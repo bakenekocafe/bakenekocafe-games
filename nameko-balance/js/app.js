@@ -1426,7 +1426,7 @@
           result: resultText,
           rank: lastSubmitRank,
           tags: ['なめこバランス', 'BAKENEKO GAMES'],
-          gameUrl: 'https://bakenekocafe.studio/nameko-balance/',
+          gameUrl: 'https://www.bakenekocafe.studio/nameko-balance/',
         };
         function doShare(blob) {
           if (blob) opts.imageBlob = blob;
@@ -1434,7 +1434,7 @@
           if (typeof BakenekoShare !== 'undefined' && BakenekoShare.post) {
             BakenekoShare.post(opts);
           } else {
-            var text = resultText + '\n\n#なめこバランス #BAKENEKO GAMES\nhttps://bakenekocafe.studio/nameko-balance/';
+            var text = resultText + '\n\n#なめこバランス #BAKENEKO GAMES\nhttps://www.bakenekocafe.studio/nameko-balance/';
             window.open('https://twitter.com/intent/tweet?text=' + encodeURIComponent(text), '_blank');
           }
         }

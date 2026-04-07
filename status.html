@@ -152,8 +152,8 @@
     }
 
     Promise.all([
-      checkEndpoint('https://bakenekocafe.studio/').then(function(ok){ setText('st-portal', ok?'正常':'異常'); setClass('st-portal', ok?'s-ok':'s-err'); }),
-      checkEndpoint('https://bakenekocafe.studio/game.html').then(function(ok){ setText('st-game', ok?'正常':'異常'); setClass('st-game', ok?'s-ok':'s-err'); }),
+      checkEndpoint('https://www.bakenekocafe.studio/').then(function(ok){ setText('st-portal', ok?'正常':'異常'); setClass('st-portal', ok?'s-ok':'s-err'); }),
+      checkEndpoint('https://www.bakenekocafe.studio/game.html').then(function(ok){ setText('st-game', ok?'正常':'異常'); setClass('st-game', ok?'s-ok':'s-err'); }),
       fetch(API+'/api/public-stats?gameId=kohada').then(function(r){return r.json()}).then(function(d){
         setText('st-api','正常'); setClass('st-api','s-ok');
         setText('st-plays', ((d.totalPlays||0)).toLocaleString());

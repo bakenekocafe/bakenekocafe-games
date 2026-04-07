@@ -1352,7 +1352,7 @@
         result: 'さよりパンチ防衛 ' + S.time + '秒 生存！ スコア: ' + S.score,
         rank: S.rank,
         tags: ['さよりパンチ防衛', 'BAKENEKOGAMES'],
-        gameUrl: 'https://bakenekocafe.studio/sayori-punch/',
+        gameUrl: 'https://www.bakenekocafe.studio/sayori-punch/',
         gameName: 'さよりパンチ防衛',
         imageBlob: null,
         imageFileName: 'sayori-record.png'

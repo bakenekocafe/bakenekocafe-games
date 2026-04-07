@@ -2196,7 +2196,7 @@ const Game = {
                 result:    result,
                 rank:      this._lastSubmitRank || null,
                 tags:      ['こはだジャンプ', 'BAKENEKOドリーム'],
-                gameUrl:   'https://bakenekocafe.studio/game.html',
+                gameUrl:   'https://www.bakenekocafe.studio/game.html',
                 imageBlob: blob || null,
                 imageFileName: 'kohada-record.png',
             });

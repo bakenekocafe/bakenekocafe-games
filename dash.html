@@ -127,8 +127,8 @@
 
     function check(url){ return fetch(url,{method:'HEAD',mode:'cors'}).then(function(r){return r.ok}).catch(function(){return false}); }
 
-    check('https://bakenekocafe.studio/').then(function(ok){ setText('d-portal',ok?'OK':'NG'); setCls('d-portal',ok?'ok':'err'); });
-    check('https://bakenekocafe.studio/game.html').then(function(ok){ setText('d-game',ok?'OK':'NG'); setCls('d-game',ok?'ok':'err'); });
+    check('https://www.bakenekocafe.studio/').then(function(ok){ setText('d-portal',ok?'OK':'NG'); setCls('d-portal',ok?'ok':'err'); });
+    check('https://www.bakenekocafe.studio/game.html').then(function(ok){ setText('d-game',ok?'OK':'NG'); setCls('d-game',ok?'ok':'err'); });
 
     var fetches = GAMES.map(function(g){
       return fetch(API+'/api/public-stats?gameId='+encodeURIComponent(g.id))

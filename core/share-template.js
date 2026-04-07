@@ -11,7 +11,7 @@
  *     rank:     12,                                   // 世界ランキング順位（省略可）
  *     score:    '45.123km',                           // スコア表示（省略可、resultに含めてもOK）
  *     tags:     ['こはだジャンプ', 'BAKENEKOドリーム'], // ハッシュタグ（#は不要）
- *     gameUrl:  'https://bakenekocafe.studio/game.html',
+ *     gameUrl:  'https://www.bakenekocafe.studio/game.html',
  *     gameName: 'こはだジャンプ',                      // ゲーム名（省略可）
  *     imageBlob: blob,                                // シェア画像 Blob（新規ゲームでは実装推奨）
  *     imageFileName: 'result.png',                    // 画像ファイル名（省略時: share.png）
@@ -20,7 +20,7 @@
 (function () {
   'use strict';
 
-  var PORTAL_URL = 'https://bakenekocafe.studio/';
+  var PORTAL_URL = 'https://www.bakenekocafe.studio/';
 
   function formatDate() {
     var d = new Date();

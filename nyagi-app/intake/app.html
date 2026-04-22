@@ -1,0 +1,536 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>申請詳細｜引き受け申請</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body class="intake-body">
+  <div class="intake-wrap">
+    <header class="intake-header">
+      <h1>申請詳細</h1>
+      <p><a class="intake-link" href="index.html">← 一覧へ</a></p>
+    </header>
+
+    <div id="previewBanner" class="intake-alert intake-alert-ok" style="display:none;">閲覧のみ（プレビュー）</div>
+    <div id="alertBox"></div>
+    <div id="autosaveBannerApp" class="intake-alert intake-alert-ok" style="display:none;"></div>
+    <p id="autosaveStatusApp" class="intake-meta" style="text-align:center;margin:0 0 8px;display:none;"></p>
+
+    <div id="mainBlock" style="display:none;">
+      <div class="intake-card">
+        <h2>申請概要</h2>
+        <p class="intake-meta" id="statusLine"></p>
+        <p class="intake-meta" id="statusMessage" style="margin-top:8px;line-height:1.5;"></p>
+        <div class="intake-field">
+          <label for="reason">引き受けを希望する理由（必須・申請送信時）</label>
+          <textarea id="reason" rows="3"></textarea>
+        </div>
+        <div class="intake-field">
+          <label for="location_id">受け入れ希望拠点（任意）</label>
+          <select id="location_id">
+            <option value="">指定なし</option>
+          </select>
+          <small>拠点一覧は API から読み込みます。一覧にない値は「現在の登録」として選択肢に追加されます。</small>
+        </div>
+        <button type="button" class="intake-btn intake-btn-primary" id="saveAppBtn">保存</button>
+      </div>
+
+      <div class="intake-card">
+        <h2>猫（1頭以上）</h2>
+        <div id="catsList"></div>
+        <button type="button" class="intake-btn intake-btn-outline" id="addCatBtn" style="margin-top:12px;">猫を追加</button>
+      </div>
+
+      <div class="intake-card">
+        <h2>メッセージ</h2>
+        <div id="msgList"></div>
+        <div class="intake-field" id="msgCompose">
+          <label for="msgBody">返信を書く</label>
+          <textarea id="msgBody" rows="2"></textarea>
+          <button type="button" class="intake-btn intake-btn-primary" id="sendMsgBtn" style="margin-top:8px;">送信</button>
+        </div>
+      </div>
+
+      <div class="intake-card" id="submitBlock">
+        <h2>申請の送信</h2>
+        <p class="intake-meta" id="submitHint"></p>
+        <button type="button" class="intake-btn intake-btn-primary" id="submitAppBtn">申請を送信する</button>
+      </div>
+
+      <div class="intake-card" id="withdrawBlock" style="display:none;">
+        <h2>下書きの取り下げ</h2>
+        <p class="intake-meta">送信前の下書きのみ取り下げできます。取り下げ後は編集できません。</p>
+        <button type="button" class="intake-btn intake-btn-outline" id="withdrawBtn" style="border-color:var(--intake-danger);color:var(--intake-danger);">この下書きを取り下げる</button>
+      </div>
+    </div>
+
+    <p class="intake-footer-note">
+      <a href="https://www.bakenekocafe.studio/terms.html" target="_blank" rel="noopener">利用規約</a>
+      ・<a href="https://www.bakenekocafe.studio/privacy.html" target="_blank" rel="noopener">プライバシー</a>
+      ・<a href="https://www.bakenekocafe.studio/contact.html" target="_blank" rel="noopener">お問い合わせ</a>
+    </p>
+  </div>
+
+  <script src="../config.js"></script>
+  <script src="js/intake-common.js"></script>
+  <script>
+  (function () {
+    var ro = window.intakeIsPreview();
+    if (!window.intakeGetToken()) {
+      location.href = 'login.html';
+      return;
+    }
+
+    var appId = 0;
+    try {
+      var u = new URL(location.href);
+      appId = parseInt(u.searchParams.get('id') || '0', 10);
+    } catch (_) {}
+    if (!appId) {
+      document.getElementById('alertBox').innerHTML =
+        '<div class="intake-alert intake-alert-error">申請IDがありません</div>';
+      return;
+    }
+
+    if (ro) {
+      document.getElementById('previewBanner').style.display = 'block';
+    }
+
+    var STATUS_LABEL = {
+      draft: '入力中',
+      submitted: '申請済み',
+      under_review: '審査中',
+      info_requested: '情報待ち',
+      approved: '承認済み',
+      rejected: '却下',
+      withdrawn: '取り下げ',
+    };
+
+    var STATUS_MESSAGE = {
+      draft: '必須項目を入力し、写真を添付したうえで申請を送信してください。',
+      submitted: '送信済みです。担当が内容を確認します。メッセージにご返信が届くことがあります。',
+      under_review: '審査中です。追加のご連絡はメッセージでお知らせします。',
+      info_requested: '不足情報のご入力をお願いします。メッセージの内容をご確認ください。',
+      approved: '承認されました。今後の手続きについて担当よりご連絡します。',
+      rejected: '今回のお申し出はお受けできない判断となりました。内容はメッセージをご確認ください。',
+      withdrawn: 'この申請は取り下げ済みです。',
+    };
+
+    var editable = false;
+    var application = null;
+    var lastServerAppUpdated = '';
+    var AUTOSAVE_APP_KEY = 'bakeneko_intake_app_draft_' + appId;
+    var appAutosaveTimer = null;
+    var appAutosaveHintTimer = null;
+
+    function showErr(msg) {
+      document.getElementById('alertBox').innerHTML =
+        '<div class="intake-alert intake-alert-error">' + window.intakeEsc(msg) + '</div>';
+    }
+    function clearErr() {
+      document.getElementById('alertBox').innerHTML = '';
+    }
+
+    function applicantCanPostMessage() {
+      if (!application) return false;
+      var st = application.status;
+      return (
+        st === 'draft' ||
+        st === 'submitted' ||
+        st === 'under_review' ||
+        st === 'info_requested'
+      );
+    }
+
+    function getLocationValue() {
+      var sel = document.getElementById('location_id');
+      if (!sel) return null;
+      var v = String(sel.value || '').trim();
+      return v === '' ? null : v;
+    }
+
+    function ensureLocationInSelect(val) {
+      if (!val) return;
+      var sel = document.getElementById('location_id');
+      if (!sel) return;
+      var found = false;
+      for (var i = 0; i < sel.options.length; i++) {
+        if (sel.options[i].value === val) {
+          found = true;
+          break;
+        }
+      }
+      if (!found) {
+        var o = document.createElement('option');
+        o.value = val;
+        o.textContent = val + '（現在の登録）';
+        sel.appendChild(o);
+      }
+    }
+
+    function collectAppDraft() {
+      return {
+        reason: document.getElementById('reason').value,
+        location_id: getLocationValue(),
+      };
+    }
+
+    function clearAppAutosave() {
+      try {
+        localStorage.removeItem(AUTOSAVE_APP_KEY);
+      } catch (_) {}
+    }
+
+    function saveAppAutosaveToStorage() {
+      if (ro || !editable) return;
+      try {
+        var rec = {
+          v: 1,
+          savedAt: Date.now(),
+          appUpdatedAt: lastServerAppUpdated || '',
+          payload: collectAppDraft(),
+        };
+        localStorage.setItem(AUTOSAVE_APP_KEY, JSON.stringify(rec));
+        var el = document.getElementById('autosaveStatusApp');
+        if (el) {
+          el.style.display = 'block';
+          el.textContent = '申請概要を端末に自動保存しました（「保存」でサーバー送信）';
+          if (appAutosaveHintTimer) clearTimeout(appAutosaveHintTimer);
+          appAutosaveHintTimer = setTimeout(function () {
+            el.style.display = 'none';
+          }, 2800);
+        }
+      } catch (_) {}
+    }
+
+    function scheduleAppAutosave() {
+      if (ro || !editable) return;
+      if (appAutosaveTimer) clearTimeout(appAutosaveTimer);
+      appAutosaveTimer = setTimeout(saveAppAutosaveToStorage, 1500);
+    }
+
+    function applyAppDraftPayload(payload) {
+      if (!payload) return;
+      if (payload.reason != null) document.getElementById('reason').value = String(payload.reason);
+      if (payload.location_id != null && payload.location_id !== '') {
+        ensureLocationInSelect(payload.location_id);
+        document.getElementById('location_id').value = payload.location_id;
+      }
+    }
+
+    function showAppAutosaveBannerIfAny() {
+      var b = document.getElementById('autosaveBannerApp');
+      if (!b || ro || !editable) return;
+      try {
+        var raw = localStorage.getItem(AUTOSAVE_APP_KEY);
+        if (!raw) return;
+        var rec = JSON.parse(raw);
+        if (!rec || !rec.payload) return;
+        var mismatch =
+          rec.appUpdatedAt && lastServerAppUpdated && rec.appUpdatedAt !== lastServerAppUpdated;
+        var msg = mismatch
+          ? 'この端末に未送信の申請概要があります（サーバー上の更新時刻と一致しません）。'
+          : 'この端末に未送信の申請概要があります。';
+        b.style.display = 'block';
+        b.innerHTML =
+          msg +
+          ' <button type="button" class="intake-btn intake-btn-primary" style="width:auto;display:inline-block;margin-left:8px;padding:6px 12px;font-size:14px;" id="autosaveAppRestoreBtn">復元</button>' +
+          ' <button type="button" class="intake-btn intake-btn-ghost" style="width:auto;display:inline-block;font-size:14px;" id="autosaveAppDiscardBtn">破棄</button>';
+        document.getElementById('autosaveAppRestoreBtn').addEventListener('click', function () {
+          applyAppDraftPayload(rec.payload);
+          b.style.display = 'none';
+          clearErr();
+          var st = document.getElementById('autosaveStatusApp');
+          if (st) {
+            st.style.display = 'block';
+            st.textContent = '反映しました。「保存」でサーバーに送信してください。';
+          }
+        });
+        document.getElementById('autosaveAppDiscardBtn').addEventListener('click', function () {
+          clearAppAutosave();
+          b.style.display = 'none';
+        });
+      } catch (_) {}
+    }
+
+    function loadLocationOptions() {
+      return window
+        .intakeFetchUnauthenticated('GET', '/locations')
+        .then(function (d) {
+          var sel = document.getElementById('location_id');
+          if (!sel) return;
+          var locs = d.locations || [];
+          sel.innerHTML = '<option value="">指定なし</option>';
+          for (var i = 0; i < locs.length; i++) {
+            var o = document.createElement('option');
+            o.value = locs[i].id;
+            var nm = locs[i].name ? String(locs[i].name) : '';
+            o.textContent = nm ? nm + ' (' + locs[i].id + ')' : locs[i].id;
+            sel.appendChild(o);
+          }
+        })
+        .catch(function () {
+          var sel = document.getElementById('location_id');
+          if (!sel) return;
+          sel.innerHTML =
+            '<option value="">指定なし</option>' +
+            '<option value="cafe">cafe</option>' +
+            '<option value="nekomata">nekomata</option>' +
+            '<option value="endo">endo</option>' +
+            '<option value="azukari">azukari</option>' +
+            '<option value="both">both</option>';
+        });
+    }
+
+    function setEditableUI() {
+      var inputs = ['reason', 'location_id'];
+      for (var i = 0; i < inputs.length; i++) {
+        var el = document.getElementById(inputs[i]);
+        if (el) el.disabled = ro || !editable;
+      }
+      document.getElementById('saveAppBtn').style.display = ro || !editable ? 'none' : 'block';
+      document.getElementById('addCatBtn').style.display = ro || !editable ? 'none' : 'block';
+      document.getElementById('msgCompose').style.display =
+        ro || !applicantCanPostMessage() ? 'none' : 'block';
+      document.getElementById('submitBlock').style.display = ro || !editable ? 'none' : 'block';
+      var wb = document.getElementById('withdrawBlock');
+      if (wb) {
+        wb.style.display = !ro && application && application.status === 'draft' ? 'block' : 'none';
+      }
+    }
+
+    function canSubmitFromDetail() {
+      if (!application) return false;
+      if (application.status !== 'draft' && application.status !== 'info_requested') return false;
+      var reasonNow = document.getElementById('reason').value.trim();
+      if (!reasonNow) return false;
+      var cats = document.querySelectorAll('[data-cat-id]');
+      if (!cats.length) return false;
+      for (var i = 0; i < cats.length; i++) {
+        var p = parseInt(cats[i].getAttribute('data-pct') || '0', 10);
+        if (p < 100) return false;
+      }
+      return true;
+    }
+
+    function renderCats(cats) {
+      var html = '';
+      for (var i = 0; i < cats.length; i++) {
+        var item = cats[i];
+        var c = item.cat || item;
+        var comp = item.completion || {};
+        var pct = comp.pct != null ? comp.pct : 0;
+        html +=
+          '<div class="intake-app-row" data-cat-id="' +
+          c.id +
+          '" data-pct="' +
+          pct +
+          '">' +
+          '<h3>猫 #' +
+          c.id +
+          (c.name ? ' — ' + window.intakeEsc(c.name) : '') +
+          '</h3>' +
+          '<div class="intake-progress"><div class="intake-progress-bar" style="width:' +
+          pct +
+          '%"></div></div>' +
+          '<p class="intake-meta">必須項目の充足: ' +
+          pct +
+          '%</p>' +
+          '<p><a class="intake-link" href="cat.html?app=' +
+          appId +
+          '&cat=' +
+          c.id +
+          '">' +
+          (editable ? '編集・写真アップロード' : '閲覧') +
+          '</a></p>';
+        if (editable && application && application.status === 'draft') {
+          html +=
+            '<p><button type="button" class="intake-btn intake-btn-ghost del-cat" data-del="' +
+            c.id +
+            '">この猫を削除（下書きのみ）</button></p>';
+        }
+        html += '</div>';
+      }
+      document.getElementById('catsList').innerHTML = html || '<p class="intake-meta">まだいません。「猫を追加」してください。</p>';
+
+      var dels = document.querySelectorAll('.del-cat');
+      for (var d = 0; d < dels.length; d++) {
+        dels[d].addEventListener('click', function () {
+          var cid = parseInt(this.getAttribute('data-del'), 10);
+          if (!confirm('この猫と紐づくファイルを削除します。よろしいですか？')) return;
+          window
+            .intakeFetch('DELETE', '/applications/' + appId + '/cats/' + cid, null)
+            .then(function () {
+              loadAll();
+            })
+            .catch(function (e) {
+              showErr(e.message || '削除に失敗');
+            });
+        });
+      }
+    }
+
+    function renderMsgs(msgs) {
+      var html = '';
+      for (var i = 0; i < msgs.length; i++) {
+        var m = msgs[i];
+        var cls = 'intake-msg-system';
+        if (m.sender_type === 'staff') cls = 'intake-msg-staff';
+        else if (m.sender_type === 'applicant') cls = 'intake-msg-applicant';
+        html +=
+          '<div class="intake-msg ' +
+          cls +
+          '">' +
+          window.intakeEsc(m.body || '') +
+          '<div class="intake-meta" style="margin-top:6px;">' +
+          window.intakeEsc(m.sender_type || '') +
+          ' · ' +
+          window.intakeEsc(m.created_at || '') +
+          '</div></div>';
+      }
+      document.getElementById('msgList').innerHTML = html || '<p class="intake-meta">まだありません</p>';
+    }
+
+    function loadAll() {
+      clearErr();
+      window
+        .intakeFetch('GET', '/applications/' + appId, null)
+        .then(function (d) {
+          application = d.application;
+          editable = application && (application.status === 'draft' || application.status === 'info_requested');
+          document.getElementById('mainBlock').style.display = 'block';
+          document.getElementById('statusLine').textContent =
+            '状態: ' + (STATUS_LABEL[application.status] || application.status) + '（ID ' + application.id + '）';
+          var sm = document.getElementById('statusMessage');
+          if (sm) {
+            sm.textContent = STATUS_MESSAGE[application.status] || '';
+          }
+          lastServerAppUpdated =
+            application.updated_at != null ? String(application.updated_at) : '';
+          document.getElementById('reason').value = application.reason || '';
+          ensureLocationInSelect(application.location_id);
+          document.getElementById('location_id').value = application.location_id || '';
+          setEditableUI();
+          document.getElementById('autosaveBannerApp').style.display = 'none';
+          document.getElementById('autosaveBannerApp').innerHTML = '';
+          showAppAutosaveBannerIfAny();
+          renderCats(d.cats || []);
+          renderMsgs(d.messages || []);
+          var sh = document.getElementById('submitHint');
+          if (canSubmitFromDetail()) {
+            sh.textContent = '必須項目が揃っていれば送信できます。';
+            document.getElementById('submitAppBtn').disabled = false;
+          } else {
+            sh.textContent =
+              '猫の必須項目・写真1枚以上・申請理由を入力し保存してから送信できます。';
+            document.getElementById('submitAppBtn').disabled = true;
+          }
+        })
+        .catch(function (e) {
+          showErr(e.message || '読み込みに失敗しました');
+        });
+    }
+
+    document.getElementById('reason').addEventListener('input', scheduleAppAutosave);
+    document.getElementById('location_id').addEventListener('change', scheduleAppAutosave);
+
+    document.getElementById('saveAppBtn').addEventListener('click', function () {
+      clearErr();
+      window
+        .intakeFetch('PUT', '/applications/' + appId, {
+          reason: document.getElementById('reason').value.trim() || null,
+          location_id: getLocationValue(),
+        })
+        .then(function (d) {
+          clearAppAutosave();
+          document.getElementById('autosaveBannerApp').style.display = 'none';
+          document.getElementById('autosaveBannerApp').innerHTML = '';
+          application = d.application;
+          loadAll();
+        })
+        .catch(function (e) {
+          showErr(e.message || '保存に失敗');
+        });
+    });
+
+    document.getElementById('addCatBtn').addEventListener('click', function () {
+      window
+        .intakeFetch('POST', '/applications/' + appId + '/cats', {})
+        .then(function (d) {
+          if (d.cat && d.cat.id) {
+            location.href = 'cat.html?app=' + appId + '&cat=' + d.cat.id;
+          } else {
+            loadAll();
+          }
+        })
+        .catch(function (e) {
+          showErr(e.message || '追加に失敗');
+        });
+    });
+
+    document.getElementById('sendMsgBtn').addEventListener('click', function () {
+      var body = document.getElementById('msgBody').value.trim();
+      if (!body) return;
+      window
+        .intakeFetch('POST', '/applications/' + appId + '/messages', { body: body })
+        .then(function () {
+          document.getElementById('msgBody').value = '';
+          loadAll();
+        })
+        .catch(function (e) {
+          showErr(e.message || '送信に失敗');
+        });
+    });
+
+    document.getElementById('submitAppBtn').addEventListener('click', function () {
+      if (!confirm('申請を送信します。送信後はスタッフの確認が入るまで編集できない場合があります。よろしいですか？'))
+        return;
+      var reasonNow = document.getElementById('reason').value.trim() || null;
+      var locNow = getLocationValue();
+      window
+        .intakeFetch('PUT', '/applications/' + appId, {
+          reason: reasonNow,
+          location_id: locNow,
+        })
+        .then(function () {
+          return window.intakeFetch('POST', '/applications/' + appId + '/submit', {});
+        })
+        .then(function () {
+          clearAppAutosave();
+          document.getElementById('autosaveBannerApp').style.display = 'none';
+          document.getElementById('autosaveBannerApp').innerHTML = '';
+          loadAll();
+        })
+        .catch(function (e) {
+          var msg = e.message || '送信に失敗';
+          if (e.body && e.body.message) msg = e.body.message;
+          showErr(msg);
+        });
+    });
+
+    document.getElementById('withdrawBtn').addEventListener('click', function () {
+      if (!confirm('下書きを取り下げます。よろしいですか？')) return;
+      window
+        .intakeFetch('POST', '/applications/' + appId + '/withdraw', {})
+        .then(function () {
+          clearAppAutosave();
+          location.href = 'index.html';
+        })
+        .catch(function (e) {
+          showErr(e.message || '取り下げに失敗しました');
+        });
+    });
+
+    loadLocationOptions()
+      .then(function () {
+        loadAll();
+      })
+      .catch(function () {
+        loadAll();
+      });
+  })();
+  </script>
+</body>
+</html>

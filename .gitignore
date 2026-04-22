@@ -6,3 +6,38 @@ Thumbs.db
 *.swp
 *.swo
 .vscode/
+
+# Node / package managers
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+.pnpm-debug.log*
+
+# Cloudflare Workers / Wrangler
+.wrangler/
+.dev.vars
+wrangler.log
+.miniflare/
+
+# Secrets / env
+.env
+.env.local
+.env.*.local
+*.secret
+
+# Recovery scratch (this folder stays local only — do not commit)
+_recovered_stash/
+_NYAGI_RECOVERY_BACKUP_*/
+_check_*.html
+_prod_now.json
+_ver.json
+_cur.json
+_old.json
+_old2.json
+_new_deploy.json
+_diary_entries.json
+_final.json
+_tmp_response.json
+_tmp_sw.txt
+

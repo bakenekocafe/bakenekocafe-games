@@ -1,0 +1,95 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+  <title>NYAGI 問い合わせ管理</title>
+  <link rel="stylesheet" href="style.css?v=210">
+  <script src="js/nyagi-fixed-header.js?v=210" defer></script>
+</head>
+<body>
+  <div class="app-sticky-top">
+    <div class="header">
+      <h1>問い合わせ管理</h1>
+      <p>統合受信箱 — Webフォームからの問い合わせ</p>
+      <nav class="header-nav">
+        <a href="index.html">NYAGI トップ</a>
+        <a href="dashboard.html">ダッシュボード</a>
+        <a href="tasks.html">タスク</a>
+        <a href="intake-admin.html">引き受け申請</a>
+        <a href="bulletin.html">掲示板</a>
+      </nav>
+    </div>
+  </div>
+
+  <!-- ログインゲート -->
+  <div id="inqGate" class="login-section" style="max-width:520px;margin:16px auto;padding:16px;">
+    <h2>ログインが必要です</h2>
+    <p style="font-size:13px;color:rgba(0,0,0,0.65);line-height:1.6;">
+      先に NYAGI トップからスタッフログイン（4桁）を行い、<code>nyagi_creds</code> が保存された状態で開いてください。
+    </p>
+    <p style="margin-top:12px;">
+      <a href="index.html" class="btn btn-primary" style="display:inline-block;text-decoration:none;text-align:center;">NYAGI トップへ</a>
+    </p>
+  </div>
+
+  <!-- メインコンテンツ -->
+  <div id="inqMain" style="display:none;max-width:1100px;margin:0 auto;padding:12px 16px 40px;">
+
+    <!-- ダッシュボードバッジ -->
+    <div id="inqDash" style="margin-bottom:12px;font-size:12px;color:#666;"></div>
+
+    <!-- フィルタバー -->
+    <div class="card" style="margin-bottom:12px;padding:10px 14px;">
+      <div style="display:flex;flex-wrap:wrap;gap:8px;align-items:center;">
+        <select id="filterStatus" style="padding:6px 10px;border-radius:6px;border:1px solid #ddd;font-size:13px;">
+          <option value="">ステータス: すべて</option>
+          <option value="open">📩 新規</option>
+          <option value="in_progress">💬 対応中</option>
+          <option value="resolved">✅ 解決済み</option>
+          <option value="closed">🔒 クローズ</option>
+          <option value="spam">🚫 スパム</option>
+        </select>
+        <select id="filterType" style="padding:6px 10px;border-radius:6px;border:1px solid #ddd;font-size:13px;">
+          <option value="">種別: すべて</option>
+          <option value="intake_consult">猫の引き受け相談</option>
+          <option value="adoption">譲渡希望</option>
+          <option value="visit">見学・来店</option>
+          <option value="volunteer">ボランティア・寄付</option>
+          <option value="media">取材・コラボ</option>
+          <option value="partnership">協業等の相談</option>
+          <option value="other">その他</option>
+        </select>
+        <input id="filterQ" type="text" placeholder="名前・メールで検索" style="padding:6px 10px;border-radius:6px;border:1px solid #ddd;font-size:13px;min-width:160px;">
+        <button type="button" id="filterBtn" class="btn btn-outline" style="padding:6px 14px;font-size:13px;">絞り込み</button>
+        <button type="button" id="reloadBtn" class="btn btn-outline" style="padding:6px 14px;font-size:13px;">再読込</button>
+      </div>
+    </div>
+
+    <!-- 一覧 + 詳細 -->
+    <div style="display:flex;flex-wrap:wrap;gap:14px;align-items:flex-start;">
+
+      <!-- チケット一覧 -->
+      <div class="card" style="flex:1;min-width:260px;max-width:380px;">
+        <h3 style="margin-bottom:8px;">チケット一覧</h3>
+        <div id="ticketList" style="max-height:580px;overflow-y:auto;"></div>
+        <div id="ticketListMore" style="text-align:center;margin-top:8px;display:none;">
+          <button type="button" id="loadMoreBtn" class="btn btn-outline" style="font-size:12px;">さらに読み込む</button>
+        </div>
+      </div>
+
+      <!-- 詳細パネル -->
+      <div class="card" style="flex:1.3;min-width:280px;">
+        <div id="ticketDetail">
+          <p style="color:#888;font-size:13px;">左の一覧からチケットを選択してください</p>
+        </div>
+      </div>
+
+    </div>
+  </div>
+
+  <script src="config.js"></script>
+  <script src="js/inquiries.js?v=210"></script>
+</body>
+</html>

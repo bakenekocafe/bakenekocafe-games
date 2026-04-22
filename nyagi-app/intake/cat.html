@@ -1,0 +1,608 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>猫の情報｜引き受け申請</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body class="intake-body">
+  <div class="intake-wrap">
+    <header class="intake-header">
+      <h1>猫の情報</h1>
+      <p id="navBack"></p>
+    </header>
+
+    <div id="previewBanner" class="intake-alert intake-alert-ok" style="display:none;">閲覧のみ（プレビュー）</div>
+    <div id="alertBox"></div>
+    <div id="autosaveBanner" class="intake-alert intake-alert-ok" style="display:none;"></div>
+    <p id="autosaveStatus" class="intake-meta" style="text-align:center;margin:0 0 8px;display:none;"></p>
+
+    <div id="mainBlock" style="display:none;">
+      <div class="intake-card">
+        <h2>入力チェック</h2>
+        <div class="intake-progress"><div class="intake-progress-bar" id="progBar" style="width:0%"></div></div>
+        <p class="intake-meta" id="progText"></p>
+        <div class="intake-checklist" id="checkList"></div>
+      </div>
+
+      <form id="catForm" class="intake-card">
+        <h2>基本情報</h2>
+        <div class="intake-field"><label for="name">名前（呼び名）*</label><input type="text" id="name" name="name"></div>
+        <div class="intake-field"><label for="breed">品種*</label><input type="text" id="breed" name="breed"></div>
+        <div class="intake-field"><label for="estimated_birth_date">推定生年月日*</label><input type="date" id="estimated_birth_date" name="estimated_birth_date"></div>
+        <div class="intake-field">
+          <label for="sex">性別*</label>
+          <select id="sex" name="sex">
+            <option value="">選択</option>
+            <option value="M">オス</option>
+            <option value="F">メス</option>
+            <option value="unknown">不明</option>
+          </select>
+        </div>
+        <div class="intake-field"><label for="color_markings">毛色・特徴</label><input type="text" id="color_markings" name="color_markings"></div>
+        <div class="intake-field"><label for="microchip_id">マイクロチップ番号</label><input type="text" id="microchip_id" name="microchip_id"></div>
+        <div class="intake-field">
+          <label><input type="checkbox" id="neutered_chk"> 不妊去勢済み</label>
+        </div>
+        <div class="intake-field"><label for="weight_kg">体重（kg）</label><input type="number" step="0.01" id="weight_kg" name="weight_kg"></div>
+
+        <h2 style="margin-top:20px;">保護ストーリー</h2>
+        <div class="intake-field"><label for="rescue_date">保護した日*</label><input type="date" id="rescue_date" name="rescue_date"></div>
+        <div class="intake-field"><label for="rescue_location">保護した場所*</label><input type="text" id="rescue_location" name="rescue_location"></div>
+        <div class="intake-field"><label for="rescue_situation">保護時の状況*</label><textarea id="rescue_situation" name="rescue_situation"></textarea></div>
+        <div class="intake-field"><label for="story">保護のストーリー・背景*</label><textarea id="story" name="story"></textarea></div>
+        <div class="intake-field"><label for="living_environment">現在の飼育環境</label><textarea id="living_environment" name="living_environment"></textarea></div>
+        <div class="intake-field"><label for="personality">性格・行動の特徴</label><textarea id="personality" name="personality"></textarea></div>
+        <div class="intake-field"><label for="special_needs">特別なケアが必要な点</label><textarea id="special_needs" name="special_needs"></textarea></div>
+
+        <h2 style="margin-top:20px;">健康情報</h2>
+        <div class="intake-field"><label for="health_summary">健康状態概要*</label><textarea id="health_summary" name="health_summary"></textarea></div>
+        <div class="intake-field"><label for="health_detail">健康状態の詳細</label><textarea id="health_detail" name="health_detail"></textarea></div>
+        <div class="intake-field">
+          <label for="fiv_status">FIV 検査状況</label>
+          <select id="fiv_status" name="fiv_status">
+            <option value="">未選択</option>
+            <option value="未検査">未検査</option>
+            <option value="陰性">陰性</option>
+            <option value="陽性">陽性</option>
+            <option value="不明">不明</option>
+          </select>
+        </div>
+        <div class="intake-field">
+          <label for="felv_status">FeLV 検査状況</label>
+          <select id="felv_status" name="felv_status">
+            <option value="">未選択</option>
+            <option value="未検査">未検査</option>
+            <option value="陰性">陰性</option>
+            <option value="陽性">陽性</option>
+            <option value="不明">不明</option>
+          </select>
+        </div>
+        <div class="intake-field"><label for="vaccination_info">ワクチン接種歴</label><textarea id="vaccination_info" name="vaccination_info"></textarea></div>
+
+        <h2 style="margin-top:20px;">法定情報</h2>
+        <div class="intake-field">
+          <label for="source_type">保護経緯の分類*</label>
+          <select id="source_type" name="source_type" required>
+            <option value="">選択してください</option>
+            <option value="迷い猫">迷い猫</option>
+            <option value="譲受">譲受</option>
+            <option value="繁殖計画外の子">繁殖計画外の子</option>
+            <option value="その他">その他（補足に記載）</option>
+          </select>
+        </div>
+        <div class="intake-field"><label for="source_detail">補足</label><textarea id="source_detail" name="source_detail"></textarea></div>
+        <div class="intake-field">
+          <label>繁殖者情報は分かりますか？*</label>
+          <label><input type="radio" name="breeder_known" value="1"> 分かる</label>
+          <label style="margin-left:12px;"><input type="radio" name="breeder_known" value="0"> 不明</label>
+        </div>
+        <div class="intake-field"><label for="breeder_name">繁殖者名</label><input type="text" id="breeder_name" name="breeder_name"></div>
+        <div class="intake-field"><label for="breeder_address">繁殖者住所</label><input type="text" id="breeder_address" name="breeder_address"></div>
+        <div class="intake-field"><label for="breeder_reg_no">繁殖者登録番号等</label><input type="text" id="breeder_reg_no" name="breeder_reg_no"></div>
+        <div class="intake-field"><label for="previous_owner_name">前所有者名</label><input type="text" id="previous_owner_name" name="previous_owner_name"></div>
+        <div class="intake-field"><label for="previous_owner_address">前所有者住所</label><input type="text" id="previous_owner_address" name="previous_owner_address"></div>
+        <div class="intake-field"><label for="ownership_start_date">所有開始日*</label><input type="date" id="ownership_start_date" name="ownership_start_date"></div>
+        <div class="intake-field"><label for="notes">備考</label><textarea id="notes" name="notes"></textarea></div>
+
+        <button type="submit" class="intake-btn intake-btn-primary" id="saveBtn">保存</button>
+      </form>
+
+      <div class="intake-card">
+        <h2>写真（必須・1枚以上）</h2>
+        <div class="intake-field">
+          <input type="file" id="photoInput" accept="image/jpeg,image/png,image/gif,image/webp">
+          <button type="button" class="intake-btn intake-btn-outline" id="uploadPhotoBtn" style="margin-top:8px;">写真をアップロード</button>
+        </div>
+        <div id="photoList"></div>
+      </div>
+
+      <div class="intake-card">
+        <h2>書類（検査結果・PDF等）</h2>
+        <div class="intake-field">
+          <input type="file" id="docInput" accept="image/jpeg,image/png,image/gif,image/webp,application/pdf">
+          <button type="button" class="intake-btn intake-btn-outline" id="uploadDocBtn" style="margin-top:8px;">書類をアップロード</button>
+        </div>
+        <div id="docList"></div>
+      </div>
+    </div>
+
+    <p class="intake-footer-note">
+      <a href="https://www.bakenekocafe.studio/terms.html" target="_blank" rel="noopener">利用規約</a>
+      ・<a href="https://www.bakenekocafe.studio/privacy.html" target="_blank" rel="noopener">プライバシー</a>
+      ・<a href="https://www.bakenekocafe.studio/contact.html" target="_blank" rel="noopener">お問い合わせ</a>
+    </p>
+  </div>
+
+  <script src="../config.js"></script>
+  <script src="js/intake-common.js"></script>
+  <script>
+  (function () {
+    var ro = window.intakeIsPreview();
+    if (!window.intakeGetToken()) {
+      location.href = 'login.html';
+      return;
+    }
+
+    var appId = 0;
+    var catId = 0;
+    try {
+      var u = new URL(location.href);
+      appId = parseInt(u.searchParams.get('app') || '0', 10);
+      catId = parseInt(u.searchParams.get('cat') || '0', 10);
+    } catch (_) {}
+
+    document.getElementById('navBack').innerHTML =
+      '<a class="intake-link" href="app.html?id=' + appId + '">← 申請に戻る</a>';
+
+    if (!appId || !catId) {
+      document.getElementById('alertBox').innerHTML =
+        '<div class="intake-alert intake-alert-error">パラメータが不正です</div>';
+      return;
+    }
+
+    if (ro) {
+      document.getElementById('previewBanner').style.display = 'block';
+    }
+
+    var editable = true;
+    var lastServerCatUpdated = '';
+    var AUTOSAVE_KEY = 'bakeneko_intake_cat_draft_' + appId + '_' + catId;
+    var autosaveTimer = null;
+    var autosaveHintTimer = null;
+
+    function showErr(msg) {
+      document.getElementById('alertBox').innerHTML =
+        '<div class="intake-alert intake-alert-error">' + window.intakeEsc(msg) + '</div>';
+    }
+    function clearErr() {
+      document.getElementById('alertBox').innerHTML = '';
+    }
+
+    function setFormDisabled(dis) {
+      var form = document.getElementById('catForm');
+      var els = form.querySelectorAll('input, textarea, select, button');
+      for (var i = 0; i < els.length; i++) {
+        if (els[i].type === 'submit') els[i].disabled = dis || ro;
+        else els[i].disabled = dis || ro;
+      }
+      document.getElementById('photoInput').disabled = ro || !editable;
+      document.getElementById('uploadPhotoBtn').disabled = ro || !editable;
+      document.getElementById('docInput').disabled = ro || !editable;
+      document.getElementById('uploadDocBtn').disabled = ro || !editable;
+    }
+
+    function setSelectAllowLegacy(selectId, raw) {
+      var el = document.getElementById(selectId);
+      if (!el) return;
+      if (raw == null || raw === '') {
+        el.value = '';
+        return;
+      }
+      var s = String(raw);
+      var found = false;
+      for (var oi = 0; oi < el.options.length; oi++) {
+        if (el.options[oi].value === s) {
+          found = true;
+          break;
+        }
+      }
+      if (!found) {
+        var o = document.createElement('option');
+        o.value = s;
+        o.textContent = s + '（従来の入力）';
+        el.appendChild(o);
+      }
+      el.value = s;
+    }
+
+    function fillForm(cat) {
+      var keys = [
+        'name',
+        'breed',
+        'estimated_birth_date',
+        'sex',
+        'color_markings',
+        'microchip_id',
+        'rescue_date',
+        'rescue_location',
+        'rescue_situation',
+        'story',
+        'living_environment',
+        'personality',
+        'special_needs',
+        'health_summary',
+        'health_detail',
+        'vaccination_info',
+        'source_detail',
+        'breeder_name',
+        'breeder_address',
+        'breeder_reg_no',
+        'previous_owner_name',
+        'previous_owner_address',
+        'ownership_start_date',
+        'notes',
+      ];
+      for (var i = 0; i < keys.length; i++) {
+        var k = keys[i];
+        var el = document.getElementById(k);
+        if (el && cat[k] != null) el.value = String(cat[k]);
+      }
+      setSelectAllowLegacy('fiv_status', cat.fiv_status);
+      setSelectAllowLegacy('felv_status', cat.felv_status);
+      setSelectAllowLegacy('source_type', cat.source_type);
+      document.getElementById('neutered_chk').checked = cat.neutered === 1;
+      var w = document.getElementById('weight_kg');
+      if (w && cat.weight_kg != null && cat.weight_kg !== '') w.value = String(cat.weight_kg);
+      var bk = cat.breeder_known;
+      if (bk === 1) {
+        document.querySelector('input[name="breeder_known"][value="1"]').checked = true;
+      } else if (bk === 0) {
+        document.querySelector('input[name="breeder_known"][value="0"]').checked = true;
+      }
+    }
+
+    function fillFormFromPayload(body) {
+      if (!body) return;
+      var keys = [
+        'name',
+        'breed',
+        'estimated_birth_date',
+        'sex',
+        'color_markings',
+        'microchip_id',
+        'rescue_date',
+        'rescue_location',
+        'rescue_situation',
+        'story',
+        'living_environment',
+        'personality',
+        'special_needs',
+        'health_summary',
+        'health_detail',
+        'vaccination_info',
+        'source_detail',
+        'breeder_name',
+        'breeder_address',
+        'breeder_reg_no',
+        'previous_owner_name',
+        'previous_owner_address',
+        'ownership_start_date',
+        'notes',
+      ];
+      for (var fi = 0; fi < keys.length; fi++) {
+        var fk = keys[fi];
+        var fel = document.getElementById(fk);
+        if (!fel) continue;
+        var val = body[fk];
+        fel.value = val != null && val !== '' ? String(val) : '';
+      }
+      setSelectAllowLegacy('fiv_status', body.fiv_status);
+      setSelectAllowLegacy('felv_status', body.felv_status);
+      setSelectAllowLegacy('source_type', body.source_type);
+      document.getElementById('neutered_chk').checked = !!body.neutered;
+      var wEl = document.getElementById('weight_kg');
+      if (wEl) {
+        if (body.weight_kg != null && body.weight_kg !== '') wEl.value = String(body.weight_kg);
+        else wEl.value = '';
+      }
+      if (body.breeder_known === true) {
+        var r1 = document.querySelector('input[name="breeder_known"][value="1"]');
+        if (r1) r1.checked = true;
+      } else if (body.breeder_known === false) {
+        var r0 = document.querySelector('input[name="breeder_known"][value="0"]');
+        if (r0) r0.checked = true;
+      }
+    }
+
+    function clearAutosave() {
+      try {
+        localStorage.removeItem(AUTOSAVE_KEY);
+      } catch (_) {}
+    }
+
+    function saveAutosaveToStorage() {
+      if (ro || !editable) return;
+      try {
+        var rec = {
+          v: 1,
+          savedAt: Date.now(),
+          catUpdatedAt: lastServerCatUpdated || '',
+          payload: collectPayload(),
+        };
+        localStorage.setItem(AUTOSAVE_KEY, JSON.stringify(rec));
+        var el = document.getElementById('autosaveStatus');
+        if (el) {
+          el.style.display = 'block';
+          el.textContent = '入力を端末に自動保存しました（サーバーへは「保存」で送信）';
+          if (autosaveHintTimer) clearTimeout(autosaveHintTimer);
+          autosaveHintTimer = setTimeout(function () {
+            el.style.display = 'none';
+          }, 2800);
+        }
+      } catch (_) {}
+    }
+
+    function scheduleAutosave() {
+      if (ro || !editable) return;
+      if (autosaveTimer) clearTimeout(autosaveTimer);
+      autosaveTimer = setTimeout(saveAutosaveToStorage, 1500);
+    }
+
+    function showAutosaveBannerIfAny() {
+      var b = document.getElementById('autosaveBanner');
+      if (!b || ro || !editable) return;
+      try {
+        var raw = localStorage.getItem(AUTOSAVE_KEY);
+        if (!raw) return;
+        var rec = JSON.parse(raw);
+        if (!rec || !rec.payload) return;
+        var mismatch =
+          rec.catUpdatedAt &&
+          lastServerCatUpdated &&
+          rec.catUpdatedAt !== lastServerCatUpdated;
+        var msg = mismatch
+          ? 'この端末に未送信の下書きがあります（サーバー上の猫データの更新時刻と一致しません。復元で上書きします）。'
+          : 'この端末に未送信の下書きがあります。';
+        b.style.display = 'block';
+        b.innerHTML =
+          msg +
+          ' <button type="button" class="intake-btn intake-btn-primary" style="width:auto;display:inline-block;margin-left:8px;padding:6px 12px;font-size:14px;" id="autosaveRestoreBtn">復元</button>' +
+          ' <button type="button" class="intake-btn intake-btn-ghost" style="width:auto;display:inline-block;font-size:14px;" id="autosaveDiscardBtn">破棄</button>';
+        document.getElementById('autosaveRestoreBtn').addEventListener('click', function () {
+          fillFormFromPayload(rec.payload);
+          b.style.display = 'none';
+          clearErr();
+          var st = document.getElementById('autosaveStatus');
+          if (st) {
+            st.style.display = 'block';
+            st.textContent = '下書きを反映しました。「保存」でサーバーに送信してください。';
+          }
+        });
+        document.getElementById('autosaveDiscardBtn').addEventListener('click', function () {
+          clearAutosave();
+          b.style.display = 'none';
+        });
+      } catch (_) {}
+    }
+
+    function collectPayload() {
+      var body = {};
+      var keys = [
+        'name',
+        'breed',
+        'estimated_birth_date',
+        'sex',
+        'color_markings',
+        'microchip_id',
+        'rescue_date',
+        'rescue_location',
+        'rescue_situation',
+        'story',
+        'living_environment',
+        'personality',
+        'special_needs',
+        'health_summary',
+        'health_detail',
+        'fiv_status',
+        'felv_status',
+        'vaccination_info',
+        'source_type',
+        'source_detail',
+        'breeder_name',
+        'breeder_address',
+        'breeder_reg_no',
+        'previous_owner_name',
+        'previous_owner_address',
+        'ownership_start_date',
+        'notes',
+      ];
+      for (var i = 0; i < keys.length; i++) {
+        var k = keys[i];
+        var el = document.getElementById(k);
+        if (!el) continue;
+        var v = el.value.trim();
+        body[k] = v === '' ? null : v;
+      }
+      body.neutered = document.getElementById('neutered_chk').checked;
+      var wv = document.getElementById('weight_kg').value.trim();
+      body.weight_kg = wv === '' ? null : Number(wv);
+      var br = document.querySelector('input[name="breeder_known"]:checked');
+      body.breeder_known = br && br.value === '1';
+      return body;
+    }
+
+    function renderCompletion(comp) {
+      var pct = comp && comp.pct != null ? comp.pct : 0;
+      document.getElementById('progBar').style.width = pct + '%';
+      document.getElementById('progText').textContent =
+        '必須項目: ' +
+        (comp && comp.required_done != null ? comp.required_done : 0) +
+        ' / ' +
+        (comp && comp.required_total != null ? comp.required_total : 0) +
+        '（' +
+        pct +
+        '%）';
+      var fields = (comp && comp.fields) || [];
+      var html = '';
+      for (var i = 0; i < fields.length; i++) {
+        var f = fields[i];
+        html +=
+          '<div class="intake-check-item' +
+          (f.filled ? ' ok' : '') +
+          '">' +
+          (f.required ? '【必須】' : '') +
+          window.intakeEsc(f.label) +
+          (f.filled ? ' ✓' : '') +
+          '</div>';
+      }
+      document.getElementById('checkList').innerHTML = html;
+    }
+
+    var MODULE_PHOTO = 'intake_app_cat_photo';
+
+    function renderFiles(files) {
+      var photos = '';
+      var docs = '';
+      for (var i = 0; i < files.length; i++) {
+        var f = files[i];
+        var isPhoto = f.module === MODULE_PHOTO;
+        var row =
+          '<div style="display:flex;align-items:center;gap:8px;padding:8px 0;border-bottom:1px solid #eee;">' +
+          '<span style="flex:1;font-size:0.85rem;">' +
+          window.intakeEsc(f.original_name || 'file') +
+          '</span>';
+        row +=
+          '<button type="button" class="intake-btn intake-btn-ghost preview-file" data-id="' +
+          f.id +
+          '">表示</button>';
+        if (!ro && editable) {
+          row +=
+            '<button type="button" class="intake-btn intake-btn-ghost del-file" data-id="' +
+            f.id +
+            '">削除</button>';
+        }
+        row += '</div>';
+        if (isPhoto) photos += row;
+        else docs += row;
+      }
+      document.getElementById('photoList').innerHTML = photos || '<p class="intake-meta">まだありません</p>';
+      document.getElementById('docList').innerHTML = docs || '<p class="intake-meta">まだありません</p>';
+
+      var previews = document.querySelectorAll('.preview-file');
+      for (var p = 0; p < previews.length; p++) {
+        previews[p].addEventListener('click', function () {
+          var fid = this.getAttribute('data-id');
+          var path = '/applications/' + appId + '/cats/' + catId + '/files/' + fid;
+          window.intakeFetchBlob(path).then(function (blob) {
+            var url = URL.createObjectURL(blob);
+            window.open(url, '_blank');
+            setTimeout(function () {
+              URL.revokeObjectURL(url);
+            }, 60000);
+          }).catch(function () {
+            alert('ファイルの表示に失敗しました');
+          });
+        });
+      }
+      var dels = document.querySelectorAll('.del-file');
+      for (var d = 0; d < dels.length; d++) {
+        dels[d].addEventListener('click', function () {
+          var fid = this.getAttribute('data-id');
+          if (!confirm('削除しますか？')) return;
+          window
+            .intakeFetch('DELETE', '/applications/' + appId + '/cats/' + catId + '/files/' + fid, null)
+            .then(function () {
+              loadCat();
+            })
+            .catch(function (e) {
+              showErr(e.message || '削除に失敗');
+            });
+        });
+      }
+    }
+
+    function loadCat() {
+      clearErr();
+      window
+        .intakeFetch('GET', '/applications/' + appId + '/cats/' + catId, null)
+        .then(function (d) {
+          document.getElementById('mainBlock').style.display = 'block';
+          var cat = d.cat || {};
+          lastServerCatUpdated = cat.updated_at != null ? String(cat.updated_at) : '';
+          fillForm(cat);
+          renderCompletion(d.completion);
+          renderFiles(d.files || []);
+          document.getElementById('autosaveBanner').style.display = 'none';
+          document.getElementById('autosaveBanner').innerHTML = '';
+          showAutosaveBannerIfAny();
+        })
+        .catch(function (e) {
+          showErr(e.message || '読み込みに失敗');
+        });
+    }
+
+    window
+      .intakeFetch('GET', '/applications/' + appId, null)
+      .then(function (d) {
+        var st = d.application && d.application.status;
+        editable = st === 'draft' || st === 'info_requested';
+        setFormDisabled(false);
+        loadCat();
+      })
+      .catch(function (e) {
+        showErr(e.message || '申請の取得に失敗');
+      });
+
+    document.getElementById('catForm').addEventListener('input', scheduleAutosave);
+    document.getElementById('catForm').addEventListener('change', scheduleAutosave);
+
+    document.getElementById('catForm').addEventListener('submit', function (ev) {
+      ev.preventDefault();
+      if (ro || !editable) return;
+      clearErr();
+      window
+        .intakeFetch('PUT', '/applications/' + appId + '/cats/' + catId, collectPayload())
+        .then(function (d) {
+          clearAutosave();
+          document.getElementById('autosaveBanner').style.display = 'none';
+          document.getElementById('autosaveBanner').innerHTML = '';
+          fillForm(d.cat || {});
+          lastServerCatUpdated = d.cat && d.cat.updated_at != null ? String(d.cat.updated_at) : lastServerCatUpdated;
+          renderCompletion(d.completion);
+        })
+        .catch(function (e) {
+          showErr(e.message || '保存に失敗');
+        });
+    });
+
+    function doUpload(isPhoto) {
+      if (ro || !editable) return;
+      var input = isPhoto ? document.getElementById('photoInput') : document.getElementById('docInput');
+      if (!input.files || !input.files[0]) {
+        alert('ファイルを選択してください');
+        return;
+      }
+      var fd = new FormData();
+      fd.append('file', input.files[0]);
+      var path =
+        '/applications/' + appId + '/cats/' + catId + (isPhoto ? '/files' : '/docs');
+      window.intakeMultipart(path, fd).then(function () {
+        input.value = '';
+        loadCat();
+      }).catch(function (e) {
+        showErr(e.message || 'アップロードに失敗');
+      });
+    }
+
+    document.getElementById('uploadPhotoBtn').addEventListener('click', function () {
+      doUpload(true);
+    });
+    document.getElementById('uploadDocBtn').addEventListener('click', function () {
+      doUpload(false);
+    });
+  })();
+  </script>
+</body>
+</html>

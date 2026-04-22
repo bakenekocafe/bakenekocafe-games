@@ -1,0 +1,127 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+  <title>NYAGI 引き受け申請（スタッフ）</title>
+  <style>
+    .intake-dash-badge { display:inline-block; margin:4px 6px 4px 0; padding:6px 10px; border-radius:999px; font-size:12px; line-height:1.3; background:#f0f4f8; color:#334; }
+    .intake-dash-badge strong { margin-left:4px; color:#111; }
+    .intake-dash-badge--phase { background:#e8f4fc; border:1px solid #b8d4ec; }
+    .intake-dash-badge--status { background:#f3f0ff; border:1px solid #d4c8f0; }
+    .intake-dash-empty { color:#888; font-size:13px; }
+  </style>
+  <link rel="stylesheet" href="style.css?v=209">
+  <script src="js/nyagi-fixed-header.js?v=209" defer></script>
+</head>
+<body>
+  <div class="app-sticky-top">
+    <div class="header">
+      <h1>引き受け申請</h1>
+      <p>外部申請者の招待・審査</p>
+      <nav class="header-nav">
+        <a href="index.html">NYAGI トップ</a>
+        <a href="dashboard.html">ダッシュボード</a>
+        <a href="tasks.html">タスク</a>
+        <a href="bulletin.html">掲示板</a>
+      </nav>
+    </div>
+  </div>
+
+  <div id="intakeAdminGate" class="login-section" style="max-width:520px;margin:16px auto;padding:16px;">
+    <h2>ログインが必要です</h2>
+    <p style="font-size:13px;color:rgba(0,0,0,0.65);line-height:1.6;">
+      先に NYAGI トップからスタッフログイン（4桁）を行い、<code>nyagi_creds</code> が保存された状態で開いてください。
+    </p>
+    <p style="margin-top:12px;"><a href="index.html" class="btn btn-primary" style="display:inline-block;text-decoration:none;text-align:center;">NYAGI トップへ</a></p>
+  </div>
+
+  <div id="intakeAdminMain" class="input-section" style="display:none;max-width:900px;margin:0 auto;padding:12px 16px 32px;">
+    <p id="dashSummary" style="font-size:12px;color:#666;margin-bottom:12px;"></p>
+
+    <div class="card" style="margin-bottom:14px;">
+      <h3>招待メール用リンクの発行</h3>
+      <p style="font-size:12px;color:#666;">新規の外部メールを登録し、setup URL を表示します（メール送信は別途）。</p>
+      <div class="form-group">
+        <label for="inviteEmail">メールアドレス</label>
+        <input type="email" id="inviteEmail" placeholder="applicant@example.com">
+      </div>
+      <div class="form-group">
+        <label for="inviteName">表示名（任意）</label>
+        <input type="text" id="inviteName" placeholder="山田">
+      </div>
+      <div id="inviteAlert"></div>
+      <button type="button" class="btn btn-primary" id="inviteBtn">招待を作成</button>
+    </div>
+
+    <div style="display:flex;gap:8px;margin-bottom:12px;flex-wrap:wrap;">
+      <button type="button" class="btn btn-primary intake-tab-btn" data-intake-tab="apps" id="tabAppsBtn">申請</button>
+      <button type="button" class="btn btn-outline intake-tab-btn" data-intake-tab="applicants" id="tabApplicantsBtn">申請者</button>
+    </div>
+
+    <div id="intakePaneApps">
+      <div style="display:flex;flex-wrap:wrap;gap:16px;align-items:flex-start;">
+        <div class="card" style="flex:1;min-width:260px;">
+          <h3>申請一覧</h3>
+          <div class="form-group" style="margin-bottom:8px;">
+            <label for="appStatusFilter">ステータス</label>
+            <select id="appStatusFilter" class="filter-select" style="width:100%;padding:8px;border-radius:8px;">
+              <option value="">すべて</option>
+              <option value="draft">入力中</option>
+              <option value="submitted">申請済み</option>
+              <option value="under_review">審査中</option>
+              <option value="info_requested">情報待ち</option>
+              <option value="approved">承認済み</option>
+              <option value="rejected">却下</option>
+              <option value="withdrawn">取り下げ</option>
+            </select>
+          </div>
+          <button type="button" class="btn btn-outline" id="reloadAppsBtn" style="margin-bottom:10px;width:auto;">再読込</button>
+          <div id="appsList" style="max-height:420px;overflow:auto;"></div>
+        </div>
+        <div class="card" style="flex:1.2;min-width:280px;">
+          <h3>詳細</h3>
+          <div id="detailPanel"><p style="color:#888;font-size:13px;">左の一覧から選択してください</p></div>
+        </div>
+      </div>
+    </div>
+
+    <div id="intakePaneApplicants" style="display:none;">
+      <div style="display:flex;flex-wrap:wrap;gap:16px;align-items:flex-start;">
+        <div class="card" style="flex:1;min-width:260px;">
+          <h3>申請者一覧</h3>
+          <div class="form-group" style="margin-bottom:8px;">
+            <label for="applicantPhaseFilter">フェーズ</label>
+            <select id="applicantPhaseFilter" class="filter-select" style="width:100%;padding:8px;border-radius:8px;">
+              <option value="">すべて</option>
+              <option value="invited">招待済み</option>
+              <option value="active">登録完了</option>
+              <option value="draft">入力中</option>
+              <option value="submitted">申請済み</option>
+              <option value="under_review">審査中</option>
+              <option value="info_requested">情報待ち</option>
+              <option value="approved">承認済み</option>
+              <option value="rejected">却下</option>
+              <option value="done">完了</option>
+            </select>
+          </div>
+          <div class="form-group" style="margin-bottom:8px;">
+            <label for="applicantTextFilter">絞り込み（メール・名前）</label>
+            <input type="text" id="applicantTextFilter" placeholder="部分一致" style="width:100%;padding:8px;border-radius:8px;border:1px solid #ddd;">
+          </div>
+          <button type="button" class="btn btn-outline" id="reloadApplicantsBtn" style="margin-bottom:10px;width:auto;">再読込</button>
+          <div id="applicantsList" style="max-height:420px;overflow:auto;"></div>
+        </div>
+        <div class="card" style="flex:1.2;min-width:280px;">
+          <h3>申請者詳細</h3>
+          <div id="applicantDetailPanel"><p style="color:#888;font-size:13px;">左の一覧から選択してください</p></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script src="config.js"></script>
+  <script src="js/intake-admin.js"></script>
+</body>
+</html>

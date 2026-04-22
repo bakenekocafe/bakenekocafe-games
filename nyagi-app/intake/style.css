@@ -1,0 +1,245 @@
+/* BAKENEKO 引き受け申請（外部ユーザー向け・明るいテーマ） */
+:root {
+  --intake-bg: #f6f7fb;
+  --intake-card: #fff;
+  --intake-text: #1a1d26;
+  --intake-muted: #6b7280;
+  --intake-border: #e5e7eb;
+  --intake-primary: #2563eb;
+  --intake-primary-hover: #1d4ed8;
+  --intake-success: #059669;
+  --intake-warn: #d97706;
+  --intake-danger: #dc2626;
+  --intake-radius: 12px;
+  --intake-shadow: 0 1px 3px rgba(0, 0, 0, 0.08);
+}
+
+* { box-sizing: border-box; }
+
+body.intake-body {
+  margin: 0;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Hiragino Sans', sans-serif;
+  background: var(--intake-bg);
+  color: var(--intake-text);
+  line-height: 1.6;
+  min-height: 100vh;
+}
+
+.intake-wrap {
+  max-width: 560px;
+  margin: 0 auto;
+  padding: 20px 16px 48px;
+}
+
+.intake-header {
+  text-align: center;
+  margin-bottom: 24px;
+}
+.intake-header h1 {
+  margin: 0 0 8px;
+  font-size: 1.35rem;
+  font-weight: 800;
+}
+.intake-header p {
+  margin: 0;
+  font-size: 0.9rem;
+  color: var(--intake-muted);
+}
+
+.intake-card {
+  background: var(--intake-card);
+  border-radius: var(--intake-radius);
+  box-shadow: var(--intake-shadow);
+  border: 1px solid var(--intake-border);
+  padding: 20px;
+  margin-bottom: 16px;
+}
+
+.intake-card h2 {
+  margin: 0 0 16px;
+  font-size: 1.05rem;
+}
+
+.intake-field {
+  margin-bottom: 14px;
+}
+.intake-field label {
+  display: block;
+  font-size: 0.85rem;
+  font-weight: 600;
+  margin-bottom: 6px;
+  color: var(--intake-text);
+}
+.intake-field input[type="text"],
+.intake-field input[type="email"],
+.intake-field input[type="password"],
+.intake-field input[type="tel"],
+.intake-field input[type="number"],
+.intake-field input[type="date"],
+.intake-field select,
+.intake-field textarea {
+  width: 100%;
+  padding: 10px 12px;
+  border: 1px solid var(--intake-border);
+  border-radius: 8px;
+  font-size: 16px;
+  background: #fff;
+}
+.intake-field textarea {
+  min-height: 88px;
+  resize: vertical;
+}
+.intake-field small {
+  display: block;
+  margin-top: 4px;
+  color: var(--intake-muted);
+  font-size: 0.75rem;
+}
+
+.intake-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 12px 20px;
+  border-radius: 10px;
+  font-size: 0.95rem;
+  font-weight: 700;
+  border: none;
+  cursor: pointer;
+  text-decoration: none;
+  width: 100%;
+}
+.intake-btn-primary {
+  background: var(--intake-primary);
+  color: #fff;
+}
+.intake-btn-primary:active {
+  background: var(--intake-primary-hover);
+}
+.intake-btn-outline {
+  background: #fff;
+  color: var(--intake-primary);
+  border: 2px solid var(--intake-primary);
+}
+.intake-btn-ghost {
+  background: transparent;
+  color: var(--intake-muted);
+  width: auto;
+  padding: 8px 12px;
+}
+
+.intake-alert {
+  padding: 12px;
+  border-radius: 8px;
+  margin-bottom: 14px;
+  font-size: 0.9rem;
+}
+.intake-alert-error {
+  background: #fef2f2;
+  color: var(--intake-danger);
+  border: 1px solid #fecaca;
+}
+.intake-alert-ok {
+  background: #ecfdf5;
+  color: var(--intake-success);
+  border: 1px solid #a7f3d0;
+}
+
+.intake-app-row {
+  border: 1px solid var(--intake-border);
+  border-radius: var(--intake-radius);
+  padding: 14px;
+  margin-bottom: 12px;
+  background: #fff;
+}
+.intake-app-row h3 {
+  margin: 0 0 8px;
+  font-size: 1rem;
+}
+.intake-progress {
+  height: 8px;
+  background: var(--intake-border);
+  border-radius: 4px;
+  overflow: hidden;
+  margin: 8px 0;
+}
+.intake-progress-bar {
+  height: 100%;
+  background: var(--intake-primary);
+  border-radius: 4px;
+  transition: width 0.2s;
+}
+
+.intake-meta {
+  font-size: 0.8rem;
+  color: var(--intake-muted);
+}
+
+.intake-link {
+  color: var(--intake-primary);
+  font-weight: 600;
+}
+
+.intake-steps {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-bottom: 16px;
+}
+.intake-step-pill {
+  font-size: 0.75rem;
+  padding: 6px 10px;
+  border-radius: 999px;
+  background: var(--intake-border);
+  color: var(--intake-muted);
+}
+.intake-step-pill.active {
+  background: #dbeafe;
+  color: var(--intake-primary);
+}
+
+.intake-msg {
+  padding: 10px 12px;
+  border-radius: 8px;
+  margin-bottom: 8px;
+  font-size: 0.9rem;
+}
+.intake-msg-staff {
+  background: #eff6ff;
+  border-left: 3px solid var(--intake-primary);
+}
+.intake-msg-applicant {
+  background: #f9fafb;
+  border-left: 3px solid #9ca3af;
+}
+.intake-msg-system {
+  background: #fefce8;
+  border-left: 3px solid var(--intake-warn);
+}
+
+.intake-checklist {
+  font-size: 0.8rem;
+  margin-top: 8px;
+}
+.intake-check-item {
+  padding: 4px 0;
+  color: var(--intake-muted);
+}
+.intake-check-item.ok {
+  color: var(--intake-success);
+}
+
+.intake-footer-note {
+  text-align: center;
+  font-size: 0.8rem;
+  color: var(--intake-muted);
+  margin-top: 24px;
+  line-height: 1.7;
+}
+
+input:disabled,
+textarea:disabled,
+select:disabled {
+  opacity: 0.65;
+  cursor: not-allowed;
+}

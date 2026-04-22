@@ -6,12 +6,76 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <link rel="canonical" href="https://www.bakenekocafe.studio/contact.html">
   <title>お問い合わせ｜BAKENEKO GAMES</title>
-  <meta name="description" content="BAKENEKO GAMES（ブラウザゲームポータル）のお問い合わせ窓口。一般社団法人新宿租界（BAKENEKO CAFE と同一運営）。メール・電話・返信目安を記載。">
+  <meta name="description" content="BAKENEKO GAMES / BAKENEKO CAFE（化猫茶屋）へのお問い合わせフォーム。猫の引き受け相談、譲渡希望、見学、取材、ゲームの不具合など、内容に応じて担当が確認のうえご返信いたします。">
   <script src="ga.js"></script>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Noto+Serif+JP:wght@400;700;900&family=Share+Tech+Mono&family=Zen+Old+Mincho:wght@400;700;900&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="portal.css">
+  <style>
+    .contact-form { display: flex; flex-direction: column; gap: 1rem; max-width: 640px; margin: 1.5rem 0; }
+    .contact-form label { display: flex; flex-direction: column; gap: 0.35rem; font-weight: 700; color: rgba(255, 215, 0, 0.95); }
+    .contact-form .required::after { content: " *"; color: #ff8080; }
+    .contact-form select,
+    .contact-form input[type="text"],
+    .contact-form input[type="email"],
+    .contact-form textarea {
+      width: 100%;
+      padding: 0.7rem 0.85rem;
+      font: inherit;
+      font-size: 1rem;
+      color: #f5f5dc;
+      background: rgba(10, 10, 10, 0.75);
+      border: 1px solid rgba(255, 215, 0, 0.45);
+      border-radius: 4px;
+      box-sizing: border-box;
+    }
+    .contact-form textarea { min-height: 180px; resize: vertical; font-family: inherit; }
+    .contact-form select:focus,
+    .contact-form input:focus,
+    .contact-form textarea:focus { outline: none; border-color: rgba(255, 215, 0, 0.9); box-shadow: 0 0 0 2px rgba(255, 215, 0, 0.2); }
+    .contact-form .field-hint { font-weight: 400; font-size: 0.85rem; color: rgba(245, 245, 220, 0.7); }
+    .contact-form .submit-btn {
+      padding: 0.85rem 2rem;
+      font-size: 1rem;
+      font-weight: 700;
+      color: #111;
+      background: linear-gradient(180deg, #ffd700 0%, #d4a70b 100%);
+      border: 1px solid #ffd700;
+      border-radius: 4px;
+      cursor: pointer;
+      align-self: flex-start;
+      transition: transform 0.15s ease, box-shadow 0.15s ease;
+    }
+    .contact-form .submit-btn:hover:not(:disabled) { transform: translateY(-1px); box-shadow: 0 4px 12px rgba(255, 215, 0, 0.3); }
+    .contact-form .submit-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+    .contact-form .field-error { font-size: 0.85rem; color: #ff8080; margin-top: 0.25rem; font-weight: 400; }
+    .form-feedback {
+      margin: 1.5rem 0;
+      padding: 1rem 1.25rem;
+      border-radius: 4px;
+      border: 1px solid rgba(255, 215, 0, 0.5);
+      background: rgba(20, 20, 20, 0.6);
+      color: #f5f5dc;
+    }
+    .form-feedback.success { border-color: rgba(0, 255, 150, 0.5); color: #a9f5d2; }
+    .form-feedback.error { border-color: rgba(255, 100, 100, 0.5); color: #ffb0b0; }
+    .contact-fineprint {
+      margin-top: 1rem;
+      font-size: 0.88rem;
+      color: rgba(245, 245, 220, 0.75);
+    }
+    .contact-fineprint li { margin: 0.2rem 0; }
+    .urgent-fallback {
+      margin-top: 2rem;
+      padding: 0.9rem 1.1rem;
+      border-left: 3px solid rgba(255, 215, 0, 0.6);
+      background: rgba(20, 20, 20, 0.45);
+      border-radius: 2px;
+    }
+    .urgent-fallback h3 { margin: 0 0 0.3rem; font-size: 0.95rem; color: rgba(255, 215, 0, 0.95); }
+    .urgent-fallback p { margin: 0.2rem 0; font-size: 0.9rem; }
+  </style>
 </head>
 <body>
 
@@ -35,34 +99,65 @@
       <h1 class="page-title">お問い合わせ</h1>
 
       <div class="page-body">
-        <p>BAKENEKO GAMESおよび本サイト（<strong>https://www.bakenekocafe.studio</strong>）に関するお問い合わせは、下記の運営元までご連絡ください。一般社団法人 新宿租界（保護猫カフェ「BAKENEKO CAFE 化猫茶屋」と同一運営）が対応いたします。</p>
-        <p>広告の表示内容、不具合、取材、コラボのご相談など、内容に応じて担当が確認いたします。メールの返信は<strong>数日から1週間程度</strong>を目安に行っています（混雑時はさらにお時間をいただく場合があります）。お急ぎの際は電話もご利用ください。</p>
+        <p>BAKENEKO GAMES / BAKENEKO CAFE（化猫茶屋・猫又療養所）に関するお問い合わせは、下記フォームからお送りください。一般社団法人 新宿租界（保護猫カフェ「BAKENEKO CAFE」と同一運営）が対応いたします。</p>
+        <p>猫の引き受け相談・譲渡希望・見学・取材・ゲームの不具合・ランキングなど、お気軽にご相談ください。</p>
 
-        <div class="contact-block">
-          <h2>運営者</h2>
-          <p><strong>一般社団法人 新宿租界</strong></p>
-          <p>代表理事：遠藤慎大</p>
+        <form id="contact-form" class="contact-form" novalidate>
+          <label>
+            <span class="required">お問い合わせの種類</span>
+            <select id="inq-type" name="inquiry_type" required>
+              <option value="intake_consult">猫の引き受け相談（新しく引き受けてほしい猫がいる）</option>
+              <option value="adoption">猫を迎えたい（譲渡希望）</option>
+              <option value="visit">見学・来店について</option>
+              <option value="volunteer">ボランティア・寄付</option>
+              <option value="media">取材・コラボ依頼</option>
+              <option value="partnership">協業等の相談</option>
+              <option value="other" selected>その他（ゲーム・サイトに関する問い合わせ等）</option>
+            </select>
+          </label>
+
+          <label>
+            <span class="required">お名前</span>
+            <input type="text" id="inq-name" name="name" maxlength="100" autocomplete="name" required>
+            <span class="field-hint">1〜100 文字</span>
+          </label>
+
+          <label>
+            <span class="required">メールアドレス</span>
+            <input type="email" id="inq-email" name="email" maxlength="254" autocomplete="email" inputmode="email" required>
+            <span class="field-hint">返信先として使用します</span>
+          </label>
+
+          <label>
+            <span>件名（任意）</span>
+            <input type="text" id="inq-subject" name="subject" maxlength="200" autocomplete="off">
+          </label>
+
+          <label>
+            <span class="required">お問い合わせ内容</span>
+            <textarea id="inq-body" name="body" maxlength="5000" required></textarea>
+            <span class="field-hint">1〜5000 文字</span>
+          </label>
+
+          <div id="form-error" class="field-error" hidden></div>
+
+          <button type="submit" id="inq-submit" class="submit-btn">送信する</button>
+        </form>
+
+        <div id="form-feedback" class="form-feedback" hidden></div>
+
+        <ul class="contact-fineprint">
+          <li>通常 2〜3 営業日以内にご返信いたしますが、混雑時はさらにお時間をいただく場合があります。</li>
+          <li>電話窓口でのお問い合わせ受付は原則として行っておりません（留守番電話のみ）。</li>
+          <li>送信内容は運営スタッフのみが閲覧し、ご返信以外の目的には使用しません（<a href="privacy.html">プライバシーポリシー</a>）。</li>
+        </ul>
+
+        <div class="urgent-fallback">
+          <h3>どうしてもお急ぎの場合</h3>
+          <p>メール：<a href="mailto:info@bakeneko-cafe.tokyo" class="contact-link">info@bakeneko-cafe.tokyo</a></p>
+          <p>電話（留守番のみ）：<a href="tel:03-6161-2929" class="contact-link">03-6161-2929</a></p>
+          <p style="font-size:0.85rem; color: rgba(245,245,220,0.7);">一般社団法人 新宿租界 / 代表理事：遠藤慎大 / 〒169-0072 東京都新宿区大久保3-13-1</p>
         </div>
-
-        <div class="contact-block">
-          <h2>メール</h2>
-          <p><a href="mailto:info@bakeneko-cafe.tokyo" class="contact-link">info@bakeneko-cafe.tokyo</a></p>
-          <p class="contact-note">件名に「BAKENEKO GAMES」とご記載いただくとスムーズです。</p>
-        </div>
-
-        <div class="contact-block">
-          <h2>電話</h2>
-          <p><a href="tel:03-6161-2929" class="contact-link">03-6161-2929</a></p>
-          <p class="contact-note">カフェ営業時間等は<a href="https://bakeneko-cafe.tokyo/" target="_blank" rel="noopener">BAKENEKO CAFE 公式サイト</a>をご確認ください。</p>
-        </div>
-
-        <div class="contact-block">
-          <h2>所在地</h2>
-          <p>〒169-0072 東京都新宿区大久保3-13-1</p>
-          <p class="contact-note">店舗は同住所の「1棟106」です。</p>
-        </div>
-
-        <p class="page-contact" style="margin-top: 2rem;">ゲームの不具合・ランキング・広告に関するお問い合わせも上記で受け付けております。</p>
       </div>
     </section>
 
@@ -91,5 +186,90 @@
   </main>
 
   <script src="portal.js"></script>
+  <script>
+  (function () {
+    var API_ENDPOINT = 'https://api.bakenekocafe.studio/api/ops/inquiry-public/submit';
+    var form = document.getElementById('contact-form');
+    var fb = document.getElementById('form-feedback');
+    var err = document.getElementById('form-error');
+    var submitBtn = document.getElementById('inq-submit');
+    if (!form) return;
+
+    function showError(msg) {
+      err.hidden = false;
+      err.textContent = msg;
+    }
+    function clearError() {
+      err.hidden = true;
+      err.textContent = '';
+    }
+    function showFeedback(kind, html) {
+      fb.hidden = false;
+      fb.className = 'form-feedback ' + kind;
+      fb.innerHTML = html;
+      try { fb.scrollIntoView({ behavior: 'smooth', block: 'start' }); } catch (_) {}
+    }
+
+    form.addEventListener('submit', function (ev) {
+      ev.preventDefault();
+      clearError();
+
+      var name = form.name.value.trim();
+      var email = form.email.value.trim().toLowerCase();
+      var subject = form.subject.value.trim();
+      var body = form.body.value.trim();
+      var inquiryType = form.inquiry_type.value;
+
+      if (!name || name.length > 100) { showError('お名前は 1〜100 文字で入力してください。'); form.name.focus(); return; }
+      if (!email || email.indexOf('@') < 1) { showError('有効なメールアドレスを入力してください。'); form.email.focus(); return; }
+      if (!body || body.length < 1 || body.length > 5000) { showError('お問い合わせ内容は 1〜5000 文字で入力してください。'); form.body.focus(); return; }
+
+      submitBtn.disabled = true;
+      submitBtn.textContent = '送信中…';
+
+      fetch(API_ENDPOINT, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          name: name,
+          email: email,
+          inquiry_type: inquiryType,
+          subject: subject,
+          body: body
+        })
+      }).then(function (res) {
+        return res.json().then(function (data) { return { ok: res.ok, status: res.status, data: data }; });
+      }).then(function (r) {
+        if (r.ok && r.data && r.data.ok) {
+          form.style.display = 'none';
+          var ref = (r.data.ref || (r.data.ticket_id || '').slice(0, 8).toUpperCase()) || '----';
+          showFeedback('success',
+            '<h3 style="margin:0 0 .5rem;">✅ 送信を受け付けました</h3>' +
+            '<p style="margin:.3rem 0;">内容を確認のうえ、担当よりご返信いたします。</p>' +
+            '<p style="margin:.3rem 0;">受付番号: <strong>' + ref + '</strong></p>' +
+            '<p style="margin:.3rem 0; font-size:.85rem; color:rgba(245,245,220,.7);">' +
+            '自動返信メールを登録されたアドレスへお送りしました。届かない場合はスパムフォルダをご確認ください。</p>'
+          );
+        } else if (r.status === 429) {
+          showFeedback('error', '<p>⚠️ 送信回数が上限を超えました。しばらく時間をおいてからお試しください。</p>');
+          submitBtn.disabled = false;
+          submitBtn.textContent = '送信する';
+        } else if (r.data && r.data.error === 'validation') {
+          showError((r.data.message || '入力内容に不備があります。'));
+          submitBtn.disabled = false;
+          submitBtn.textContent = '送信する';
+        } else {
+          showFeedback('error', '<p>⚠️ 送信に失敗しました。しばらくしてから再度お試しください。</p><p style="font-size:.85rem;">お急ぎの場合は <a href="mailto:info@bakeneko-cafe.tokyo">info@bakeneko-cafe.tokyo</a> までお願いします。</p>');
+          submitBtn.disabled = false;
+          submitBtn.textContent = '送信する';
+        }
+      }).catch(function (e) {
+        showFeedback('error', '<p>⚠️ 通信エラーが発生しました。ネットワーク環境をご確認のうえ再度お試しください。</p><p style="font-size:.85rem;">お急ぎの場合は <a href="mailto:info@bakeneko-cafe.tokyo">info@bakeneko-cafe.tokyo</a> までお願いします。</p>');
+        submitBtn.disabled = false;
+        submitBtn.textContent = '送信する';
+      });
+    });
+  })();
+  </script>
 </body>
 </html>

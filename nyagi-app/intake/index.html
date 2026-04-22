@@ -1,0 +1,214 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>マイ申請｜引き受け申請</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body class="intake-body">
+  <div class="intake-wrap">
+    <header class="intake-header">
+      <h1>引き受け申請</h1>
+      <p id="subHint">申請の一覧と進捗</p>
+    </header>
+
+    <div id="previewBanner" class="intake-alert intake-alert-ok" style="display:none;">
+      スタッフ共有のプレビュー（閲覧のみ）です。編集はできません。
+    </div>
+
+    <div id="alertBox"></div>
+
+    <div class="intake-card" id="toolbar" style="display:none;">
+      <button type="button" class="intake-btn intake-btn-primary" id="newAppBtn">新しい申請を作成</button>
+      <div style="margin-top:12px;display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px;">
+        <a class="intake-link" href="#" id="accountLink">アカウント情報</a>
+        <button type="button" class="intake-btn intake-btn-ghost" id="logoutBtn">ログアウト</button>
+      </div>
+    </div>
+
+    <div id="listArea"></div>
+
+    <p class="intake-footer-note">
+      <a href="https://www.bakenekocafe.studio/terms.html" target="_blank" rel="noopener">利用規約</a>
+      ・<a href="https://www.bakenekocafe.studio/privacy.html" target="_blank" rel="noopener">プライバシー</a>
+      ・<a href="https://www.bakenekocafe.studio/contact.html" target="_blank" rel="noopener">お問い合わせ</a>
+    </p>
+  </div>
+
+  <script src="../config.js"></script>
+  <script src="js/intake-common.js"></script>
+  <script>
+  (function () {
+    var ro = window.intakeIsPreview();
+    if (!window.intakeGetToken()) {
+      location.href = 'login.html';
+      return;
+    }
+
+    if (ro) {
+      document.getElementById('previewBanner').style.display = 'block';
+      document.getElementById('subHint').textContent = 'プレビュー（閲覧のみ）';
+      document.getElementById('toolbar').style.display = 'none';
+    } else {
+      if (!window.intakeRequireAuth()) return;
+      document.getElementById('toolbar').style.display = 'block';
+    }
+
+    var STATUS_LABEL = {
+      draft: '入力中',
+      submitted: '申請済み',
+      under_review: '審査中',
+      info_requested: '情報待ち',
+      approved: '承認済み',
+      rejected: '却下',
+      withdrawn: '取り下げ',
+    };
+
+    var listArea = document.getElementById('listArea');
+    var alertBox = document.getElementById('alertBox');
+
+    function showErr(msg) {
+      alertBox.innerHTML = '<div class="intake-alert intake-alert-error">' + window.intakeEsc(msg) + '</div>';
+    }
+
+    function formatShortDate(iso) {
+      if (!iso) return '';
+      try {
+        var dt = new Date(iso);
+        if (isNaN(dt.getTime())) return String(iso).slice(0, 16);
+        return dt.getMonth() + 1 + '/' + dt.getDate() + ' ' + dt.getHours() + ':' + (dt.getMinutes() < 10 ? '0' : '') + dt.getMinutes();
+      } catch (_) {
+        return String(iso).slice(0, 16);
+      }
+    }
+
+    function render(list) {
+      alertBox.innerHTML = '';
+      if (!list || !list.length) {
+        listArea.innerHTML =
+          '<div class="intake-card"><p>申請はまだありません。「新しい申請を作成」から始めてください。</p></div>';
+        return;
+      }
+      var html = '';
+      for (var i = 0; i < list.length; i++) {
+        var a = list[i];
+        var st = STATUS_LABEL[a.status] || a.status;
+        var pct = 0;
+        if (a.cats && a.cats.length) {
+          var sum = 0;
+          for (var j = 0; j < a.cats.length; j++) {
+            sum += a.cats[j].completion ? a.cats[j].completion.pct : 0;
+          }
+          pct = Math.round(sum / a.cats.length);
+        }
+        var nameParts = [];
+        if (a.cats && a.cats.length) {
+          for (var k = 0; k < a.cats.length; k++) {
+            var nm = a.cats[k].name;
+            if (nm && String(nm).trim()) nameParts.push(window.intakeEsc(String(nm).trim()));
+          }
+        }
+        var nameLine =
+          nameParts.length > 0
+            ? '<div class="intake-meta">猫: ' + nameParts.join('、') + '</div>'
+            : '';
+        var btnLabel = a.status === 'draft' ? '続きを入力' : '詳細を見る';
+        var updLine = a.updated_at
+          ? '<div class="intake-meta">最終更新: ' + window.intakeEsc(formatShortDate(a.updated_at)) + '</div>'
+          : '';
+        html +=
+          '<div class="intake-app-row">' +
+          '<h3>申請 #' +
+          a.id +
+          '</h3>' +
+          '<div class="intake-meta">状態: ' +
+          window.intakeEsc(st) +
+          ' ／ 猫 ' +
+          (a.cat_count || 0) +
+          ' 頭</div>' +
+          nameLine +
+          updLine +
+          '<div class="intake-progress"><div class="intake-progress-bar" style="width:' +
+          pct +
+          '%"></div></div>' +
+          '<div class="intake-meta">入力の目安: ' +
+          pct +
+          '%（必須項目ベース）</div>' +
+          '<p style="margin-top:10px;"><a class="intake-btn intake-btn-primary" style="display:inline-block;text-decoration:none;text-align:center;" href="app.html?id=' +
+          a.id +
+          '">' +
+          window.intakeEsc(btnLabel) +
+          '</a></p>' +
+          '</div>';
+      }
+      listArea.innerHTML = html;
+    }
+
+    function load() {
+      var pMe = window.intakeFetch('GET', '/me', null).catch(function () {
+        return {};
+      });
+      window
+        .intakeFetch('GET', '/applications', null)
+        .then(function (d) {
+          return pMe.then(function (md) {
+            var hint = document.getElementById('subHint');
+            if (hint && md && md.applicant) {
+              var n = String(md.applicant.name || '').trim();
+              if (n) hint.textContent = n + ' さんの申請一覧';
+            }
+            render(d.applications || []);
+          });
+        })
+        .catch(function (e) {
+          showErr(e.message || '読み込みに失敗しました');
+        });
+    }
+
+    document.getElementById('newAppBtn').addEventListener('click', function () {
+      window
+        .intakeFetch('POST', '/applications', {})
+        .then(function (d) {
+          if (d.application && d.application.id) {
+            location.href = 'app.html?id=' + d.application.id;
+          } else {
+            load();
+          }
+        })
+        .catch(function (e) {
+          showErr(e.message || '作成に失敗しました');
+        });
+    });
+
+    document.getElementById('logoutBtn').addEventListener('click', function () {
+      window.intakeLogout();
+    });
+
+    document.getElementById('accountLink').addEventListener('click', function (ev) {
+      ev.preventDefault();
+      window
+        .intakeFetch('GET', '/me', null)
+        .then(function (d) {
+          var ap = d.applicant || {};
+          alert(
+            '氏名: ' +
+              (ap.name || '') +
+              '\nメール: ' +
+              (ap.email || '') +
+              '\n電話: ' +
+              (ap.phone || '') +
+              '\n住所: ' +
+              (ap.address || '')
+          );
+        })
+        .catch(function () {
+          alert('取得に失敗しました');
+        });
+    });
+
+    load();
+  })();
+  </script>
+</body>
+</html>

@@ -1,0 +1,86 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>ログイン｜引き受け申請</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body class="intake-body">
+  <div class="intake-wrap">
+    <header class="intake-header">
+      <h1>ログイン</h1>
+      <p>登録済みのメールアドレスとパスワード</p>
+    </header>
+
+    <div id="alertBox"></div>
+
+    <form id="loginForm" class="intake-card">
+      <div class="intake-field">
+        <label for="email">メールアドレス</label>
+        <input type="email" id="email" name="email" autocomplete="username" required>
+      </div>
+      <div class="intake-field">
+        <label for="password">パスワード</label>
+        <input type="password" id="password" name="password" autocomplete="current-password" required>
+      </div>
+      <button type="submit" class="intake-btn intake-btn-primary" id="submitBtn">ログイン</button>
+      <p style="margin-top:14px;text-align:center;font-size:0.85rem;">
+        <a class="intake-link" href="https://www.bakenekocafe.studio/contact.html" target="_blank" rel="noopener">パスワードを忘れた場合（お問い合わせ）</a>
+      </p>
+      <p style="margin-top:10px;text-align:center;font-size:0.9rem;">
+        <a class="intake-link" href="setup.html">初回登録（招待メールのリンク）</a>
+      </p>
+    </form>
+
+    <p class="intake-footer-note">
+      BAKENEKO / 猫又療養所 引き受け申請<br>
+      <a href="https://www.bakenekocafe.studio/terms.html" target="_blank" rel="noopener">利用規約</a>
+      ・<a href="https://www.bakenekocafe.studio/privacy.html" target="_blank" rel="noopener">プライバシー</a>
+      ・<a href="https://www.bakenekocafe.studio/contact.html" target="_blank" rel="noopener">お問い合わせ</a>
+    </p>
+  </div>
+
+  <script src="../config.js"></script>
+  <script src="js/intake-common.js"></script>
+  <script>
+  (function () {
+    if (window.intakeGetToken() && !window.intakeIsPreview()) {
+      location.replace('index.html');
+      return;
+    }
+
+    var alertBox = document.getElementById('alertBox');
+    var submitBtn = document.getElementById('submitBtn');
+
+    function showErr(msg) {
+      alertBox.innerHTML = '<div class="intake-alert intake-alert-error">' + window.intakeEsc(msg) + '</div>';
+    }
+
+    document.getElementById('loginForm').addEventListener('submit', function (ev) {
+      ev.preventDefault();
+      alertBox.innerHTML = '';
+      var email = document.getElementById('email').value.trim().toLowerCase();
+      var password = document.getElementById('password').value;
+      submitBtn.disabled = true;
+      window
+        .intakeFetch('POST', '/login', { email: email, password: password })
+        .then(function (d) {
+          if (d.session_token) window.intakeSetSession(d.session_token);
+          location.href = 'index.html';
+        })
+        .catch(function (e) {
+          var msg = e.message || 'ログインに失敗しました';
+          if (e.status === 429) {
+            msg =
+              (e.body && e.body.message) ||
+              'ログイン試行回数が上限に達しました。しばらくしてからお試しください。';
+          }
+          showErr(msg);
+          submitBtn.disabled = false;
+        });
+    });
+  })();
+  </script>
+</body>
+</html>

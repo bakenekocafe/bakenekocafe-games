@@ -1,0 +1,560 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
+  <meta http-equiv="Pragma" content="no-cache">
+  <script>
+  (function(){if(!navigator.serviceWorker)return;navigator.serviceWorker.getRegistrations().then(function(r){for(var i=0;i<r.length;i++){r[i].update();if(r[i].waiting)r[i].waiting.postMessage({type:'SKIP_WAITING'})}});var f=!1;navigator.serviceWorker.addEventListener('controllerchange',function(){if(!f){f=!0;location.reload()}})})();
+  </script>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+  <title>NYAGI 業務連絡掲示板</title>
+  <link rel="manifest" href="manifest.json?v=214">
+  <meta name="theme-color" content="#1a1a2e">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <link rel="stylesheet" href="style.css?v=214">
+  <script src="js/nyagi-fixed-header.js?v=209" defer></script>
+  <script src="js/nyagi-cache-clear.js?v=209" defer></script>
+  <style>
+    /* ── フィルター ─────────────────────────── */
+    .bb-filters {
+      margin-bottom: 16px;
+    }
+    .filter-row {
+      display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin-bottom: 10px;
+    }
+    .filter-label {
+      font-size: 11px; color: var(--text-dim); min-width: 52px;
+    }
+    .loc-bar {
+      display: flex; flex-direction: column; gap: 4px; margin-bottom: 14px;
+    }
+    .loc-btn {
+      display: inline-flex; align-items: center; gap: 6px;
+      padding: 7px 14px; border-radius: 20px;
+      border: 1px solid rgba(255,255,255,0.15);
+      background: var(--surface); color: var(--text-dim);
+      font-size: 13px; font-weight: 600; cursor: pointer;
+      transition: all 0.15s;
+    }
+    .loc-btn.active {
+      background: var(--primary); color: #fff; border-color: var(--primary);
+    }
+
+    .bb-select {
+      background: var(--surface); color: var(--text);
+      border: 1px solid rgba(255,255,255,0.15); border-radius: 8px;
+      padding: 7px 12px; font-size: 13px; flex: 1; max-width: 200px;
+      -webkit-appearance: none; appearance: none;
+    }
+    .bb-hint {
+      font-size: 11px; color: var(--text-dim); line-height: 1.45;
+      margin: 0 0 12px; padding: 0 2px;
+    }
+
+    /* ── セクション ─────────────────────────── */
+    .bb-section {
+      margin-bottom: 20px;
+    }
+    .bb-section-header {
+      display: flex; align-items: center; justify-content: space-between;
+      margin-bottom: 10px;
+    }
+    .bb-section-title {
+      font-size: 15px; font-weight: 700;
+    }
+    .bb-badge {
+      font-size: 11px; font-weight: 700;
+      background: var(--primary); color: #fff;
+      border-radius: 10px; padding: 2px 8px; min-width: 20px; text-align: center;
+    }
+
+    /* ── カード共通 ─────────────────────────── */
+    .bb-card {
+      background: var(--surface); border-radius: 10px;
+      padding: 12px 14px; margin-bottom: 8px;
+      border: 1px solid rgba(255,255,255,0.06);
+      transition: border-color 0.15s;
+    }
+    .bb-card:hover { border-color: rgba(255,255,255,0.15); }
+    .bb-card-head {
+      display: flex; justify-content: space-between; align-items: flex-start;
+      margin-bottom: 6px;
+    }
+    .bb-cat-name {
+      font-size: 13px; font-weight: 700; color: var(--primary-hover);
+    }
+    .bb-date {
+      font-size: 11px; color: var(--text-dim); white-space: nowrap;
+    }
+    .bb-card-body {
+      font-size: 13px; color: var(--text); line-height: 1.55;
+      white-space: pre-wrap; word-break: break-word;
+    }
+    .bb-type-badge {
+      display: inline-block; font-size: 10px; font-weight: 700;
+      padding: 2px 8px; border-radius: 6px; margin-right: 6px;
+    }
+    .bb-type-note { background: rgba(250,204,21,0.18); color: #facc15; }
+    /* 注意事項のカテゴリ（食事など）— 猫詳細の色味に寄せる */
+    .bb-note-cat {
+      display: inline-block; font-size: 10px; font-weight: 700;
+      padding: 2px 7px; border-radius: 6px; margin-right: 6px; vertical-align: middle;
+    }
+    .bb-note-cat--general { background: rgba(148,163,184,0.22); color: #cbd5e1; }
+    .bb-note-cat--health { background: rgba(52,211,153,0.2); color: #6ee7b7; }
+    .bb-note-cat--behavior { background: rgba(167,139,250,0.22); color: #c4b5fd; }
+    .bb-note-cat--feeding { background: rgba(251,146,60,0.3); color: #fdba74; }
+    .bb-note-cat--medication { background: rgba(96,165,250,0.22); color: #93c5fd; }
+    .bb-note-cat--task { background: rgba(250,204,21,0.15); color: #fde047; }
+    .bb-note-cat--warning { background: rgba(248,113,113,0.25); color: #fca5a5; }
+    .bb-note-cat--nutrition { background: rgba(45,212,191,0.18); color: #5eead4; }
+    .bb-note-cat--other { background: rgba(148,163,184,0.15); color: #94a3b8; }
+    .bb-type-clinic { background: rgba(129,140,248,0.18); color: #818cf8; }
+    .bb-type-schedule { background: rgba(52,211,153,0.18); color: #34d399; }
+    .bb-type-bulletin { background: rgba(251,146,60,0.18); color: #fb923c; }
+    .bb-type-overdue { background: rgba(248,113,113,0.18); color: #f87171; }
+
+    .bb-urgency-bar {
+      width: 3px; border-radius: 2px; min-height: 100%; margin-right: 10px; flex-shrink: 0;
+    }
+
+    /* ── 業務連絡入力 ──────────────────────── */
+    .bb-compose {
+      background: var(--surface); border-radius: 10px;
+      padding: 14px; margin-bottom: 16px;
+      border: 1px solid rgba(255,255,255,0.08);
+    }
+    .bb-compose-title {
+      font-size: 14px; font-weight: 700; margin-bottom: 10px;
+    }
+    .bb-input {
+      width: 100%; box-sizing: border-box;
+      background: var(--bg); color: var(--text);
+      border: 1px solid rgba(255,255,255,0.15); border-radius: 8px;
+      padding: 10px 12px; font-size: 13px;
+      font-family: inherit;
+    }
+    .bb-input:focus { outline: none; border-color: var(--primary); }
+    .bb-textarea {
+      min-height: 80px; resize: vertical;
+    }
+    .bb-compose-actions {
+      display: flex; gap: 8px; margin-top: 10px; justify-content: flex-end; align-items: center;
+    }
+    .bb-compose-actions label {
+      font-size: 12px; color: var(--text-dim); display: flex; align-items: center; gap: 4px;
+    }
+    .bb-btn {
+      padding: 8px 20px; border-radius: 8px; border: none;
+      font-size: 13px; font-weight: 700; cursor: pointer;
+      transition: background 0.15s, opacity 0.15s;
+    }
+    .bb-btn-primary { background: var(--primary); color: #fff; }
+    .bb-btn-primary:hover { background: var(--primary-hover); }
+    .bb-btn-primary:disabled { opacity: 0.5; cursor: default; }
+    .bb-btn-sm {
+      padding: 4px 10px; font-size: 11px; border-radius: 6px; border: none; cursor: pointer;
+    }
+    .bb-btn-del { background: rgba(239,68,68,0.15); color: #f87171; }
+    .bb-btn-del:hover { background: rgba(239,68,68,0.25); }
+    .bb-btn-edit { background: rgba(96,165,250,0.18); color: #93c5fd; }
+    .bb-btn-edit:hover { background: rgba(96,165,250,0.28); }
+    .bb-btn-comment { background: rgba(52,211,153,0.18); color: #6ee7b7; }
+    .bb-btn-comment:hover { background: rgba(52,211,153,0.28); }
+    .bb-card-actions {
+      display: flex; gap: 6px; justify-content: flex-end;
+      margin-top: 6px; flex-wrap: wrap;
+    }
+
+    /* 追記一覧 */
+    .bb-comments {
+      margin-top: 8px; padding-top: 8px;
+      border-top: 1px dashed rgba(255,255,255,0.12);
+    }
+    .bb-comments-title {
+      font-size: 11px; color: var(--text-dim); margin-bottom: 6px; font-weight: 700;
+    }
+    .bb-comment {
+      background: rgba(255,255,255,0.03);
+      border-left: 2px solid rgba(52,211,153,0.5);
+      border-radius: 6px;
+      padding: 6px 8px;
+      margin-bottom: 4px;
+      font-size: 12px;
+      line-height: 1.5;
+    }
+    .bb-comment-head {
+      display: flex; justify-content: space-between; align-items: center;
+      font-size: 10px; color: var(--text-dim); margin-bottom: 2px;
+      gap: 6px;
+    }
+    .bb-comment-body { white-space: pre-wrap; word-break: break-word; }
+    .bb-comment-actions { display: flex; gap: 4px; }
+    .bb-comment-actions .bb-btn-sm { padding: 2px 6px; font-size: 10px; }
+
+    /* 編集・追記モーダル */
+    .bb-modal {
+      position: fixed; inset: 0; background: rgba(0,0,0,0.6);
+      display: none; align-items: center; justify-content: center;
+      z-index: 1000; padding: 16px;
+    }
+    .bb-modal.open { display: flex; }
+    .bb-modal-box {
+      background: var(--surface);
+      border-radius: 12px;
+      border: 1px solid rgba(255,255,255,0.1);
+      width: 100%; max-width: 480px;
+      padding: 16px;
+      max-height: 90vh; overflow-y: auto;
+      box-sizing: border-box;
+    }
+    .bb-modal-title {
+      font-size: 15px; font-weight: 700; margin-bottom: 10px;
+    }
+    .bb-modal-actions {
+      display: flex; justify-content: flex-end; gap: 8px; margin-top: 12px;
+    }
+    .bb-modal-actions .bb-btn-cancel {
+      background: rgba(255,255,255,0.08); color: var(--text);
+    }
+    .bb-attach-list {
+      margin: 8px 0;
+      display: flex; flex-direction: column; gap: 4px;
+    }
+    .bb-attach-row {
+      display: flex; justify-content: space-between; align-items: center;
+      background: rgba(255,255,255,0.04);
+      border-radius: 6px; padding: 4px 8px;
+      font-size: 11px;
+    }
+
+    /* ── 空 / ローディング ──────────────────── */
+    .bb-empty {
+      text-align: center; color: var(--text-dim); font-size: 13px;
+      padding: 24px 0;
+    }
+    .bb-loading {
+      text-align: center; color: var(--text-dim); font-size: 13px;
+      padding: 24px 0;
+    }
+
+    /* ── 病院予定カード追加 ─────────────────── */
+    .bb-sched-card {
+      display: flex; align-items: stretch;
+    }
+
+    /* ── 業務連絡専用・折りたたみ ───────────── */
+    .bb-bulletin-fold {
+      margin-bottom: 16px;
+    }
+    .bb-bulletin-fold-card {
+      background: var(--surface);
+      border-radius: 10px;
+      border: 1px solid rgba(251, 146, 60, 0.35);
+      overflow: hidden;
+    }
+    .bb-bulletin-fold-toggle {
+      width: 100%;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding: 12px 14px;
+      border: none;
+      background: rgba(251, 146, 60, 0.08);
+      color: var(--text);
+      font-size: 15px;
+      font-weight: 700;
+      cursor: pointer;
+      text-align: left;
+      font-family: inherit;
+    }
+    .bb-bulletin-fold-toggle:active {
+      background: rgba(251, 146, 60, 0.14);
+    }
+    .bb-bulletin-fold-toggle:disabled {
+      cursor: default;
+    }
+    .bb-bulletin-fold-chev {
+      display: inline-block;
+      font-size: 12px;
+      color: #fb923c;
+      transition: transform 0.2s;
+      width: 1.2em;
+    }
+    .bb-bulletin-fold.open .bb-bulletin-fold-chev {
+      transform: rotate(90deg);
+    }
+    .bb-bulletin-fold-label { flex: 1; }
+    .bb-bulletin-fold-badge {
+      font-size: 11px;
+      font-weight: 800;
+      background: #fb923c;
+      color: #1a1a2e;
+      border-radius: 10px;
+      padding: 2px 8px;
+      min-width: 1.5em;
+      text-align: center;
+    }
+    .bb-bulletin-fold-body {
+      padding: 0 10px 12px;
+      border-top: 1px solid rgba(255,255,255,0.06);
+    }
+    .bb-bulletin-fold-body[hidden] {
+      display: none !important;
+    }
+    .bb-bulletin-list {
+      padding-top: 8px;
+    }
+    .bb-bulletin-list .bb-card {
+      margin-bottom: 8px;
+    }
+    .bb-bulletin-list .bb-card:last-child {
+      margin-bottom: 0;
+    }
+
+    /* ── 業務連絡添付 ───────────────────────── */
+    .bb-compose-files {
+      margin-top: 8px;
+      font-size: 12px;
+      color: var(--text-dim);
+    }
+    .bb-compose-files input[type="file"] {
+      font-size: 12px;
+      max-width: 100%;
+    }
+    .bb-bull-atts {
+      margin-top: 10px;
+      padding-top: 8px;
+      border-top: 1px solid rgba(255,255,255,0.06);
+    }
+    .bb-bull-att-img {
+      max-width: 100%;
+      max-height: 220px;
+      border-radius: 8px;
+      margin-top: 6px;
+      object-fit: contain;
+      background: rgba(0,0,0,0.2);
+    }
+    .bb-bull-att-video {
+      display: block;
+      max-width: 100%;
+      max-height: min(70vh, 480px);
+      width: 100%;
+      border-radius: 8px;
+      margin-top: 6px;
+      background: rgba(0,0,0,0.35);
+    }
+    /* PDF 添付: iframe でブラウザ内蔵ビューアにインラインプレビュー */
+    .bb-bull-att-pdf {
+      display: block;
+      width: 100%;
+      height: 480px;
+      max-height: 70vh;
+      border: 0;
+      border-radius: 8px;
+      margin-top: 6px;
+      background: rgba(0,0,0,0.35);
+    }
+    .bb-bull-att-pdf-wrap {
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+      margin-top: 6px;
+    }
+    .bb-bull-att-link {
+      display: inline-block;
+      margin-top: 6px;
+      font-size: 12px;
+      color: var(--accent);
+      word-break: break-all;
+    }
+
+    /* ── 表示カタログ（選別参考） ───────────────── */
+    .bb-catalog-details {
+      margin: 0 0 14px;
+      padding: 10px 12px;
+      background: var(--surface);
+      border-radius: 10px;
+      border: 1px solid rgba(255,255,255,0.08);
+    }
+    .bb-catalog-summary {
+      cursor: pointer;
+      font-size: 12px;
+      font-weight: 700;
+      color: var(--text-dim);
+      list-style: none;
+    }
+    .bb-catalog-summary::-webkit-details-marker { display: none; }
+    .bb-catalog-details[open] .bb-catalog-summary { color: var(--accent); }
+    .bb-catalog-body {
+      margin-top: 10px;
+      font-size: 12px;
+      color: var(--text);
+      line-height: 1.5;
+    }
+    .bb-catalog-intro {
+      margin: 0 0 10px;
+      color: var(--text-dim);
+      font-size: 11px;
+    }
+    .bb-catalog-subtitle {
+      font-weight: 700;
+      font-size: 12px;
+      margin: 14px 0 6px;
+      color: var(--text);
+    }
+    .bb-catalog-subtitle:first-of-type { margin-top: 0; }
+    .bb-catalog-table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 11px;
+    }
+    .bb-catalog-table th,
+    .bb-catalog-table td {
+      border: 1px solid rgba(255,255,255,0.08);
+      padding: 5px 8px;
+      text-align: left;
+      vertical-align: top;
+    }
+    .bb-catalog-table th {
+      background: rgba(0,0,0,0.2);
+      color: var(--text-dim);
+      font-weight: 700;
+    }
+    .bb-catalog-table code {
+      font-size: 10px;
+      word-break: break-all;
+    }
+  </style>
+</head>
+<body>
+
+  <div class="app-sticky-top">
+    <div class="header">
+      <h1>NYAGI</h1>
+      <p>業務連絡掲示板</p>
+      <nav class="header-nav">
+        <a href="index.html">トップ</a>
+        <a href="dashboard.html">ダッシュボード</a>
+        <a href="cats.html">猫一覧</a>
+        <a href="tasks.html">タスク</a>
+        <a href="bulletin.html" class="nav-current">掲示板</a>
+        <a href="manual.html?v=235">マニュアル</a>
+      </nav>
+    </div>
+  </div>
+
+  <!-- ログインゲート -->
+  <div id="loginGate" style="display:none;"></div>
+
+  <div id="mainContent">
+    <!-- ── フィルター ── -->
+    <div class="bb-filters">
+      <div id="locBar" class="loc-bar"></div>
+      <div class="filter-row">
+        <span class="filter-label">猫</span>
+        <select id="catFilter" class="bb-select"><option value="all">すべて</option></select>
+      </div>
+      <div class="filter-row">
+        <span class="filter-label">項目</span>
+        <select id="itemFilter" class="bb-select">
+          <option value="all">すべて</option>
+          <option value="notes">注意事項</option>
+          <option value="clinic">病院記録</option>
+          <option value="schedule">病院予定</option>
+          <option value="bulletin">業務連絡</option>
+        </select>
+      </div>
+      <p class="bb-hint">業務連絡は上部の専用カード内のみ表示（タップで開閉・初期は閉）。その下は猫の注意事項・病院のみ・直近30日・新しい順です。</p>
+      <details id="bbDisplayCatalog" class="bb-catalog-details">
+        <summary class="bb-catalog-summary">表示カテゴリ・健康記録種別一覧（選別の参考）</summary>
+        <div id="bbDisplayCatalogBody" class="bb-catalog-body">開くとサーバーから一覧を取得します。</div>
+      </details>
+    </div>
+
+    <!-- ── 業務連絡入力 ── -->
+    <div id="composeSection" class="bb-compose">
+      <div class="bb-compose-title">業務連絡を投稿</div>
+      <input type="text" id="composeTitle" class="bb-input" placeholder="タイトル" maxlength="100" style="margin-bottom:8px;">
+      <textarea id="composeBody" class="bb-input bb-textarea" placeholder="本文を入力…"></textarea>
+      <div class="bb-compose-files">
+        <label for="composeFiles">添付（任意・複数可）</label>
+        <input type="file" id="composeFiles" multiple accept="image/*,video/*,video/mp4,video/quicktime,video/webm,.pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.txt,.csv,.zip">
+        <div style="margin-top:4px;opacity:0.85;">画像・動画（掲示板カード内で再生）・PDF・Office・zip・テキスト。各最大32MB・最大25件・合計約200MBまで。</div>
+      </div>
+      <div class="bb-compose-actions">
+        <label><input type="checkbox" id="composePinned"> 固定</label>
+        <button id="composeBtn" class="bb-btn bb-btn-primary" disabled>投稿</button>
+      </div>
+    </div>
+
+    <!-- ── 業務連絡専用カード（折りたたみ・デフォルト閉） ── -->
+    <div id="bulletinFoldWrap" class="bb-bulletin-fold" style="display:none;">
+      <div class="bb-bulletin-fold-card">
+        <button type="button" class="bb-bulletin-fold-toggle" id="bulletinFoldToggle" aria-expanded="false" aria-controls="bulletinFoldBody">
+          <span class="bb-bulletin-fold-chev" aria-hidden="true">▶</span>
+          <span class="bb-bulletin-fold-label">業務連絡</span>
+          <span class="bb-bulletin-fold-badge" id="bulletinFoldCount">0</span>
+        </button>
+        <div id="bulletinFoldBody" class="bb-bulletin-fold-body" hidden>
+          <div id="bulletinListArea" class="bb-bulletin-list"></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ── 猫関連タイムライン（注意事項・病院） ── -->
+    <div id="feedArea">
+      <div class="bb-loading">読み込み中…</div>
+    </div>
+  </div>
+
+  <!-- ── 編集モーダル（本人 or 管理者のみ・エンティティ別に行を出し分け） ── -->
+  <div class="bb-modal" id="editModal">
+    <div class="bb-modal-box">
+      <div class="bb-modal-title" id="editModalTitle">編集</div>
+      <div id="editTitleRow">
+        <input type="text" id="editTitle" class="bb-input" placeholder="タイトル" maxlength="100" style="margin-bottom:8px;">
+      </div>
+      <textarea id="editBody" class="bb-input bb-textarea" placeholder="本文"></textarea>
+      <div id="editHint" style="margin-top:6px;font-size:11px;color:var(--text-dim);"></div>
+      <div id="editPinnedRow" style="margin-top:10px;">
+        <label style="font-size:12px;color:var(--text-dim);display:flex;align-items:center;gap:4px;">
+          <input type="checkbox" id="editPinned"> 固定
+        </label>
+      </div>
+      <div id="editAttachBlock">
+        <div style="margin-top:10px;font-size:11px;color:var(--text-dim);">既存の添付</div>
+        <div id="editAttachList" class="bb-attach-list"></div>
+        <div style="margin-top:6px;">
+          <label for="editFiles" style="font-size:11px;color:var(--text-dim);">追加する添付（任意）</label>
+          <input type="file" id="editFiles" multiple accept="image/*,video/*,video/mp4,video/quicktime,video/webm,.pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.txt,.csv,.zip" style="display:block;margin-top:4px;">
+        </div>
+      </div>
+      <div class="bb-modal-actions">
+        <button id="editCancel" class="bb-btn bb-btn-sm bb-btn-cancel">キャンセル</button>
+        <button id="editSave" class="bb-btn bb-btn-primary bb-btn-sm">保存</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ── 追記モーダル（全員OK） ── -->
+  <div class="bb-modal" id="commentModal">
+    <div class="bb-modal-box">
+      <div class="bb-modal-title" id="commentModalTitle">追記を投稿</div>
+      <textarea id="commentBody" class="bb-input bb-textarea" placeholder="追記内容を入力…"></textarea>
+      <div class="bb-modal-actions">
+        <button id="commentCancel" class="bb-btn bb-btn-sm bb-btn-cancel">キャンセル</button>
+        <button id="commentSave" class="bb-btn bb-btn-primary bb-btn-sm">投稿</button>
+      </div>
+    </div>
+  </div>
+
+  <script src="config.js?v=219"></script>
+  <script src="js/login-gate.js?v=219"></script>
+  <script src="js/nyagi-jst.js?v=2"></script>
+  <script src="js/nyagi-drive-embed.js?v=1"></script>
+  <script src="js/bulletin.js?v=238"></script>
+</body>
+</html>

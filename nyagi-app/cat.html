@@ -407,6 +407,25 @@
     .cat-detail-fold__panel .detail-section > .section-header .detail-title {
       display: none;
     }
+    /* 食事・給餌タブ内の折りたたみサブフォールド */
+    #feedingArea .cat-detail-fold {
+      margin-bottom: 6px;
+    }
+    #feedingArea .cat-detail-fold__panel {
+      padding: 0 8px 10px 10px;
+    }
+    #feedingArea .cat-detail-fold__panel .detail-section {
+      margin-top: 6px;
+      margin-bottom: 0;
+    }
+    #feedingArea .cat-detail-fold__toggle {
+      font-size: 13px;
+      padding: 10px 12px;
+      background: rgba(255,255,255,0.04);
+    }
+    #feedingArea .cat-detail-fold__close {
+      margin-top: 6px;
+    }
     .cat-detail-fold__panel .intake-adoption-card > .section-header .detail-title {
       display: block;
     }
@@ -848,14 +867,19 @@
       gap: 12px;
       margin-top: 8px;
       font-size: 11px;
+      position: relative;
+      z-index: 2;
     }
     .cat-note-actions button {
       background: none;
       border: none;
-      padding: 0;
+      padding: 8px 10px;
+      min-height: 40px;
       cursor: pointer;
       color: var(--accent, #93c5fd);
       text-decoration: underline;
+      -webkit-tap-highlight-color: rgba(147, 197, 253, 0.2);
+      touch-action: manipulation;
     }
     .cat-note-actions button.cat-note-del { color: #f87171; }
 
@@ -1199,6 +1223,23 @@
     .cd-feed-plan-row--eaten-recorded { color: #6b7280; }
     .cd-feed-plan-row--eaten-recorded .btn-edit-small { color: var(--text-main); }
 
+    /* ── 飲水測定 ── */
+    .water-status-badge { display:inline-block; padding:2px 8px; border-radius:4px; font-size:11px; font-weight:700; }
+    .water-status-badge.ws-none { background:rgba(248,113,113,0.2); color:#f87171; }
+    .water-status-badge.ws-low { background:rgba(250,204,21,0.2); color:#eab308; }
+    .water-status-badge.ws-normal { background:rgba(34,197,94,0.2); color:#22c55e; }
+    .water-status-badge.ws-over { background:rgba(239,68,68,0.25); color:#ef4444; }
+    .water-history-row { display:flex; align-items:center; padding:6px 0; border-bottom:1px solid var(--border); font-size:12px; gap:6px; }
+    .water-history-row:last-child { border-bottom:none; }
+    .water-history-date { width:50px; color:var(--text-dim); flex-shrink:0; }
+    .water-history-bar { flex:1; min-width:0; height:16px; background:var(--surface); border-radius:4px; overflow:hidden; position:relative; }
+    .water-history-fill { height:100%; border-radius:4px; transition:width .3s; }
+    .water-history-val { width:55px; text-align:right; font-weight:700; flex-shrink:0; }
+    .water-history-status { width:80px; text-align:center; flex-shrink:0; }
+    .water-input-group { display:flex; gap:8px; align-items:flex-end; margin-bottom:10px; }
+    .water-input-group .form-input { width:100px; }
+    .water-toggle-row { display:flex; justify-content:space-between; align-items:center; margin-bottom:10px; }
+
     /* ── お薬タブ ── */
     .med-tabs {
       display: flex; gap: 0; margin-bottom: 12px;
@@ -1340,9 +1381,11 @@
         <a href="dashboard.html">ダッシュボード</a>
         <a href="cats.html">猫一覧</a>
         <a href="tasks.html">タスク</a>
+        <a href="bulletin.html">掲示板</a>
+        <a href="inquiries.html">📮 問い合わせ</a>
         <a href="foods.html">フード</a>
         <a href="medicines.html">薬</a>
-        <a href="manual.html">📖 マニュアル</a>
+        <a href="manual.html?v=235">📖 マニュアル</a>
       </nav>
     </div>
     <div id="catStickyBack" class="cat-back-bar" style="display:none;">
@@ -1393,7 +1436,7 @@
       <div class="cat-detail-fold__panel"><div id="calorieArea" style="scroll-margin-top: 16px;"></div><button type="button" class="cat-detail-fold__close">▲ 閉じる</button></div>
     </div>
     <div class="cat-detail-fold cat-detail-fold--collapsed">
-      <button type="button" class="cat-detail-fold__toggle" aria-expanded="false"><span class="cat-detail-fold__toggle-main"><span class="cat-detail-fold__chev" aria-hidden="true">▶</span><span>🍽 給餌プラン</span></span><span class="cat-detail-fold__hint" aria-hidden="true">タップで開く</span></button>
+      <button type="button" class="cat-detail-fold__toggle" aria-expanded="false"><span class="cat-detail-fold__toggle-main"><span class="cat-detail-fold__chev" aria-hidden="true">▶</span><span>🍽 食事・給餌</span></span><span class="cat-detail-fold__hint" aria-hidden="true">タップで開く</span></button>
       <div class="cat-detail-fold__panel"><div id="feedingArea"></div><button type="button" class="cat-detail-fold__close">▲ 閉じる</button></div>
     </div>
     <div class="cat-detail-fold cat-detail-fold--collapsed">
@@ -1407,6 +1450,10 @@
     <div class="cat-detail-fold cat-detail-fold--collapsed">
       <button type="button" class="cat-detail-fold__toggle" aria-expanded="false"><span class="cat-detail-fold__toggle-main"><span class="cat-detail-fold__chev" aria-hidden="true">▶</span><span>💧 排尿状況</span></span><span class="cat-detail-fold__hint" aria-hidden="true">タップで開く</span></button>
       <div class="cat-detail-fold__panel"><div id="urineArea"></div><button type="button" class="cat-detail-fold__close">▲ 閉じる</button></div>
+    </div>
+    <div id="waterSectionWrap" class="cat-detail-fold cat-detail-fold--collapsed" style="display:none;">
+      <button type="button" class="cat-detail-fold__toggle" aria-expanded="false"><span class="cat-detail-fold__toggle-main"><span class="cat-detail-fold__chev" aria-hidden="true">▶</span><span>🚰 飲水測定</span></span><span class="cat-detail-fold__hint" aria-hidden="true">タップで開く</span></button>
+      <div class="cat-detail-fold__panel"><div id="waterMeasureArea"></div><button type="button" class="cat-detail-fold__close">▲ 閉じる</button></div>
     </div>
     <div class="cat-detail-fold cat-detail-fold--collapsed">
       <button type="button" class="cat-detail-fold__toggle" aria-expanded="false" title="開くと先頭に「紐づけ投薬プリセット」と変更ボタンがあります"><span class="cat-detail-fold__toggle-main"><span class="cat-detail-fold__chev" aria-hidden="true">▶</span><span>💊 お薬管理</span></span><span class="cat-detail-fold__hint" aria-hidden="true">タップで開く · プリセットは展開先頭</span></button>
@@ -1589,13 +1636,24 @@
         </label>
       </div>
       <div class="form-group">
-        <label class="form-label" for="cnSlackImage">画像（保存で記録に残ります / Slack送信時も利用）</label>
-        <input type="file" id="cnSlackImage" class="form-select" accept="image/*" style="padding:8px;" onchange="onCnSlackImageChange()">
-        <p style="font-size:11px;color:var(--text-dim);margin:6px 0 0;line-height:1.45;">JPEG/PNG/GIF/WebP、最大10MB。編集で開くと保存済み画像を表示します。「画像を外す」で削除できます。</p>
+        <div id="cnExistingAttachmentsWrap" style="display:none;margin-bottom:12px;">
+          <div style="font-size:12px;color:var(--text-dim);margin-bottom:6px;">保存済みの添付（開く・削除できます）</div>
+          <div id="cnExistingAttachments"></div>
+          <button type="button" class="btn btn-outline" style="font-size:11px;padding:4px 8px;margin-top:6px;" onclick="markCnClearAllSavedAttachments()">保存済みの添付をすべて削除（次の保存で反映）</button>
+        </div>
+        <label class="form-label" for="cnSlackImage">新しく追加するファイル（複数選択可・保存で記録 / Slack送信時も利用）</label>
+        <input type="file" id="cnSlackImage" class="form-select" accept="image/*,.pdf,application/pdf" multiple style="padding:8px;" onchange="onCnSlackImageChange()">
+        <p style="font-size:11px;color:var(--text-dim);margin:6px 0 0;line-height:1.45;">JPEG/PNG/GIF/WebP/PDF、1ファイル10MB以下・1メモあたり最大20件（既存＋新規の合計）。編集時は上に保存済み、ここで追加ファイルを選べます。</p>
+        <div id="cnPendingFilesList" style="display:none;margin-top:8px;font-size:12px;color:var(--text-dim);"></div>
         <div id="cnSlackImagePreviewWrap" style="display:none;margin-top:10px;">
+          <div style="font-size:11px;color:var(--text-dim);margin-bottom:4px;">追加予定の先頭ファイルのプレビュー</div>
           <img id="cnSlackImagePreview" alt="" style="max-width:100%;max-height:160px;border-radius:8px;border:1px solid rgba(255,255,255,0.12);display:none;">
+          <div id="cnPdfPreview" style="display:none;padding:12px;background:rgba(255,255,255,0.06);border-radius:8px;border:1px solid rgba(255,255,255,0.12);">
+            <span style="font-size:24px;vertical-align:middle;">📄</span>
+            <span id="cnPdfFileName" style="font-size:13px;color:var(--text-main);margin-left:6px;vertical-align:middle;word-break:break-all;"></span>
+          </div>
           <div style="margin-top:6px;">
-            <button type="button" class="btn btn-outline" style="font-size:12px;padding:6px 10px;" onclick="clearCnSlackImage()">画像を外す</button>
+            <button type="button" class="btn btn-outline" style="font-size:12px;padding:6px 10px;" onclick="clearCnPendingFiles()">追加ファイルの選択をクリア</button>
           </div>
         </div>
       </div>
@@ -1976,6 +2034,7 @@
             <option value="滴">滴</option>
             <option value="包">包</option>
             <option value="g">g</option>
+            <option value="プッシュ">プッシュ</option>
           </select>
         </div>
       </div>
@@ -2110,6 +2169,7 @@
               <option value="滴">滴</option>
               <option value="包">包</option>
               <option value="g">g</option>
+              <option value="プッシュ">プッシュ</option>
             </select>
           </div>
         </div>
@@ -2197,11 +2257,12 @@
   <script src="config.js?v=213"></script>
   <script src="js/nyagi-boot-overlay.js?v=213"></script>
   <script src="js/login-gate.js?v=213"></script>
-  <script src="js/nyagi-jst.js?v=1"></script>
-  <script src="js/app.js?v=220"></script>
+  <script src="js/nyagi-jst.js?v=2"></script>
+  <script src="js/nyagi-drive-embed.js?v=1"></script>
+  <script src="js/app.js?v=231"></script>
   <script src="js/nyagi-scroll-restore.js?v=217"></script>
   <script src="js/nyagi-search-normalize.js?v=1"></script>
-  <script src="js/cat-detail.js?v=304"></script>
-  <script src="js/voice-console.js?v=216"></script>
+  <script src="js/cat-detail.js?v=408"></script>
+  <script src="js/voice-console.js?v=217"></script>
 </body>
 </html>

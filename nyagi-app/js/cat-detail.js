@@ -5,6 +5,8 @@
  * P4 拡張: 体重グラフ / 健康記録 CRUD / 投薬スケジュール + 投薬ログ UI
  * P5 拡張: 健康スコアカード / 給餌プラン + 給餌ログセクション
  * P5.7 拡張: 猫注意事項セクション（cat_notes CRUD）
+ *
+ * 猫ナビ: タブ順は「日々の記録 → 概要 → 医療・予定」。開くたび既定は日々の記録（buildCatDetailCatNav / v400-nav）。
  */
 
 function toggleFold(id, btn) {
@@ -57,17 +59,63 @@ function closeCatDetailFoldSection(btn) {
   var calorieArea          = document.getElementById('calorieArea');
   var healthRecordsArea    = document.getElementById('healthRecordsArea');
   var medicationScheduleArea = document.getElementById('medicationScheduleArea');
+  var waterMeasureArea     = document.getElementById('waterMeasureArea');
+  var waterSectionWrap     = document.getElementById('waterSectionWrap');
   var feedingArea          = document.getElementById('feedingArea');
   var careArea             = document.getElementById('careArea');
   var stoolArea            = document.getElementById('stoolArea');
   var urineArea            = document.getElementById('urineArea');
   
   var catNotesArea         = document.getElementById('catNotesArea');
+  /** 注意事項カード内のクリックは data-* + 委譲（インライン onclick の構文壊れ・タップ取りこぼし対策） */
+  if (catNotesArea && !catNotesArea.getAttribute('data-cn-delegated')) {
+    catNotesArea.setAttribute('data-cn-delegated', '1');
+    catNotesArea.addEventListener('click', function (ev) {
+      var el = ev.target;
+      if (!el || typeof el.closest !== 'function') return;
+      var pinEl = el.closest('[data-cn-pin-id]');
+      if (pinEl) {
+        ev.preventDefault();
+        var pid = pinEl.getAttribute('data-cn-pin-id');
+        var wantPin = pinEl.getAttribute('data-cn-pin-want') === '1';
+        if (pid != null && pid !== '' && typeof window.togglePin === 'function') window.togglePin(pid, wantPin);
+        return;
+      }
+      var editBtn = el.closest('button[data-cn-edit-id]');
+      if (editBtn) {
+        ev.preventDefault();
+        var eid = editBtn.getAttribute('data-cn-edit-id');
+        if (eid != null && eid !== '' && typeof window.openEditCatNote === 'function') window.openEditCatNote(eid);
+        return;
+      }
+      var delBtn = el.closest('button[data-cn-del-id]');
+      if (delBtn) {
+        ev.preventDefault();
+        var did = delBtn.getAttribute('data-cn-del-id');
+        if (did != null && did !== '' && typeof window.deleteCatNoteConfirm === 'function') window.deleteCatNoteConfirm(did);
+        return;
+      }
+      var attEl = el.closest('[data-cn-att-note]');
+      if (attEl) {
+        ev.preventDefault();
+        var nid = attEl.getAttribute('data-cn-att-note');
+        var fid = attEl.getAttribute('data-cn-att-file');
+        if (nid != null && nid !== '' && typeof window.openCatNoteAttachment === 'function') {
+          if (fid != null && fid !== '') window.openCatNoteAttachment(nid, fid);
+          else window.openCatNoteAttachment(nid);
+        }
+        return;
+      }
+    });
+  }
   /** renderCatNotes 直近の一覧（編集モーダル用） */
   var _catNotesListCache   = [];
   var _cnAttachmentPreviewUrl = null;
-  var _cnEditHadAttachment = false;
+  var _cnAttLightboxEl = null;
+  var _cnAttLightboxUrl = null;
+  var _catNoteInlineBlobUrls = [];
   var _cnNoteClearAttachment = false;
+  var MAX_CN_NOTE_ATTACHMENTS = 20;
   var scoreCardArea        = document.getElementById('scoreCardArea');
   var actionsArea          = document.getElementById('actionsArea');
   var reportLink           = document.getElementById('reportLink');
@@ -532,6 +580,7 @@ function closeCatDetailFoldSection(btn) {
             settle(loadHealthRecords()),
             settle(loadClinicRecords()),
             settle(loadMedicationSchedule()),
+            settle(loadWaterSection()),
             settle(loadFeedingSection()),
             settle(loadCatNotes()),
             settle(loadCatTasks({ skipScrollRestore: true })),
@@ -717,6 +766,15 @@ function closeCatDetailFoldSection(btn) {
       false,
       'bcsInfoCell'
     );
+    var waterTrk = cat.water_tracking === 1 || cat.water_tracking === true || String(cat.water_tracking) === '1';
+    infoHtml += '<div class="info-cell">' +
+      '<div class="info-label" style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:4px;">' +
+      '<span>🚰 飲水測定</span></div>' +
+      '<div class="info-value" style="font-size:13px;">' +
+      '<label style="display:inline-flex;align-items:center;gap:6px;cursor:pointer;">' +
+      '<input type="checkbox" id="waterTrackingToggle" ' + (waterTrk ? 'checked' : '') + ' onchange="toggleWaterTracking(this.checked)">' +
+      '<span>' + (waterTrk ? 'ON' : 'OFF') + '</span></label>' +
+      '</div></div>';
     var descDisp = cat.description ? escapeHtml(cat.description) : '<span style="color:var(--text-dim);">—</span>';
     infoHtml += renderBasicInfoEditableRow('説明', descDisp, 'description', true, '');
     infoHtml += '</div></div>';
@@ -771,6 +829,11 @@ function closeCatDetailFoldSection(btn) {
 
     var s = scores[0];
     var prev = scores[1] || null;
+
+    // detail を最初に parse（diet_status / diet_status_score の参照より前に必要）
+    var detail = null;
+    try { detail = JSON.parse(s.detail || '{}'); } catch (_) {}
+
     var total = s.total_score;
     var color = scoreColor(total);
     var colorHex = scoreColorHex(total);
@@ -797,11 +860,37 @@ function closeCatDetailFoldSection(btn) {
     if (s.appetite_score !== null) html += '<span>食欲: <b style="color:' + scoreColorHex(s.appetite_score) + ';">' + s.appetite_score + '</b></span>';
     if (s.medication_score !== null) html += '<span>投薬: <b style="color:' + scoreColorHex(s.medication_score) + ';">' + s.medication_score + '</b></span>';
     if (s.vet_score !== null) html += '<span>検査: <b style="color:' + scoreColorHex(s.vet_score) + ';">' + s.vet_score + '</b></span>';
-    if (s.behavior_score !== null) html += '<span>行動: <b style="color:' + scoreColorHex(s.behavior_score) + ';">' + s.behavior_score + '</b></span>';
+    var dsScore = (detail && detail.diet_status_score !== undefined) ? detail.diet_status_score : s.diet_status_score;
+    if (dsScore !== null && dsScore !== undefined) html += '<span>食事形態: <b style="color:' + scoreColorHex(dsScore) + ';">' + dsScore + '</b></span>';
     html += '</div>';
 
-    var detail = null;
-    try { detail = JSON.parse(s.detail || '{}'); } catch (_) {}
+    // 食事形態ステータス変更ボタン（4択）
+    var dietStatusCurrent = (detail && detail.diet_status) ? detail.diet_status : 'normal';
+    var dietOptions = [
+      { value: 'normal',        label: '🍚 通常食',        score: 100 },
+      { value: 'therapeutic',   label: '💊 療法食のみ',    score: 70 },
+      { value: 'liquid',        label: '🥤 液体食',        score: 35 },
+      { value: 'force_feeding', label: '💉 強制給餌',      score: 10 },
+    ];
+    html += '<div style="margin-top:10px;border-top:1px solid var(--border);padding-top:8px;">';
+    html += '<div style="font-size:11px;color:var(--text-dim);margin-bottom:6px;font-weight:700;">🍽 食事形態ステータス <span style="font-weight:400;color:var(--text-dim);">（タップで変更）</span></div>';
+    html += '<div style="display:flex;flex-wrap:wrap;gap:6px;">';
+    for (var di = 0; di < dietOptions.length; di++) {
+      var dopt = dietOptions[di];
+      var isActive = dopt.value === dietStatusCurrent;
+      var activeStyle = isActive
+        ? 'font-weight:800;box-shadow:0 0 0 2px #a78bfa,0 0 8px rgba(167,139,250,0.4);position:relative;'
+        : 'opacity:0.6;';
+      html += '<button type="button"'
+        + ' class="btn ' + (isActive ? 'btn-primary' : 'btn-outline') + ' btn-diet-status"'
+        + ' data-diet-value="' + escapeHtml(dopt.value) + '"'
+        + ' style="font-size:12px;padding:6px 12px;' + activeStyle + '">'
+        + (isActive ? '✔ ' : '')
+        + escapeHtml(dopt.label)
+        + '</button>';
+    }
+    html += '</div></div>';
+
     var comments = (detail && detail.comments) ? detail.comments : [];
     var actionComments = [];
     for (var ci = 0; ci < comments.length; ci++) {
@@ -823,6 +912,25 @@ function closeCatDetailFoldSection(btn) {
     html += '</div>';
 
     scoreCardArea.innerHTML = html;
+
+    // 食事形態ボタンのクリックハンドラを登録
+    var dietBtns = scoreCardArea.querySelectorAll('.btn-diet-status');
+    for (var dbi = 0; dbi < dietBtns.length; dbi++) {
+      dietBtns[dbi].addEventListener('click', function (ev) {
+        var val = ev.currentTarget.getAttribute('data-diet-value');
+        if (!val) return;
+        fetch(API_BASE + '/cats/' + encodeURIComponent(catId), {
+          method: 'PATCH',
+          headers: apiHeaders(),
+          body: JSON.stringify({ diet_status: val }),
+        }).then(function (r) { return r.json(); })
+        .then(function () {
+          loadScoreCard();
+        }).catch(function () {
+          alert('食事形態の保存に失敗しました');
+        });
+      });
+    }
   }
 
   function getSubScore(s, area) {
@@ -830,7 +938,11 @@ function closeCatDetailFoldSection(btn) {
     if (area === '食欲') return s.appetite_score;
     if (area === '投薬') return s.medication_score;
     if (area === '検査') return s.vet_score;
-    if (area === '行動') return s.behavior_score;
+    if (area === '食事形態') {
+      var detail2 = null;
+      try { detail2 = JSON.parse(s.detail || '{}'); } catch (_) {}
+      return detail2 ? detail2.diet_status_score : null;
+    }
     return null;
   }
 
@@ -991,16 +1103,66 @@ function closeCatDetailFoldSection(btn) {
     return pts;
   }
 
+  /** スコア値 → 色（良好:緑 / 普通:黄 / 低下:赤） */
+  function appetiteScoreColor(v) {
+    if (v >= 75) return '#4ade80';
+    if (v >= 50) return '#facc15';
+    return '#f87171';
+  }
+  /** スコア値 → ゾーンラベル */
+  function appetiteScoreZoneLabel(v) {
+    if (v >= 75) return '良好';
+    if (v >= 50) return '普通';
+    return '低下';
+  }
+
   function appetiteIndexChartBlockHtml(pts) {
     var h = '<div style="margin-bottom:16px;padding-bottom:14px;border-bottom:1px solid var(--surface-alt);">';
-    h += '<div class="detail-title" style="margin-bottom:4px;">📈 食欲指数（推移）</div>';
-    h += '<div style="font-size:11px;color:var(--text-dim);margin-bottom:8px;line-height:1.45;">健康スコアの内訳（0〜100）。直近7日の給餌「摂取率」から日次算出された値の履歴です（サーバの日次ジョブで保存されます）。</div>';
+    h += '<div class="detail-title" style="margin-bottom:8px;">食欲指数（推移）</div>';
     if (!pts || pts.length === 0) {
       h += '<div class="empty-msg" style="font-size:12px;">まだ履歴がありません。給餌の「あげた」記録が溜まると日次スコアに反映されます。</div>';
       h += '</div>';
       return h;
     }
-    h += '<div class="weight-canvas-wrap"><canvas id="appetiteIndexCanvas" height="150"></canvas></div>';
+    /* ── 今日のスコア / 前日比 / 平均 の3列 ── */
+    var latest = pts[pts.length - 1].value;
+    var prevVal = pts.length >= 2 ? pts[pts.length - 2].value : null;
+    var diff = prevVal !== null ? (latest - prevVal) : null;
+    var avg = 0;
+    for (var ai = 0; ai < pts.length; ai++) avg += pts[ai].value;
+    avg = Math.round(avg / pts.length);
+    var latestColor = appetiteScoreColor(latest);
+    var zoneLabel = appetiteScoreZoneLabel(latest);
+    var diffStr = diff === null ? '—' : (diff >= 0 ? '+' + diff : String(diff));
+    var diffColor = diff === null ? 'var(--text-dim)' : diff >= 0 ? '#4ade80' : '#f87171';
+    h += '<div style="display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-bottom:10px;">';
+    /* 今日 */
+    h += '<div style="background:var(--surface);border-radius:8px;padding:8px 10px;">';
+    h += '<div style="font-size:10px;color:var(--text-dim);margin-bottom:2px;">今日のスコア</div>';
+    h += '<div style="font-size:22px;font-weight:800;line-height:1;color:' + latestColor + ';">' + latest + '</div>';
+    h += '<div style="font-size:10px;margin-top:2px;color:' + latestColor + ';font-weight:600;">' + zoneLabel + '</div>';
+    h += '</div>';
+    /* 前日比 */
+    h += '<div style="background:var(--surface);border-radius:8px;padding:8px 10px;">';
+    h += '<div style="font-size:10px;color:var(--text-dim);margin-bottom:2px;">前日比</div>';
+    h += '<div style="font-size:22px;font-weight:800;line-height:1;color:' + diffColor + ';">' + diffStr + '</div>';
+    h += '<div style="font-size:10px;margin-top:2px;color:var(--text-dim);">pt</div>';
+    h += '</div>';
+    /* 平均 */
+    h += '<div style="background:var(--surface);border-radius:8px;padding:8px 10px;">';
+    h += '<div style="font-size:10px;color:var(--text-dim);margin-bottom:2px;">' + pts.length + '日平均</div>';
+    h += '<div style="font-size:22px;font-weight:800;line-height:1;color:var(--text-main);">' + avg + '</div>';
+    h += '<div style="font-size:10px;margin-top:2px;color:' + appetiteScoreColor(avg) + ';font-weight:600;">' + appetiteScoreZoneLabel(avg) + '</div>';
+    h += '</div>';
+    h += '</div>';
+    /* ── キャンバス ── */
+    h += '<div class="weight-canvas-wrap"><canvas id="appetiteIndexCanvas" height="120"></canvas></div>';
+    /* ── ゾーン凡例 ── */
+    h += '<div style="display:flex;gap:12px;flex-wrap:wrap;margin-top:6px;">';
+    h += '<div style="display:flex;align-items:center;gap:4px;font-size:10px;color:var(--text-dim);"><span style="width:8px;height:8px;border-radius:2px;background:#4ade80;display:inline-block;"></span>75〜 良好</div>';
+    h += '<div style="display:flex;align-items:center;gap:4px;font-size:10px;color:var(--text-dim);"><span style="width:8px;height:8px;border-radius:2px;background:#facc15;display:inline-block;"></span>50〜74 普通</div>';
+    h += '<div style="display:flex;align-items:center;gap:4px;font-size:10px;color:var(--text-dim);"><span style="width:8px;height:8px;border-radius:2px;background:#f87171;display:inline-block;"></span>〜49 低下</div>';
+    h += '</div>';
     h += '</div>';
     return h;
   }
@@ -1095,85 +1257,121 @@ function closeCatDetailFoldSection(btn) {
 
     var dpr = window.devicePixelRatio || 1;
     var displayW = canvas.offsetWidth || 300;
-    var displayH = 150;
+    var displayH = 120;
     canvas.width = displayW * dpr;
     canvas.height = displayH * dpr;
+    canvas.style.height = displayH + 'px';
 
     var ctx = canvas.getContext('2d');
     ctx.scale(dpr, dpr);
 
     var W = displayW;
     var H = displayH;
-    var pad = { top: 14, right: 12, bottom: 28, left: 34 };
+    var pad = { top: 10, right: 14, bottom: 24, left: 32 };
     var cW = W - pad.left - pad.right;
     var cH = H - pad.top - pad.bottom;
-    var minV = 0;
-    var maxV = 100;
-    var rangeV = 100;
 
-    ctx.fillStyle = '#1e1e2e';
+    /* 背景 */
+    ctx.fillStyle = 'rgba(0,0,0,0)';
     ctx.fillRect(0, 0, W, H);
 
-    ctx.strokeStyle = '#2a2a3e';
-    ctx.lineWidth = 1;
-    var yTicks = [100, 75, 50, 25, 0];
-    for (var gi = 0; gi < yTicks.length; gi++) {
-      var yVal = yTicks[gi];
-      var gy = pad.top + cH - (cH * (yVal - minV) / rangeV);
-      ctx.beginPath();
-      ctx.moveTo(pad.left, gy);
-      ctx.lineTo(pad.left + cW, gy);
-      ctx.stroke();
-      ctx.fillStyle = '#888';
-      ctx.font = '10px sans-serif';
-      ctx.textAlign = 'right';
-      ctx.fillText(String(yVal), pad.left - 4, gy + 4);
+    function yPos(v) {
+      return pad.top + cH - (cH * Math.max(0, Math.min(100, v)) / 100);
     }
 
-    function appetiteChartX(i) {
+    /* ゾーン帯（薄い背景色） */
+    var zones = [
+      { from: 75, to: 100, color: 'rgba(74,222,128,0.07)' },
+      { from: 50, to: 75,  color: 'rgba(250,204,21,0.06)' },
+      { from: 0,  to: 50,  color: 'rgba(248,113,113,0.06)' },
+    ];
+    for (var zi = 0; zi < zones.length; zi++) {
+      var z = zones[zi];
+      ctx.fillStyle = z.color;
+      ctx.fillRect(pad.left, yPos(z.to), cW, yPos(z.from) - yPos(z.to));
+    }
+
+    /* ゾーン境界線（50・75） */
+    var zBounds = [75, 50];
+    for (var bi = 0; bi < zBounds.length; bi++) {
+      var bv = zBounds[bi];
+      var by = yPos(bv);
+      ctx.beginPath();
+      ctx.setLineDash([3, 3]);
+      ctx.strokeStyle = bv === 75 ? 'rgba(74,222,128,0.25)' : 'rgba(250,204,21,0.25)';
+      ctx.lineWidth = 1;
+      ctx.moveTo(pad.left, by);
+      ctx.lineTo(pad.left + cW, by);
+      ctx.stroke();
+      ctx.setLineDash([]);
+      /* Y 軸ラベル */
+      ctx.fillStyle = 'rgba(150,150,180,0.7)';
+      ctx.font = '9px sans-serif';
+      ctx.textAlign = 'right';
+      ctx.fillText(String(bv), pad.left - 3, by + 3);
+    }
+    /* 0ラベル */
+    ctx.fillStyle = 'rgba(150,150,180,0.7)';
+    ctx.font = '9px sans-serif';
+    ctx.textAlign = 'right';
+    ctx.fillText('0', pad.left - 3, yPos(0) + 3);
+
+    /* X座標計算 */
+    function xPos(i) {
       if (pts.length === 1) return pad.left + cW / 2;
       return pad.left + (cW / (pts.length - 1)) * i;
     }
 
+    /* 折れ線 */
     ctx.beginPath();
-    for (var i = 0; i < pts.length; i++) {
-      var x = appetiteChartX(i);
-      var y = pad.top + cH - (cH * (pts[i].value - minV) / rangeV);
-      if (i === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
+    for (var li = 0; li < pts.length; li++) {
+      var lx = xPos(li);
+      var ly = yPos(pts[li].value);
+      if (li === 0) ctx.moveTo(lx, ly); else ctx.lineTo(lx, ly);
     }
-    ctx.lineTo(appetiteChartX(pts.length - 1), pad.top + cH);
-    ctx.lineTo(appetiteChartX(0), pad.top + cH);
-    ctx.closePath();
-    ctx.fillStyle = 'rgba(251,146,60,.18)';
-    ctx.fill();
-
-    ctx.beginPath();
-    for (var j = 0; j < pts.length; j++) {
-      var x2 = appetiteChartX(j);
-      var y2 = pad.top + cH - (cH * (pts[j].value - minV) / rangeV);
-      if (j === 0) ctx.moveTo(x2, y2); else ctx.lineTo(x2, y2);
-    }
-    ctx.strokeStyle = '#fb923c';
+    ctx.strokeStyle = 'rgba(139,92,246,0.9)';
     ctx.lineWidth = 2;
     ctx.lineJoin = 'round';
     ctx.stroke();
 
-    for (var k = 0; k < pts.length; k++) {
-      var x3 = appetiteChartX(k);
-      var y3 = pad.top + cH - (cH * (pts[k].value - minV) / rangeV);
+    /* ドット + 日付ラベル */
+    var step = pts.length <= 7 ? 1 : Math.max(1, Math.floor(pts.length / 7));
+    for (var di = 0; di < pts.length; di++) {
+      var dx = xPos(di);
+      var dv = pts[di].value;
+      var dy = yPos(dv);
+      var dotColor = appetiteScoreColor(dv);
+      var isLast = di === pts.length - 1;
+      var dotR = isLast ? 5 : 3;
+
       ctx.beginPath();
-      ctx.arc(x3, y3, 4, 0, Math.PI * 2);
-      ctx.fillStyle = '#fb923c';
+      ctx.arc(dx, dy, dotR, 0, Math.PI * 2);
+      ctx.fillStyle = dotColor;
       ctx.fill();
-      var step = Math.max(1, Math.floor(pts.length / 5));
-      if (k % step === 0 || k === pts.length - 1) {
-        ctx.fillStyle = '#888';
-        ctx.font = '9px sans-serif';
+      if (isLast) {
+        ctx.strokeStyle = 'rgba(255,255,255,0.35)';
+        ctx.lineWidth = 1.5;
+        ctx.stroke();
+      }
+
+      /* 日付ラベル（間引き + 最終点は必ず） */
+      if (di % step === 0 || isLast) {
+        var lbl = (pts[di].date || '').slice(5); /* MM/DD */
+        ctx.fillStyle = isLast ? dotColor : 'rgba(150,150,180,0.7)';
+        ctx.font = isLast ? '9px sans-serif' : '9px sans-serif';
         ctx.textAlign = 'center';
-        var dl = (pts[k].date || '').slice(5);
-        ctx.fillText(dl, x3, pad.top + cH + 14);
+        ctx.fillText(lbl, dx, pad.top + cH + 14);
       }
     }
+
+    /* 最新値の値ラベル（点の上） */
+    var lv = pts[pts.length - 1].value;
+    var lx2 = xPos(pts.length - 1);
+    var ly2 = yPos(lv);
+    ctx.fillStyle = appetiteScoreColor(lv);
+    ctx.font = 'bold 10px sans-serif';
+    ctx.textAlign = lx2 > W - pad.right - 20 ? 'right' : 'center';
+    ctx.fillText(String(lv), lx2, ly2 - 8);
   }
 
   // ── ケア実施セクション ─────────────────────────────────────────────────────────
@@ -2486,10 +2684,15 @@ function closeCatDetailFoldSection(btn) {
             '</div>';
         }
         if (note && String(note).trim()) {
+          var noteRendered =
+            window.NyagiDriveEmbed && typeof window.NyagiDriveEmbed.renderText === 'function'
+              ? window.NyagiDriveEmbed.renderText(String(note))
+              : { html: escapeHtml(String(note)), embeds: '' };
           html +=
-            '<div class="cr-view-note-label">本文・メモ（全文）</div><div class="cr-view-full-note">' +
-            escapeHtml(String(note)) +
-            '</div>';
+            '<div class="cr-view-note-label">本文・メモ（全文）</div><div class="cr-view-full-note" style="white-space:pre-wrap;word-break:break-word;">' +
+            noteRendered.html +
+            '</div>' +
+            (noteRendered.embeds || '');
         } else if (!html) {
           html = '<div style="color:var(--text-dim);font-size:13px;">（本文の登録がありません）</div>';
         }
@@ -2607,13 +2810,18 @@ function closeCatDetailFoldSection(btn) {
     _medLogDate = date;
 
     var medPrLoc = effectivePresetLocationForApply();
+    var histTo = todayJstYmd();
+    var histFrom = addDaysJstYmd(histTo, -13);
     return Promise.all([
       fetch(API_BASE + '/health/medications?cat_id=' + encodeURIComponent(catId) + '&active=false', { headers: apiHeaders(), cache: 'no-store' }).then(function (r) { return r.json(); }),
       fetch(API_BASE + '/health/medication-logs?cat_id=' + encodeURIComponent(catId) + '&date=' + date, { headers: apiHeaders(), cache: 'no-store' }).then(function (r) { return r.json(); }),
       fetch(API_BASE + '/health/records?cat_id=' + encodeURIComponent(catId) + '&type=medication&limit=60', { headers: apiHeaders(), cache: 'no-store' }).then(function (r) { return r.json(); }),
       fetch(medicationPresetsListUrl(medPrLoc), { headers: apiHeaders(), cache: 'no-store' }).then(function (r) { return r.json(); }),
+      fetch(API_BASE + '/health/medication-logs?cat_id=' + encodeURIComponent(catId) + '&from=' + encodeURIComponent(histFrom) + '&to=' + encodeURIComponent(histTo) + '&history=1', { headers: apiHeaders(), cache: 'no-store' })
+        .then(function (r) { return r.json().then(function (j) { return { logs: (j && j.logs) || [] }; }); })
+        .catch(function () { return { logs: [] }; }),
     ]).then(function (results) {
-      renderMedicationUnified(results[0].medications || [], results[1].logs || [], date, results[2].records || [], results[3].presets || []);
+      renderMedicationUnified(results[0].medications || [], results[1].logs || [], date, results[2].records || [], results[3].presets || [], results[4].logs || []);
     }).catch(function () {
       medicationScheduleArea.innerHTML = '';
     });
@@ -2635,7 +2843,7 @@ function closeCatDetailFoldSection(btn) {
 
   var _medicationsList = [];
 
-  function renderMedicationUnified(medications, logs, date, historyRecords, presets) {
+  function renderMedicationUnified(medications, logs, date, historyRecords, presets, historyRangeLogs) {
     _medicationsList = medications;
     _medPresets = presets;
 
@@ -2799,7 +3007,7 @@ function closeCatDetailFoldSection(btn) {
 
     // ── タブ2: 投薬履歴 ──
     html += '<div id="medTabHistory" class="med-tab-panel' + (_medActiveTab === 'history' ? ' active' : '') + '">';
-    html += renderMedHistoryContent(historyRecords);
+    html += renderMedHistoryContent(historyRecords, historyRangeLogs);
     html += '</div>';
 
     // ── タブ3: プリセット ──
@@ -2811,10 +3019,45 @@ function closeCatDetailFoldSection(btn) {
     medicationScheduleArea.innerHTML = html;
   }
 
-  function renderMedHistoryContent(records) {
+  /** medication_logs（実施・スキップ）を health_records 風にして履歴タブへ統合 */
+  function medLogsToHistoryRows(logs) {
+    var out = [];
+    for (var i = 0; i < (logs || []).length; i++) {
+      var l = logs[i];
+      if (!l || (l.status !== 'done' && l.status !== 'skipped')) continue;
+      var sched = String(l.scheduled_at || '');
+      var d = sched.slice(0, 10);
+      if (!/^\d{4}-\d{2}-\d{2}$/.test(d)) continue;
+      var name = l.medicine_name || '—';
+      var val = name + (l.status === 'done' ? ' ✓' : '（スキップ）');
+      var slotPart = sched.length > 11 ? sched.slice(11).trim() : '';
+      var adm = String(l.administered_at || '');
+      out.push({
+        record_date: d,
+        value: val,
+        details: slotPart,
+        recorded_time: adm.length >= 16 ? adm.slice(11, 16) : '',
+        recorded_by: l.administered_by || '',
+        created_at: adm || l.created_at || '',
+      });
+    }
+    return out;
+  }
+
+  function mergeMedHistoryRecords(healthRecs, rangeLogs) {
+    var merged = (healthRecs || []).slice().concat(medLogsToHistoryRows(rangeLogs));
+    merged.sort(function (x, y) {
+      if (x.record_date !== y.record_date) return x.record_date < y.record_date ? 1 : -1;
+      return String(y.created_at || '').localeCompare(String(x.created_at || ''));
+    });
+    return merged;
+  }
+
+  function renderMedHistoryContent(records, historyRangeLogs) {
     var days = buildRecentDays(14);
-    var byDate = groupByDate(records);
-    var html = '<div style="font-size:12px;color:var(--text-dim);margin-bottom:8px;">直近14日間の投薬記録（手動入力・インポート）</div>';
+    var merged = mergeMedHistoryRecords(records, historyRangeLogs);
+    var byDate = groupByDate(merged);
+    var html = '<div style="font-size:12px;color:var(--text-dim);margin-bottom:8px;">直近14日間の投薬記録（健康記録・インポート、およびスケジュールの実施・スキップ）</div>';
     html += '<div class="stool-list">';
     html += renderDailyRows(days, byDate, function (r) {
       var name = r.value || '—';
@@ -3634,14 +3877,106 @@ function closeCatDetailFoldSection(btn) {
     return !isNaN(n) && n !== 0;
   }
 
+  /**
+   * 折りたたみセクション HTML を生成する共通ヘルパー。
+   * cat-detail-fold の CSS / 委譲イベントは既存の bindCatDetailFoldClicks() が処理する。
+   * @param {string} title      ヘッダに表示するタイトル（HTML 可）
+   * @param {string} hintLabel  折りたたみ中に表示する短いヒント（省略可）
+   * @param {string} bodyHtml   パネル内容の HTML
+   * @param {boolean} [startOpen] true で最初から開く（デフォルト: 閉じた状態）
+   */
+  function makeFeedingFold(title, hintLabel, bodyHtml, startOpen) {
+    var collapsed = !startOpen;
+    var cls = 'cat-detail-fold' + (collapsed ? ' cat-detail-fold--collapsed' : '');
+    var expanded = collapsed ? 'false' : 'true';
+    var hint = hintLabel
+      ? '<span class="cat-detail-fold__hint" aria-hidden="true">' + hintLabel + '</span>'
+      : '';
+    return (
+      '<div class="' + cls + '">' +
+        '<button type="button" class="cat-detail-fold__toggle" aria-expanded="' + expanded + '">' +
+          '<span class="cat-detail-fold__toggle-main">' +
+            '<span class="cat-detail-fold__chev" aria-hidden="true">▶</span>' +
+            '<span>' + title + '</span>' +
+          '</span>' +
+          hint +
+        '</button>' +
+        '<div class="cat-detail-fold__panel">' +
+          '<div class="detail-section" style="margin-top:8px;">' + bodyHtml + '</div>' +
+          '<button type="button" class="cat-detail-fold__close">▲ 閉じる</button>' +
+        '</div>' +
+      '</div>'
+    );
+  }
+
   function renderFeedingSection(calc, logs, today, healthRecs, foodsDb, appetiteScoreHistory) {
     healthRecs = healthRecs || [];
     foodsDb = foodsDb || [];
 
-    var html = '<div class="detail-section">';
+    var html = '';
+
+    /* ── 折りたたみ1: 食欲指数グラフ ── */
     var appetitePts = normalizeAppetiteHistoryToPoints(appetiteScoreHistory || []);
-    html += appetiteIndexChartBlockHtml(appetitePts);
-    html += foodPreferenceSummaryBlockHtml(calc && calc.food_preference_summary ? calc.food_preference_summary : null);
+    var appetiteBody = appetiteIndexChartBlockHtml(appetitePts);
+    html += makeFeedingFold('食欲指数', 'タップで開く', appetiteBody);
+
+    /* ── 折りたたみ2: 食事傾向（食いつき傾向）── */
+    var preferenceBody = foodPreferenceSummaryBlockHtml(
+      calc && calc.food_preference_summary ? calc.food_preference_summary : null
+    );
+    html += makeFeedingFold('食事傾向', 'タップで開く', preferenceBody);
+
+    /* ── 折りたたみ3: 食事数（1日の給餌回数 + 今日の進捗）── */
+    var mealCountBody = '';
+
+    /* ── 食事数折りたたみの中身（calc がある場合のみ）── */
+    if (calc && !calc.error) {
+      var mpd = calc.meals_per_day;
+      var fedCntEarly = calc.fed_count || 0;
+      var remainEarly = mpd ? Math.max(0, mpd - fedCntEarly) : null;
+
+      mealCountBody += '<div style="background:var(--surface);border-radius:8px;padding:10px 12px;margin-bottom:8px;">';
+      mealCountBody += '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;">';
+      mealCountBody += '<span style="font-size:12px;color:var(--text-dim);">1日の給餌回数</span>';
+      mealCountBody += '<div style="display:flex;align-items:center;gap:6px;">';
+      mealCountBody += '<select id="mealsPerDaySelectTop" style="background:var(--surface-alt);color:var(--text-main);border:1px solid var(--surface-alt);border-radius:6px;padding:4px 8px;font-size:13px;">';
+      var mpdOptsT = [{ v: '', l: '未設定' }];
+      for (var mpdIT = 1; mpdIT <= 16; mpdIT++) { mpdOptsT.push({ v: String(mpdIT), l: mpdIT + '回' }); }
+      for (var miT = 0; miT < mpdOptsT.length; miT++) {
+        var selT = (mpd !== null && String(mpd) === mpdOptsT[miT].v) || (!mpd && mpdOptsT[miT].v === '') ? ' selected' : '';
+        mealCountBody += '<option value="' + mpdOptsT[miT].v + '"' + selT + '>' + mpdOptsT[miT].l + '</option>';
+      }
+      mealCountBody += '</select>';
+      mealCountBody += '<button class="btn-outline" style="font-size:11px;padding:4px 8px;" onclick="saveMealsPerDayFromId(\'mealsPerDaySelectTop\')">保存</button>';
+      mealCountBody += '</div></div>';
+
+      if (mpd) {
+        var progColorT = fedCntEarly >= mpd ? '#4ade80' : fedCntEarly > 0 ? '#facc15' : '#f87171';
+        mealCountBody += '<div style="display:flex;justify-content:space-between;align-items:center;font-size:13px;">';
+        mealCountBody += '<span>今日の進捗</span>';
+        mealCountBody += '<span style="color:' + progColorT + ';font-weight:700;">' + fedCntEarly + ' / ' + mpd + ' 回';
+        if (remainEarly > 0) mealCountBody += ' <span style="font-size:11px;color:var(--text-dim);">（残り ' + remainEarly + ' 回）</span>';
+        else mealCountBody += ' ✅';
+        mealCountBody += '</span></div>';
+
+        if (calc.remaining_meals && calc.remaining_meals > 0 && calc.remaining_kcal > 0 && calc.kcal_per_meal) {
+          mealCountBody += '<div style="margin-top:6px;padding:8px;background:rgba(168,139,250,0.1);border-radius:6px;font-size:12px;color:#c4b5fd;">';
+          mealCountBody += '💡 残り <b>' + calc.remaining_meals + '回</b> で <b>' + calc.remaining_kcal + 'kcal</b> → ';
+          mealCountBody += '1回あたり <b style="color:#a78bfa;">' + calc.kcal_per_meal + 'kcal</b> が目安です';
+          mealCountBody += '</div>';
+        }
+      }
+      mealCountBody += '</div>';
+    } else {
+      mealCountBody += '<div style="font-size:12px;color:var(--text-dim);">データなし</div>';
+    }
+    html += makeFeedingFold('食事数', 'タップで開く', mealCountBody);
+
+    /* ── 折りたたみ4: 給餌プラン ──
+       以降の既存コードは全て html+= で書かれているので、
+       現在の html の長さを保存し、追記後に差分を planBody として取り出す。
+    */
+    var _planStartLen = html.length;
 
     var yesterdayRel = (function (ymd) {
       var d = new Date(ymd + 'T12:00:00+09:00');
@@ -3733,43 +4068,6 @@ function closeCatDetailFoldSection(btn) {
     }
 
     if (calc && !calc.error) {
-      var mpd = calc.meals_per_day;
-      var fedCnt = calc.fed_count || 0;
-      var remain = mpd ? Math.max(0, mpd - fedCnt) : null;
-
-      html += '<div style="background:var(--surface);border-radius:8px;padding:10px 12px;margin-bottom:8px;">';
-      html += '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;">';
-      html += '<span style="font-size:12px;color:var(--text-dim);">1日の給餌回数</span>';
-      html += '<div style="display:flex;align-items:center;gap:6px;">';
-      html += '<select id="mealsPerDaySelect" style="background:var(--surface-alt);color:var(--text-main);border:1px solid var(--surface-alt);border-radius:6px;padding:4px 8px;font-size:13px;">';
-      var mpdOptions = [{ v: '', l: '未設定' }];
-      for (var mpdI = 1; mpdI <= 16; mpdI++) { mpdOptions.push({ v: String(mpdI), l: mpdI + '回' }); }
-      for (var mi = 0; mi < mpdOptions.length; mi++) {
-        var sel = (mpd !== null && String(mpd) === mpdOptions[mi].v) || (!mpd && mpdOptions[mi].v === '') ? ' selected' : '';
-        html += '<option value="' + mpdOptions[mi].v + '"' + sel + '>' + mpdOptions[mi].l + '</option>';
-      }
-      html += '</select>';
-      html += '<button class="btn-outline" style="font-size:11px;padding:4px 8px;" onclick="saveMealsPerDay()">保存</button>';
-      html += '</div></div>';
-
-      if (mpd) {
-        var progressColor = fedCnt >= mpd ? '#4ade80' : fedCnt > 0 ? '#facc15' : '#f87171';
-        html += '<div style="display:flex;justify-content:space-between;align-items:center;font-size:13px;">';
-        html += '<span>今日の進捗</span>';
-        html += '<span style="color:' + progressColor + ';font-weight:700;">' + fedCnt + ' / ' + mpd + ' 回';
-        if (remain > 0) html += ' <span style="font-size:11px;color:var(--text-dim);">（残り ' + remain + ' 回）</span>';
-        else html += ' ✅';
-        html += '</span></div>';
-
-        if (calc.remaining_meals && calc.remaining_meals > 0 && calc.remaining_kcal > 0 && calc.kcal_per_meal) {
-          html += '<div style="margin-top:6px;padding:8px;background:rgba(168,139,250,0.1);border-radius:6px;font-size:12px;color:#c4b5fd;">';
-          html += '💡 残り <b>' + calc.remaining_meals + '回</b> で <b>' + calc.remaining_kcal + 'kcal</b> → ';
-          html += '1回あたり <b style="color:#a78bfa;">' + calc.kcal_per_meal + 'kcal</b> が目安です';
-          html += '</div>';
-        }
-      }
-      html += '</div>';
-
       var plans = calc.plans || [];
       // プラン0件の分岐でも朝/夕ボタンに使うため、ここで必ず定義する（else 内のみだと undefined で例外→「データ取得に失敗」になる）
       var _slotFixed = ['morning', 'afternoon', 'evening'];
@@ -3846,9 +4144,17 @@ function closeCatDetailFoldSection(btn) {
               html += '<button type="button" onclick=\'openQuickFedModal(' + p.id + ',' + JSON.stringify(String(p.food_name || '')) + ',' + (p.amount_g != null && !isNaN(Number(p.amount_g)) ? Number(p.amount_g) : 'null') + ')\' style="font-size:18px;background:none;border:none;cursor:pointer;padding:0;" title="あげた！">⬜</button>';
             }
 
+            // ログがある場合は実際の提供量(offered_g)を表示。なければ献立の規定量(amount_g)を表示
+            var displayAmountG = (isFed && fedLog && fedLog.offered_g != null && fedLog.offered_g !== '') ? fedLog.offered_g : p.amount_g;
+            var displayKcalPerG = p.kcal_calc != null && p.amount_g > 0 ? p.kcal_calc / p.amount_g : 0;
+            var displayKcal = Math.round(displayAmountG * displayKcalPerG);
+            var amountMismatch = isFed && fedLog && fedLog.offered_g != null && Number(fedLog.offered_g) !== Number(p.amount_g);
             html += '<div style="flex:1;min-width:0;">';
             html += '<div style="font-size:12px;display:flex;align-items:center;">' + typeTag + escapeHtml(p.food_name || '') + '</div>';
-            html += '<div style="font-size:11px;color:var(--text-dim);">' + p.amount_g + 'g (' + Math.round(p.kcal_calc || 0) + 'kcal)';
+            html += '<div style="font-size:11px;color:var(--text-dim);">';
+            html += '<span' + (amountMismatch ? ' style="color:#fbbf24;font-weight:700;"' : '') + '>' + displayAmountG + 'g</span>';
+            if (amountMismatch) html += ' <span style="font-size:10px;color:var(--text-dim);">(献立 ' + p.amount_g + 'g)</span>';
+            html += ' (' + displayKcal + 'kcal)';
             if (p.scheduled_time) html += ' ⏰' + escapeHtml(p.scheduled_time);
             html += '</div>';
             if (isFed) {
@@ -3925,11 +4231,169 @@ function closeCatDetailFoldSection(btn) {
     html += '<button class="btn btn-outline" style="font-size:13px;" onclick="startFeedingVoice()">🎤 音声で記録</button>';
     html += '</div>';
 
+    // 給餌履歴ブロック（lazy load）
+    html += '<div id="feedingHistoryBlock" style="margin-top:16px;">';
+    html += '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">';
+    html += '<div style="font-size:13px;font-weight:700;color:var(--text-main);">📅 給餌履歴</div>';
+    html += '<div style="display:flex;gap:4px;align-items:center;">';
+    html += '<select id="feedingHistoryDays" style="background:var(--surface-alt);color:var(--text-main);border:1px solid var(--surface-alt);border-radius:6px;padding:3px 6px;font-size:12px;" onchange="loadFeedingHistory()">';
+    html += '<option value="7">直近7日</option>';
+    html += '<option value="14" selected>直近14日</option>';
+    html += '<option value="30">直近30日</option>';
+    html += '</select>';
+    html += '</div></div>';
+    html += '<div id="feedingHistoryList" style="font-size:13px;color:var(--text-dim);padding:8px 0;">読み込み中...</div>';
     html += '</div>';
+
+    html += '</div>';
+
+    /* 給餌プランの追記分を差分で取り出してフォールドに変換 */
+    var planBody = html.slice(_planStartLen);
+    html = html.slice(0, _planStartLen) + makeFeedingFold('給餌プラン', 'タップで開く', planBody, true);
+
     feedingArea.innerHTML = html;
     _feedingLogsCache = logs;
     _feedingSectionRenderedDate = today;
     setTimeout(function () { paintAppetiteIndexCanvas(appetitePts); }, 0);
+    setTimeout(function () { loadFeedingHistory(); }, 0);
+  }
+
+  var _feedingHistoryCache = null;
+  var _feedingHistoryCatId = null;
+  var _feedingHistoryDays = null;
+
+  window.loadFeedingHistory = function () {
+    var el = document.getElementById('feedingHistoryList');
+    if (!el || !catId) return;
+    var daysEl = document.getElementById('feedingHistoryDays');
+    var days = daysEl ? parseInt(daysEl.value, 10) : 14;
+
+    if (_feedingHistoryCatId === catId && _feedingHistoryDays === days && _feedingHistoryCache) {
+      el.innerHTML = renderFeedingHistoryHtml(_feedingHistoryCache);
+      return;
+    }
+
+    el.innerHTML = '<div style="padding:8px;color:var(--text-dim);">読み込み中...</div>';
+    _feedFetchJsonSoft(API_BASE + '/feeding/logs/history?cat_id=' + encodeURIComponent(catId) + '&days=' + days)
+      .then(function (data) {
+        _feedingHistoryCache = (data && data.history) || [];
+        _feedingHistoryCatId = catId;
+        _feedingHistoryDays = days;
+        el.innerHTML = renderFeedingHistoryHtml(_feedingHistoryCache);
+      })
+      .catch(function () {
+        el.innerHTML = '<div style="padding:8px;color:var(--text-dim);">取得に失敗しました。</div>';
+      });
+  };
+
+  function renderFeedingHistoryHtml(history) {
+    if (!history || history.length === 0) return '<div style="padding:8px;color:var(--text-dim);">履歴がありません。</div>';
+
+    var html = '';
+    var hasAny = false;
+    for (var i = 0; i < history.length; i++) {
+      var day = history[i];
+      if (!day.has_record) continue;
+      hasAny = true;
+
+      // 残食量 = 与えた - 食べた（remaining_g が null の行が多いため推計で補完）
+      var totalRemaining = day.total_offered_g - day.total_eaten_g;
+      if (totalRemaining < 0) totalRemaining = 0;
+      totalRemaining = Math.round(totalRemaining * 10) / 10;
+
+      var pct = day.eat_pct;
+      var pctColor = pct == null ? '#64748b' : pct >= 80 ? '#4ade80' : pct >= 50 ? '#facc15' : '#f87171';
+      var pctLabel = pct != null ? pct + '%' : '—';
+
+      html += '<details style="border-bottom:1px solid var(--surface-alt);padding:8px 0;" ' + (i === 0 ? 'open' : '') + '>';
+
+      // ─ サマリ行 ─
+      html += '<summary style="cursor:pointer;list-style:none;">';
+      html += '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px;">';
+      html += '<span style="font-size:13px;font-weight:700;color:var(--text-main);">' + escapeHtml(day.day_label) + '</span>';
+      html += '<span style="font-size:12px;color:' + pctColor + ';font-weight:700;">' + pctLabel + '</span>';
+      html += '</div>';
+      // 与えた・食べた・残した の3つを横並び
+      html += '<div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:4px;font-size:12px;text-align:center;">';
+      html += '<div style="background:var(--surface);border-radius:6px;padding:4px 2px;">';
+      html += '<div style="color:var(--text-dim);font-size:10px;">与えた</div>';
+      html += '<div style="font-weight:700;color:var(--text-main);">' + day.total_offered_g + 'g</div>';
+      html += '</div>';
+      html += '<div style="background:rgba(74,222,128,0.12);border-radius:6px;padding:4px 2px;">';
+      html += '<div style="color:var(--text-dim);font-size:10px;">食べた</div>';
+      html += '<div style="font-weight:700;color:#4ade80;">' + day.total_eaten_g + 'g</div>';
+      html += '</div>';
+      html += '<div style="background:rgba(248,113,113,0.10);border-radius:6px;padding:4px 2px;">';
+      html += '<div style="color:var(--text-dim);font-size:10px;">残した</div>';
+      html += '<div style="font-weight:700;color:#f87171;">' + totalRemaining + 'g</div>';
+      html += '</div>';
+      html += '</div>';
+      if (day.total_eaten_kcal > 0) {
+        html += '<div style="text-align:right;font-size:10px;color:#64748b;margin-top:2px;">' + day.total_eaten_kcal + ' kcal</div>';
+      }
+      html += '</summary>';
+
+      // ─ 食事明細 ─
+      if (day.meals && day.meals.length > 0) {
+        var lastSlot = null;
+        html += '<div style="padding:6px 0 0 0;">';
+        for (var j = 0; j < day.meals.length; j++) {
+          var ml = day.meals[j];
+          if (ml.meal_slot !== lastSlot) {
+            var slotLabel = ml.meal_slot === 'morning' ? '🌅 朝' : ml.meal_slot === 'evening' ? '🌆 夕' : ml.meal_slot === 'noon' ? '☀️ 昼' : (ml.meal_slot || '');
+            html += '<div style="font-size:11px;font-weight:700;color:var(--text-dim);margin:6px 0 3px;">' + escapeHtml(slotLabel) + '</div>';
+            lastSlot = ml.meal_slot;
+          }
+
+          // 明細1行の残食量を計算
+          var mlRemaining = null;
+          if (ml.remaining_g != null) {
+            mlRemaining = ml.remaining_g;
+          } else if (ml.offered_g != null && ml.eaten_g != null) {
+            mlRemaining = Math.round((ml.offered_g - ml.eaten_g) * 10) / 10;
+            if (mlRemaining < 0) mlRemaining = 0;
+          } else if (ml.offered_g != null && ml.eaten_pct != null) {
+            mlRemaining = Math.round(ml.offered_g * (100 - ml.eaten_pct) / 100 * 10) / 10;
+          }
+
+          var mPct = ml.eaten_pct != null ? ml.eaten_pct : null;
+          var mPctColor = mPct == null ? '#64748b' : mPct >= 80 ? '#4ade80' : mPct >= 50 ? '#facc15' : '#f87171';
+
+          html += '<div style="background:var(--surface);border-radius:6px;padding:5px 8px;margin-bottom:3px;">';
+          // フード名・時刻
+          html += '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:3px;">';
+          html += '<span style="font-size:12px;color:var(--text-main);flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">' + escapeHtml(ml.food_name || '（フード未設定）') + '</span>';
+          if (ml.served_time) html += '<span style="font-size:10px;color:#64748b;margin-left:8px;white-space:nowrap;">' + escapeHtml(ml.served_time.slice(0, 5)) + '</span>';
+          html += '</div>';
+          // 与えた・食べた・残した の3カラム
+          html += '<div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:3px;font-size:11px;text-align:center;">';
+          html += '<div>';
+          html += '<div style="color:var(--text-dim);font-size:9px;">与えた</div>';
+          html += '<div style="font-weight:700;">' + (ml.offered_g != null ? ml.offered_g + 'g' : '—') + '</div>';
+          html += '</div>';
+          html += '<div>';
+          html += '<div style="color:var(--text-dim);font-size:9px;">食べた</div>';
+          var eatenLabel = ml.eaten_g != null ? ml.eaten_g + 'g' : (mPct != null ? mPct + '%' : '—');
+          html += '<div style="font-weight:700;color:' + mPctColor + ';">' + eatenLabel + '</div>';
+          html += '</div>';
+          html += '<div>';
+          html += '<div style="color:var(--text-dim);font-size:9px;">残した</div>';
+          html += '<div style="font-weight:700;color:#f87171;">' + (mlRemaining != null ? mlRemaining + 'g' : '—') + '</div>';
+          html += '</div>';
+          html += '</div>';
+          if (ml.eaten_kcal != null && ml.eaten_kcal > 0) {
+            html += '<div style="text-align:right;font-size:9px;color:#64748b;margin-top:2px;">' + ml.eaten_kcal + ' kcal</div>';
+          }
+          html += '</div>';
+        }
+        html += '</div>';
+      }
+
+      html += '</details>';
+    }
+
+    if (!hasAny) return '<div style="padding:8px;color:var(--text-dim);">この期間に記録がありません。</div>';
+    return html;
   }
 
   var _cdQfPlanId = null;
@@ -4928,11 +5392,22 @@ function closeCatDetailFoldSection(btn) {
   window.startFeedingVoice = function () {
     var SR = window.SpeechRecognition || window.webkitSpeechRecognition;
     if (!SR) { alert('この端末は音声認識に対応していません'); return; }
+    var ios = /iPad|iPhone|iPod/.test(navigator.userAgent) ||
+      (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
     var sr = new SR();
     sr.lang = 'ja-JP';
+    sr.continuous = ios;
     sr.interimResults = false;
+    var fedDone = false;
     sr.onresult = function (e) {
-      var text = e.results[0][0].transcript;
+      var text = '';
+      for (var ri = 0; ri < e.results.length; ri++) {
+        if (e.results[ri].isFinal) text += e.results[ri][0].transcript;
+      }
+      text = String(text || '').trim();
+      if (!text || fedDone) return;
+      fedDone = true;
+      if (ios) { try { sr.stop(); } catch (_) {} }
       if (confirm('音声入力: 「' + text + '」\nこの内容で記録しますか？')) {
         var line = String(text || '').trim();
         if (currentCatData && currentCatData.name) {
@@ -4985,10 +5460,7 @@ function closeCatDetailFoldSection(btn) {
       }).catch(function () { cb(); });
   }
 
-  window.saveMealsPerDay = function () {
-    var sel = document.getElementById('mealsPerDaySelect');
-    if (!sel) return;
-    var val = sel.value ? parseInt(sel.value, 10) : null;
+  function _doSaveMealsPerDay(val) {
     fetch(API_BASE + '/cats/' + encodeURIComponent(catId), {
       method: 'PUT',
       headers: apiHeaders(), cache: 'no-store',
@@ -4998,6 +5470,20 @@ function closeCatDetailFoldSection(btn) {
       if (data.error) { alert('エラー: ' + (data.message || data.error)); return; }
       loadFeedingSection();
     }).catch(function () { alert('保存に失敗しました'); });
+  }
+
+  /* 独立カード（食事数）からの保存: select要素IDを指定 */
+  window.saveMealsPerDayFromId = function (selectId) {
+    var sel = document.getElementById(selectId);
+    if (!sel) return;
+    _doSaveMealsPerDay(sel.value ? parseInt(sel.value, 10) : null);
+  };
+
+  /* 旧 ID での互換も維持 */
+  window.saveMealsPerDay = function () {
+    var sel = document.getElementById('mealsPerDaySelect') || document.getElementById('mealsPerDaySelectTop');
+    if (!sel) return;
+    _doSaveMealsPerDay(sel.value ? parseInt(sel.value, 10) : null);
   };
 
   window.openFeedingLogModalForEdit = function (logId) {
@@ -7275,11 +7761,88 @@ function closeCatDetailFoldSection(btn) {
 
   // ── 猫注意事項（P5.7）──────────────────────────────────────────────────────
 
+  function revokeCatNoteInlineBlobs() {
+    for (var _ri = 0; _ri < _catNoteInlineBlobUrls.length; _ri++) {
+      try {
+        URL.revokeObjectURL(_catNoteInlineBlobUrls[_ri]);
+      } catch (_rz) {}
+    }
+    _catNoteInlineBlobUrls = [];
+  }
+
+  function loadInlineImagePlaceholder(ph) {
+    if (!ph || ph.getAttribute('data-cn-inline-done') === '1') return;
+    ph.setAttribute('data-cn-inline-done', '1');
+    var nid = ph.getAttribute('data-cn-inline-note');
+    var fid = ph.getAttribute('data-cn-inline-file');
+    var legacy = ph.getAttribute('data-cn-inline-legacy') === '1';
+    if (!nid) return;
+    var path = legacy
+      ? '/cat-notes/' + encodeURIComponent(nid) + '/attachment'
+      : '/cat-notes/' + encodeURIComponent(nid) + '/attachments/' + encodeURIComponent(fid || '');
+    var fnameEnc = ph.getAttribute('data-cn-inline-fname') || '';
+    var fname = '';
+    try {
+      fname = decodeURIComponent(fnameEnc);
+    } catch (_fe) {
+      fname = '';
+    }
+    fetch(API_BASE + path, { headers: apiHeadersBinary(), cache: 'no-store' })
+      .then(function (r) {
+        if (!r.ok) throw new Error('fail');
+        return r.blob();
+      })
+      .then(function (blob) {
+        var mime = String(blob.type || '').toLowerCase();
+        if (mime.indexOf('pdf') !== -1) {
+          ph.textContent = '（PDFは下のリンクから開いてください）';
+          ph.style.color = 'var(--text-dim)';
+          return;
+        }
+        var u = URL.createObjectURL(blob);
+        _catNoteInlineBlobUrls.push(u);
+        var wrap = document.createElement('div');
+        wrap.style.cssText =
+          'margin:8px 0 0;border-radius:8px;overflow:hidden;border:1px solid rgba(255,255,255,0.12);' +
+          'text-align:center;background:rgba(0,0,0,0.28);';
+        var img = document.createElement('img');
+        img.src = u;
+        img.alt = fname || '';
+        img.loading = 'lazy';
+        img.decoding = 'async';
+        img.setAttribute('data-cn-att-note', nid);
+        if (!legacy && fid) img.setAttribute('data-cn-att-file', fid);
+        img.style.cssText =
+          'max-width:100%;max-height:220px;width:auto;height:auto;object-fit:contain;display:block;margin:0 auto;cursor:zoom-in;';
+        wrap.appendChild(img);
+        if (fname) {
+          var cap = document.createElement('div');
+          cap.style.cssText =
+            'font-size:11px;color:var(--text-dim);padding:4px 8px 6px;text-align:center;word-break:break-all;line-height:1.35;';
+          cap.textContent = fname;
+          wrap.appendChild(cap);
+        }
+        if (ph.parentNode) ph.parentNode.replaceChild(wrap, ph);
+      })
+      .catch(function () {
+        ph.textContent = '（画像を表示できません）';
+        ph.style.color = '#e57373';
+      });
+  }
+
+  function hydrateCatNoteInlineAttachments() {
+    if (!catNotesArea) return;
+    var phs = catNotesArea.querySelectorAll('.cn-inline-img-ph');
+    for (var _hi = 0; _hi < phs.length; _hi++) {
+      loadInlineImagePlaceholder(phs[_hi]);
+    }
+  }
+
   function loadCatNotes() {
     if (!catNotesArea) return Promise.resolve();
     catNotesArea.innerHTML = '<div class="detail-section"><div class="section-header"><div class="detail-title">📝 注意事項</div><div style="display:flex;gap:8px;"><button type="button" class="btn-edit-loc" onclick="openInternalNoteModal()">内部メモ</button><button class="btn-add" onclick="openCatNoteModal()">+ 追加</button></div></div><div class="loading" style="padding:16px;">読み込み中...</div></div>';
 
-    return fetch(API_BASE + '/cat-notes?cat_id=' + encodeURIComponent(catId) + '&exclude_categories=feeding,nutrition,medication&limit=30', {
+    return fetch(API_BASE + '/cat-notes?cat_id=' + encodeURIComponent(catId) + '&limit=80', {
       headers: apiHeaders(), cache: 'no-store',
     }).then(function (res) { return res.json(); })
     .then(function (data) {
@@ -7290,11 +7853,25 @@ function closeCatDetailFoldSection(btn) {
   }
 
   function renderCatNotes(notes) {
+    revokeCatNoteInlineBlobs();
     _catNotesListCache = notes.slice();
     var internalNote = currentCatData ? (currentCatData.internal_note || '') : '';
     var noteTexts = {};
     for (var i = 0; i < notes.length; i++) {
       noteTexts[(notes[i].note || '').trim()] = true;
+    }
+
+    /** 内部メモと同じ本文の注意事項のうち、少なくとも1件に画像/PDF が付いているときだけ内部メモカードを省略する（本文だけ複製で添付が無いときは内部メモを残し、画像追加の導線を失わせない） */
+    function internalMemoRedundantWithAttachedCatNote(internal, list) {
+      var t = (internal || '').trim();
+      if (!t) return false;
+      for (var hi = 0; hi < list.length; hi++) {
+        if ((list[hi].note || '').trim() !== t) continue;
+        var hn = list[hi];
+        if (hn.attachments && hn.attachments.length) return true;
+        if (hn.attachment_file_id) return true;
+      }
+      return false;
     }
 
     var html = '<div class="detail-section">';
@@ -7306,15 +7883,20 @@ function closeCatDetailFoldSection(btn) {
 
     var hasContent = false;
 
-    if (internalNote && !noteTexts[internalNote.trim()]) {
+    if (internalNote && !internalMemoRedundantWithAttachedCatNote(internalNote, notes)) {
       hasContent = true;
       html += '<div class="cat-note-item pinned">';
       html += '<span class="cat-note-pin">📋</span>';
       html += '<div class="cat-note-head">';
-      html += '<span><span class="cat-note-category general">内部メモ</span></span>';
-      html += '<span><button type="button" class="btn-edit-loc" onclick="openInternalNoteModal()">編集</button></span>';
+      html += '<span><span class="cat-note-category general">内部メモ</span> <span style="font-size:10px;color:var(--text-dim);">（テキストのみ）</span></span>';
+      html += '<span><button type="button" class="btn-edit-loc" onclick="openInternalNoteModal()">テキスト編集</button></span>';
       html += '</div>';
       html += '<div class="cat-note-body">' + escapeHtml(internalNote) + '</div>';
+      if (noteTexts[internalNote.trim()]) {
+        html +=
+          '<div style="margin-top:6px;font-size:11px;color:var(--text-dim);line-height:1.45;">同じ本文の注意事項がありますが、添付がまだありません。下の「注意事項として投稿」で追記するか、一覧の該当項目を「編集」からファイルを追加してください。</div>';
+      }
+      html += '<div style="margin-top:8px;"><button type="button" class="btn-add" style="font-size:11px;padding:5px 10px;" onclick="convertInternalNoteToPost()">📝 注意事項として投稿（画像・Slack対応）</button></div>';
       html += '</div>';
     } else if (currentCatData && (!internalNote || !internalNote.trim())) {
       hasContent = true;
@@ -7330,8 +7912,8 @@ function closeCatDetailFoldSection(btn) {
       var n = notes[i];
       var pinnedClass = n.pinned ? ' pinned' : '';
       html += '<div class="cat-note-item' + pinnedClass + '">';
-      if (n.pinned) html += '<span class="cat-note-pin" onclick="togglePin(' + n.id + ', false)" title="ピン解除">📌</span>';
-      else html += '<span class="cat-note-pin" onclick="togglePin(' + n.id + ', true)" title="ピン留め">📌</span>';
+      if (n.pinned) html += '<span class="cat-note-pin" role="button" tabindex="0" data-cn-pin-id="' + n.id + '" data-cn-pin-want="0" title="ピン解除">📌</span>';
+      else html += '<span class="cat-note-pin" role="button" tabindex="0" data-cn-pin-id="' + n.id + '" data-cn-pin-want="1" title="ピン留め">📌</span>';
       html += '<div class="cat-note-head">';
       html += '<span><span class="cat-note-category ' + escapeHtml(n.category || 'general') + '">' + noteCategoryLabel(n.category) + '</span>';
       if (n.staff_name) html += ' ' + escapeHtml(n.staff_name);
@@ -7339,12 +7921,63 @@ function closeCatDetailFoldSection(btn) {
       html += '<span>' + formatDate(n.created_at) + '</span>';
       html += '</div>';
       html += '<div class="cat-note-body">' + escapeHtml(n.note) + '</div>';
-      if (n.attachment_file_id) {
-        html += '<div class="cat-note-img-hint" style="font-size:12px;color:var(--text-dim);margin:6px 0 0;">📷 画像が添付されています（編集で表示）</div>';
+      var _atts = n.attachments && n.attachments.length ? n.attachments : null;
+      var _attRendered = 0;
+      if (_atts) {
+        var _seenAtt = {};
+        for (var _ai = 0; _ai < _atts.length; _ai++) {
+          var _a = _atts[_ai];
+          if (!_a || _a.id == null || String(_a.id) === '') continue;
+          var _aidKey = String(_a.id);
+          if (_seenAtt[_aidKey]) continue;
+          _seenAtt[_aidKey] = true;
+          var _pdf = _a.mime_type && _a.mime_type.indexOf('pdf') !== -1;
+          var _fnRaw = (_a.original_name || 'file').slice(0, 120);
+          if (_pdf) {
+            var _label = '📄 PDF';
+            var _fn = escapeHtml(_fnRaw.slice(0, 40));
+            html +=
+              '<div class="cat-note-img-hint" style="font-size:12px;color:var(--text-dim);margin:4px 0 0;"><a href="#" data-cn-att-note="' +
+              n.id +
+              '" data-cn-att-file="' +
+              _a.id +
+              '" style="color:var(--accent);">' +
+              _label +
+              '：' +
+              _fn +
+              '</a></div>';
+          } else {
+            html +=
+              '<div class="cn-inline-img-ph" style="min-height:64px;display:flex;align-items:center;justify-content:center;font-size:12px;color:var(--text-dim);margin:8px 0 0;border-radius:8px;border:1px dashed rgba(255,255,255,0.2);background:rgba(0,0,0,0.18);" data-cn-inline-note="' +
+              n.id +
+              '" data-cn-inline-file="' +
+              _a.id +
+              '" data-cn-inline-fname="' +
+              encodeURIComponent(_fnRaw) +
+              '">読み込み中…</div>';
+          }
+          _attRendered++;
+        }
+      }
+      if (_attRendered === 0 && n.attachment_file_id) {
+        var _attIsPdf = n.attachment_mime && n.attachment_mime.indexOf('pdf') !== -1;
+        if (_attIsPdf) {
+          html +=
+            '<div class="cat-note-img-hint" style="font-size:12px;color:var(--text-dim);margin:6px 0 0;"><a href="#" data-cn-att-note="' +
+            n.id +
+            '" style="color:var(--accent);">📄 PDFを表示</a></div>';
+        } else {
+          html +=
+            '<div class="cn-inline-img-ph" style="min-height:64px;display:flex;align-items:center;justify-content:center;font-size:12px;color:var(--text-dim);margin:8px 0 0;border-radius:8px;border:1px dashed rgba(255,255,255,0.2);background:rgba(0,0,0,0.18);" data-cn-inline-note="' +
+            n.id +
+            '" data-cn-inline-legacy="1" data-cn-inline-fname="' +
+            encodeURIComponent('') +
+            '">読み込み中…</div>';
+        }
       }
       html += '<div class="cat-note-actions">';
-      html += '<button type="button" onclick="openEditCatNote(' + n.id + ')">編集</button>';
-      html += '<button type="button" class="cat-note-del" onclick="deleteCatNoteConfirm(' + n.id + ')">削除</button>';
+      html += '<button type="button" data-cn-edit-id="' + n.id + '">編集</button>';
+      html += '<button type="button" class="cat-note-del" data-cn-del-id="' + n.id + '">削除</button>';
       html += '</div>';
       html += '</div>';
     }
@@ -7354,12 +7987,21 @@ function closeCatDetailFoldSection(btn) {
     }
     html += '</div>';
     catNotesArea.innerHTML = html;
+    setTimeout(function () {
+      hydrateCatNoteInlineAttachments();
+    }, 0);
   }
 
   function noteCategoryLabel(cat) {
     var labels = {
-      general: '一般', health: '健康', behavior: '行動',
-      feeding: '食事', medication: '投薬', task: 'タスク', warning: '警告',
+      general: '一般',
+      health: '健康',
+      behavior: '行動',
+      feeding: '食事',
+      medication: '投薬',
+      task: 'タスク関連',
+      warning: '警告',
+      nutrition: '栄養',
     };
     return labels[cat] || cat || '一般';
   }
@@ -7375,40 +8017,170 @@ function closeCatDetailFoldSection(btn) {
     revokeCnAttachmentPreview();
     var inp = document.getElementById('cnSlackImage');
     var prev = document.getElementById('cnSlackImagePreview');
+    var pdfPrev = document.getElementById('cnPdfPreview');
     var wrap = document.getElementById('cnSlackImagePreviewWrap');
+    var pend = document.getElementById('cnPendingFilesList');
     if (inp) inp.value = '';
     if (prev) { prev.removeAttribute('src'); prev.style.display = 'none'; }
+    if (pdfPrev) pdfPrev.style.display = 'none';
     if (wrap) wrap.style.display = 'none';
+    if (pend) { pend.style.display = 'none'; pend.innerHTML = ''; }
   }
 
-  window.clearCnSlackImage = function () {
+  /** 新規で選んだファイルだけクリア（保存済みはそのまま） */
+  window.clearCnPendingFiles = function () {
     resetCatNoteSlackImage();
+  };
+
+  /** 保存時に clear_attachment を送る（確認後） */
+  window.markCnClearAllSavedAttachments = function () {
+    if (!confirm('「保存」を押すと、この注意事項の保存済み添付がすべて削除されます。よろしいですか？')) return;
     _cnNoteClearAttachment = true;
+    var ew = document.getElementById('cnExistingAttachmentsWrap');
+    var eb = document.getElementById('cnExistingAttachments');
+    if (ew) ew.style.display = 'none';
+    if (eb) eb.innerHTML = '';
+  };
+
+  function cnEditExistingAttachmentCount() {
+    var eid = document.getElementById('cnEditId');
+    var editId = eid && eid.value ? String(eid.value).trim() : '';
+    if (!editId || _cnNoteClearAttachment) return 0;
+    for (var i = 0; i < _catNotesListCache.length; i++) {
+      if (String(_catNotesListCache[i].id) === editId) {
+        var row = _catNotesListCache[i];
+        if (row.attachments && row.attachments.length) return row.attachments.length;
+        return row.attachment_file_id ? 1 : 0;
+      }
+    }
+    return 0;
+  }
+
+  function renderCnExistingAttachmentsList(row) {
+    var ew = document.getElementById('cnExistingAttachmentsWrap');
+    var eb = document.getElementById('cnExistingAttachments');
+    if (!ew || !eb) return;
+    eb.innerHTML = '';
+    if (_cnNoteClearAttachment) {
+      ew.style.display = 'none';
+      return;
+    }
+    var atts = row && row.attachments && row.attachments.length ? row.attachments : [];
+    if (!atts.length && row && row.attachment_file_id) {
+      atts = [{ id: row.attachment_file_id, original_name: row.attachment_mime && row.attachment_mime.indexOf('pdf') !== -1 ? 'PDF' : '画像', mime_type: row.attachment_mime || '' }];
+    }
+    if (!atts.length) {
+      ew.style.display = 'none';
+      return;
+    }
+    ew.style.display = 'block';
+    for (var j = 0; j < atts.length; j++) {
+      var a = atts[j];
+      var nm = escapeHtml(String(a.original_name || 'file'));
+      var rowHtml = '<div style="display:flex;align-items:center;flex-wrap:wrap;gap:8px;padding:8px 0;border-bottom:1px solid rgba(255,255,255,0.08);">';
+      rowHtml += '<span style="flex:1;min-width:0;font-size:13px;word-break:break-all;">' + nm + '</span>';
+      rowHtml += '<button type="button" class="btn btn-outline" style="font-size:12px;padding:4px 10px;" onclick="openCatNoteAttachment(' + row.id + ',' + a.id + ');return false;">開く</button>';
+      rowHtml += '<button type="button" class="btn btn-outline" style="font-size:12px;padding:4px 10px;color:#e53e3e;border-color:rgba(229,62,62,0.5);" onclick="deleteCatNoteAttachmentOne(' + row.id + ',' + a.id + ');return false;">削除</button>';
+      rowHtml += '</div>';
+      eb.insertAdjacentHTML('beforeend', rowHtml);
+    }
+  }
+
+  window.deleteCatNoteAttachmentOne = function (noteId, fileId) {
+    if (!confirm('この添付ファイルを削除しますか？（すぐに反映されます）')) return;
+    fetch(API_BASE + '/cat-notes/' + encodeURIComponent(noteId) + '/attachments/' + encodeURIComponent(fileId), {
+      method: 'DELETE',
+      headers: apiHeadersDelete(),
+      cache: 'no-store',
+    }).then(function (r) { return r.json(); })
+    .then(function (data) {
+      if (data.error) { alert('エラー: ' + (data.message || data.error)); return; }
+      loadCatNotes().then(function () {
+        var eid = document.getElementById('cnEditId');
+        if (!eid || String(eid.value) !== String(noteId)) return;
+        var row = null;
+        for (var i = 0; i < _catNotesListCache.length; i++) {
+          if (String(_catNotesListCache[i].id) === String(noteId)) { row = _catNotesListCache[i]; break; }
+        }
+        renderCnExistingAttachmentsList(row);
+      });
+    }).catch(function () {
+      alert('削除に失敗しました');
+    });
   };
 
   window.onCnSlackImageChange = function () {
     var inp = document.getElementById('cnSlackImage');
-    var f = inp && inp.files && inp.files[0];
     var prev = document.getElementById('cnSlackImagePreview');
+    var pdfPrev = document.getElementById('cnPdfPreview');
+    var pdfName = document.getElementById('cnPdfFileName');
     var wrap = document.getElementById('cnSlackImagePreviewWrap');
-    if (!f) {
+    var pend = document.getElementById('cnPendingFilesList');
+    var n = inp && inp.files ? inp.files.length : 0;
+    if (!n) {
       if (wrap) wrap.style.display = 'none';
       if (prev) { prev.removeAttribute('src'); prev.style.display = 'none'; }
+      if (pdfPrev) pdfPrev.style.display = 'none';
+      if (pend) { pend.style.display = 'none'; pend.innerHTML = ''; }
       return;
     }
-    if (f.size > 10 * 1024 * 1024) {
-      alert('画像は10MB以下にしてください');
+    var existing = cnEditExistingAttachmentCount();
+    if (existing + n > MAX_CN_NOTE_ATTACHMENTS) {
+      alert('1件の注意事項に付けられるファイルは最大' + MAX_CN_NOTE_ATTACHMENTS + '件です（既存＋新規の合計）。');
       if (inp) inp.value = '';
+      if (pend) { pend.style.display = 'none'; pend.innerHTML = ''; }
+      if (wrap) wrap.style.display = 'none';
       return;
     }
-    _cnNoteClearAttachment = false;
-    var url = URL.createObjectURL(f);
-    if (prev) {
-      prev.onload = function () { try { URL.revokeObjectURL(url); } catch (_e) {} };
-      prev.src = url;
-      prev.style.display = 'block';
+    for (var i = 0; i < n; i++) {
+      if (inp.files[i].size > 10 * 1024 * 1024) {
+        alert('ファイルは10MB以下にしてください: ' + (inp.files[i].name || ''));
+        if (inp) inp.value = '';
+        if (pend) { pend.style.display = 'none'; pend.innerHTML = ''; }
+        if (wrap) wrap.style.display = 'none';
+        return;
+      }
+    }
+    if (pend) {
+      var names = [];
+      for (var k = 0; k < n; k++) names.push(escapeHtml(inp.files[k].name || 'file'));
+      pend.innerHTML = '<strong>追加予定（' + n + '件）</strong><br>' + names.join('<br>');
+      pend.style.display = 'block';
+    }
+    var f = inp.files[0];
+    if (prev) { prev.removeAttribute('src'); prev.style.display = 'none'; }
+    if (pdfPrev) pdfPrev.style.display = 'none';
+    var isPdf = f.type === 'application/pdf' || (f.name && /\.pdf$/i.test(f.name));
+    if (isPdf) {
+      if (pdfName) pdfName.textContent = f.name || 'document.pdf';
+      if (pdfPrev) pdfPrev.style.display = 'block';
+    } else {
+      var url = URL.createObjectURL(f);
+      if (prev) {
+        prev.onload = function () { try { URL.revokeObjectURL(url); } catch (_e) {} };
+        prev.src = url;
+        prev.style.display = 'block';
+      }
     }
     if (wrap) wrap.style.display = 'block';
+  };
+
+  window.convertInternalNoteToPost = function () {
+    var text = currentCatData ? (currentCatData.internal_note || '') : '';
+    var eid = document.getElementById('cnEditId');
+    var ttl = document.getElementById('cnModalTitle');
+    if (eid) eid.value = '';
+    if (ttl) ttl.textContent = '注意事項を追加（画像・Slack対応）';
+    document.getElementById('cnNote').value = text;
+    document.getElementById('cnCategory').value = 'general';
+    document.getElementById('cnPinned').checked = true;
+    _cnNoteClearAttachment = false;
+    resetCatNoteSlackImage();
+    var ew = document.getElementById('cnExistingAttachmentsWrap');
+    var eb = document.getElementById('cnExistingAttachments');
+    if (ew) ew.style.display = 'none';
+    if (eb) eb.innerHTML = '';
+    document.getElementById('catNoteModal').classList.add('open');
   };
 
   window.openCatNoteModal = function () {
@@ -7419,9 +8191,12 @@ function closeCatDetailFoldSection(btn) {
     document.getElementById('cnNote').value = '';
     document.getElementById('cnCategory').value = 'general';
     document.getElementById('cnPinned').checked = false;
-    _cnEditHadAttachment = false;
     _cnNoteClearAttachment = false;
     resetCatNoteSlackImage();
+    var ew = document.getElementById('cnExistingAttachmentsWrap');
+    var eb = document.getElementById('cnExistingAttachments');
+    if (ew) ew.style.display = 'none';
+    if (eb) eb.innerHTML = '';
     document.getElementById('catNoteModal').classList.add('open');
   };
 
@@ -7444,30 +8219,9 @@ function closeCatDetailFoldSection(btn) {
     document.getElementById('cnNote').value = row.note || '';
     document.getElementById('cnCategory').value = row.category || 'general';
     document.getElementById('cnPinned').checked = !!row.pinned;
-    _cnEditHadAttachment = !!row.attachment_file_id;
     _cnNoteClearAttachment = false;
     resetCatNoteSlackImage();
-    if (row.attachment_file_id) {
-      fetch(API_BASE + '/cat-notes/' + encodeURIComponent(row.id) + '/attachment', {
-        headers: apiHeaders(), cache: 'no-store',
-      }).then(function (r) {
-        if (!r.ok) return null;
-        return r.blob();
-      }).then(function (blob) {
-        if (!blob) return;
-        revokeCnAttachmentPreview();
-        var u = URL.createObjectURL(blob);
-        _cnAttachmentPreviewUrl = u;
-        var prev = document.getElementById('cnSlackImagePreview');
-        var wrap = document.getElementById('cnSlackImagePreviewWrap');
-        if (prev) {
-          prev.onload = function () {};
-          prev.src = u;
-          prev.style.display = 'block';
-        }
-        if (wrap) wrap.style.display = 'block';
-      }).catch(function () {});
-    }
+    renderCnExistingAttachmentsList(row);
     document.getElementById('catNoteModal').classList.add('open');
   };
 
@@ -7485,13 +8239,120 @@ function closeCatDetailFoldSection(btn) {
     });
   };
 
+  function closeCnAttLightbox() {
+    if (_cnAttLightboxEl) {
+      try {
+        document.removeEventListener('keydown', cnAttLightboxOnKey);
+      } catch (_r0) {}
+      if (_cnAttLightboxEl.parentNode) {
+        _cnAttLightboxEl.parentNode.removeChild(_cnAttLightboxEl);
+      }
+      _cnAttLightboxEl = null;
+    }
+    if (_cnAttLightboxUrl) {
+      try {
+        URL.revokeObjectURL(_cnAttLightboxUrl);
+      } catch (_r1) {}
+      _cnAttLightboxUrl = null;
+    }
+  }
+
+  function cnAttLightboxOnKey(ev) {
+    if (ev.key === 'Escape' || ev.keyCode === 27) closeCnAttLightbox();
+  }
+
+  /** 別タブ＋blob URL はモバイル Safari 等で表示されないことが多いため、同一ドキュメント内の全画面プレビューにする */
+  window.openCatNoteAttachment = function (noteId, fileId) {
+    closeCnAttLightbox();
+    var path =
+      '/cat-notes/' +
+      encodeURIComponent(noteId) +
+      (fileId != null && String(fileId) !== ''
+        ? '/attachments/' + encodeURIComponent(fileId)
+        : '/attachment');
+    fetch(API_BASE + path, {
+      headers: apiHeadersBinary(),
+      cache: 'no-store',
+    })
+      .then(function (r) {
+        if (!r.ok) throw new Error('not_found');
+        return r.blob();
+      })
+      .then(function (blob) {
+        var mime = String(blob.type || '').toLowerCase();
+        var u = URL.createObjectURL(blob);
+        _cnAttLightboxUrl = u;
+        var wrap = document.createElement('div');
+        wrap.id = 'cnAttLightbox';
+        wrap.setAttribute('role', 'dialog');
+        wrap.setAttribute('aria-modal', 'true');
+        wrap.style.cssText =
+          'position:fixed;inset:0;z-index:25000;display:flex;flex-direction:column;' +
+          'background:rgba(0,0,0,0.94);touch-action:manipulation;-webkit-tap-highlight-color:transparent;';
+        var bar = document.createElement('div');
+        bar.style.cssText =
+          'flex-shrink:0;display:flex;align-items:center;justify-content:flex-end;gap:8px;' +
+          'padding:10px 12px;background:rgba(0,0,0,0.55);border-bottom:1px solid rgba(255,255,255,0.12);';
+        var closeBtn = document.createElement('button');
+        closeBtn.type = 'button';
+        closeBtn.textContent = '閉じる';
+        closeBtn.style.cssText =
+          'font-size:15px;padding:10px 18px;border-radius:8px;border:1px solid rgba(255,255,255,0.35);' +
+          'background:rgba(255,255,255,0.14);color:#fff;cursor:pointer;font-weight:700;';
+        closeBtn.addEventListener('click', function (ev) {
+          ev.stopPropagation();
+          closeCnAttLightbox();
+        });
+        bar.appendChild(closeBtn);
+        var stage = document.createElement('div');
+        stage.style.cssText =
+          'flex:1;min-height:0;display:flex;align-items:center;justify-content:center;padding:12px;overflow:auto;';
+        var isPdf = mime.indexOf('pdf') !== -1;
+        if (isPdf) {
+          var iframe = document.createElement('iframe');
+          iframe.title = 'PDF';
+          iframe.src = u;
+          iframe.style.cssText =
+            'width:100%;max-width:920px;height:85vh;max-height:900px;border:none;border-radius:8px;background:#222;';
+          stage.appendChild(iframe);
+        } else {
+          var img = document.createElement('img');
+          img.src = u;
+          img.alt = '';
+          img.style.cssText =
+            'max-width:100%;max-height:88vh;width:auto;height:auto;object-fit:contain;' +
+            'display:block;margin:0 auto;';
+          stage.appendChild(img);
+        }
+        wrap.appendChild(bar);
+        wrap.appendChild(stage);
+        stage.addEventListener('click', function (ev) {
+          if (ev.target === stage) closeCnAttLightbox();
+        });
+        wrap.addEventListener('click', function (ev) {
+          if (ev.target === wrap) closeCnAttLightbox();
+        });
+        document.body.appendChild(wrap);
+        _cnAttLightboxEl = wrap;
+        document.addEventListener('keydown', cnAttLightboxOnKey);
+      })
+      .catch(function () {
+        alert('ファイルの読み込みに失敗しました');
+      });
+  };
+
+  window.closeCnAttLightbox = closeCnAttLightbox;
+
   window.closeCatNoteModal = function () {
     document.getElementById('catNoteModal').classList.remove('open');
     var eid = document.getElementById('cnEditId');
     if (eid) eid.value = '';
-    _cnEditHadAttachment = false;
     _cnNoteClearAttachment = false;
     resetCatNoteSlackImage();
+    var ew = document.getElementById('cnExistingAttachmentsWrap');
+    var eb = document.getElementById('cnExistingAttachments');
+    if (ew) ew.style.display = 'none';
+    if (eb) eb.innerHTML = '';
   };
 
   function catNoteReadFileAsDataURL(file) {
@@ -7504,11 +8365,19 @@ function closeCatDetailFoldSection(btn) {
   }
 
   function slackCatNoteFollowup(data, wantedSlack) {
-    if (!wantedSlack || !data || !data.slack) return;
+    if (!wantedSlack) return;
+    if (!data || typeof data.slack !== 'object' || data.slack === null) {
+      alert(
+        '保存しましたが、Slack の送信結果を応答から確認できませんでした。ネットワークや API の状態を確認してください。'
+      );
+      return;
+    }
     var s = data.slack;
     if (s.sent) {
-      if (s.with_file) {
-        alert('保存しました。Slackにテキストと画像を送信しました。');
+      if (s.with_file && s.file_count > 1) {
+        alert('保存しました。Slackにテキストと' + s.file_count + '件のファイルリンクを送信しました。');
+      } else if (s.with_file) {
+        alert('保存しました。Slackにテキストとファイルリンクを送信しました。');
       } else {
         alert('保存しました。Slackに送信しました。');
       }
@@ -7530,85 +8399,137 @@ function closeCatDetailFoldSection(btn) {
     var editId = editIdEl && editIdEl.value ? String(editIdEl.value).trim() : '';
 
     var fileInp = document.getElementById('cnSlackImage');
-    var file = fileInp && fileInp.files && fileInp.files[0];
+    var filesArr = [];
+    if (fileInp && fileInp.files && fileInp.files.length) {
+      for (var fi = 0; fi < fileInp.files.length; fi++) {
+        filesArr.push(fileInp.files[fi]);
+      }
+    }
 
-    function runSubmit(slackImageDataUrl, slackImageName) {
+    var existingCnt = editId ? cnEditExistingAttachmentCount() : 0;
+    if (existingCnt + filesArr.length > MAX_CN_NOTE_ATTACHMENTS) {
+      alert('1件の注意事項に付けられるファイルは最大' + MAX_CN_NOTE_ATTACHMENTS + '件です（既存＋新規の合計）。');
+      return;
+    }
+    for (var fs = 0; fs < filesArr.length; fs++) {
+      if (filesArr[fs].size > 10 * 1024 * 1024) {
+        alert('ファイルは10MB以下にしてください: ' + (filesArr[fs].name || ''));
+        return;
+      }
+    }
+
+    function runSubmit(noteImagesArr) {
+      noteImagesArr = noteImagesArr || [];
       var payload = {
         note: note,
         category: document.getElementById('cnCategory').value,
         pinned: document.getElementById('cnPinned').checked,
       };
-      if (slackImageDataUrl) {
-        payload.note_image = slackImageDataUrl;
-        if (slackImageName) payload.note_image_name = slackImageName;
+      if (noteImagesArr.length) {
+        payload.note_images = noteImagesArr;
       }
-      if (editId && _cnNoteClearAttachment && !slackImageDataUrl) {
+      if (editId && _cnNoteClearAttachment && !noteImagesArr.length) {
         payload.clear_attachment = true;
       }
       if (wantedSlack) {
         payload.notify_slack = true;
-        if (slackImageDataUrl) {
-          payload.slack_image = slackImageDataUrl;
-          if (slackImageName) payload.slack_image_name = slackImageName;
-        }
       }
 
       if (editId) {
         fetch(API_BASE + '/cat-notes/' + encodeURIComponent(editId), {
           method: 'PUT',
-          headers: apiHeaders(), cache: 'no-store',
+          headers: apiHeaders(),
+          cache: 'no-store',
           body: JSON.stringify(payload),
-        }).then(function (r) { return r.json(); })
-        .then(function (data) {
-          if (data.error) { alert('エラー: ' + (data.message || data.error)); return; }
-          if (wantedSlack) slackCatNoteFollowup(data, true);
-          closeCatNoteModal();
-          loadCatNotes();
-        }).catch(function () {
-          alert('保存に失敗しました');
-        });
+        })
+          .then(function (r) {
+            return r.text().then(function (text) {
+              var data = {};
+              try {
+                data = text ? JSON.parse(text) : {};
+              } catch (e) {
+                throw new Error('bad_json');
+              }
+              if (!r.ok) {
+                alert('エラー: ' + (data.message || data.error || 'HTTP ' + r.status));
+                throw new Error('http');
+              }
+              return data;
+            });
+          })
+          .then(function (data) {
+            if (data.error) {
+              alert('エラー: ' + (data.message || data.error));
+              return;
+            }
+            slackCatNoteFollowup(data, wantedSlack);
+            closeCatNoteModal();
+            loadCatNotes();
+          })
+          .catch(function (e) {
+            if (e && e.message === 'http') return;
+            alert('保存に失敗しました');
+          });
         return;
       }
 
       fetch(API_BASE + '/cat-notes', {
         method: 'POST',
-        headers: apiHeaders(), cache: 'no-store',
+        headers: apiHeaders(),
+        cache: 'no-store',
         body: JSON.stringify({
           cat_id: catId,
           note: note,
           category: document.getElementById('cnCategory').value,
           pinned: document.getElementById('cnPinned').checked,
           notify_slack: wantedSlack,
-          note_image: payload.note_image,
-          note_image_name: payload.note_image_name,
-          slack_image: payload.slack_image,
-          slack_image_name: payload.slack_image_name,
+          note_images: noteImagesArr.length ? noteImagesArr : undefined,
         }),
-      }).then(function (r) { return r.json(); })
-      .then(function (data) {
-        if (data.error) { alert('エラー: ' + (data.message || data.error)); return; }
-        if (wantedSlack) slackCatNoteFollowup(data, true);
-        closeCatNoteModal();
-        loadCatNotes();
-      }).catch(function () {
-        alert('保存に失敗しました');
-      });
+      })
+        .then(function (r) {
+          return r.text().then(function (text) {
+            var data = {};
+            try {
+              data = text ? JSON.parse(text) : {};
+            } catch (e) {
+              throw new Error('bad_json');
+            }
+            if (!r.ok) {
+              alert('エラー: ' + (data.message || data.error || 'HTTP ' + r.status));
+              throw new Error('http');
+            }
+            return data;
+          });
+        })
+        .then(function (data) {
+          if (data.error) {
+            alert('エラー: ' + (data.message || data.error));
+            return;
+          }
+          slackCatNoteFollowup(data, wantedSlack);
+          closeCatNoteModal();
+          loadCatNotes();
+        })
+        .catch(function (e) {
+          if (e && e.message === 'http') return;
+          alert('保存に失敗しました');
+        });
     }
 
-    if (file) {
-      if (file.size > 10 * 1024 * 1024) {
-        alert('画像は10MB以下にしてください');
-        return;
-      }
-      catNoteReadFileAsDataURL(file).then(function (dataUrl) {
-        runSubmit(dataUrl, file.name || '');
-      }).catch(function () {
-        alert('画像の読み込みに失敗しました');
-      });
+    if (!filesArr.length) {
+      runSubmit([]);
       return;
     }
 
-    runSubmit(null, null);
+    Promise.all(filesArr.map(function (f) {
+      return catNoteReadFileAsDataURL(f).then(function (dataUrl) {
+        return { data: dataUrl, name: f.name || '' };
+      });
+    })).then(function (items) {
+      runSubmit(items);
+    }).catch(function () {
+      alert('ファイルの読み込みに失敗しました');
+    });
   };
 
   window.openInternalNoteModal = function () {
@@ -7912,18 +8833,24 @@ function closeCatDetailFoldSection(btn) {
     var btn = document.querySelector('[data-voice-for="' + targetInputId + '"]');
     if (btn) { btn.classList.add('recording'); btn.textContent = '⏹'; }
 
+    var ios = /iPad|iPhone|iPod/.test(navigator.userAgent) ||
+      (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+
     _inlineSR = new SR();
     _inlineSR.lang = 'ja-JP';
-    _inlineSR.continuous = false;
-    _inlineSR.interimResults = false;
+    _inlineSR.continuous = ios;
+    _inlineSR.interimResults = ios;
 
     _inlineSR.onresult = function (event) {
       var text = '';
-      for (var i = 0; i < event.results.length; i++) {
+      for (var i = event.resultIndex; i < event.results.length; i++) {
         if (event.results[i].isFinal) text += event.results[i][0].transcript;
       }
+      text = String(text || '').trim();
       if (text && _inlineTarget) {
         if (_inlineTarget.tagName === 'TEXTAREA') {
+          _inlineTarget.value = _inlineTarget.value ? _inlineTarget.value + ' ' + text : text;
+        } else if (ios) {
           _inlineTarget.value = _inlineTarget.value ? _inlineTarget.value + ' ' + text : text;
         } else {
           _inlineTarget.value = text;
@@ -7957,6 +8884,194 @@ function closeCatDetailFoldSection(btn) {
 
   window.stopInlineVoice = function () {
     if (_inlineSR) { try { _inlineSR.abort(); } catch (_) {} _inlineSR = null; }
+  };
+
+  // ── 飲水測定セクション ─────────────────────────────────────────────────────────
+
+  function loadWaterSection() {
+    waterMeasureArea = document.getElementById('waterMeasureArea') || waterMeasureArea;
+    waterSectionWrap = document.getElementById('waterSectionWrap') || waterSectionWrap;
+    if (!waterMeasureArea || !waterSectionWrap) return Promise.resolve();
+    var isOn = currentCatData && (currentCatData.water_tracking === 1 || currentCatData.water_tracking === true || String(currentCatData.water_tracking) === '1');
+    waterSectionWrap.style.display = isOn ? '' : 'none';
+    function afterWaterUi() {
+      if (typeof window.nyagiCdNavRefresh === 'function') window.nyagiCdNavRefresh();
+    }
+    if (!isOn) { waterMeasureArea.innerHTML = ''; afterWaterUi(); return Promise.resolve(); }
+    waterMeasureArea.innerHTML = '<div class="detail-section"><div class="loading" style="padding:16px;">読み込み中...</div></div>';
+    return fetch(API_BASE + '/health/water?cat_id=' + encodeURIComponent(catId) + '&days=14', { headers: apiHeaders(), cache: 'no-store' })
+      .then(function (r) { return r.json(); })
+      .then(function (data) { renderWaterSection(data.measurements || []); afterWaterUi(); })
+      .catch(function (e) { waterMeasureArea.innerHTML = '<div class="detail-section"><div class="empty-msg" style="color:#f87171;">飲水データの読み込みに失敗しました</div></div>'; afterWaterUi(); });
+  }
+
+  function waterStatusClass(s) {
+    if (!s) return '';
+    if (s === 'ほぼ飲んでいない') return 'ws-none';
+    if (s === '少し飲んだ') return 'ws-low';
+    if (s === '普通に飲んだ') return 'ws-normal';
+    if (s === '多飲異常') return 'ws-over';
+    return '';
+  }
+
+  function waterBarColor(s) {
+    if (s === 'ほぼ飲んでいない') return '#f87171';
+    if (s === '少し飲んだ') return '#eab308';
+    if (s === '普通に飲んだ') return '#22c55e';
+    if (s === '多飲異常') return '#ef4444';
+    return '#94a3b8';
+  }
+
+  function renderWaterSection(measurements) {
+    var today = todayJstYmd();
+    var yesterday = addDaysJstYmd(today, -1);
+    var todayRec = null;
+    var yesterdayRec = null;
+    var byDate = {};
+    for (var i = 0; i < measurements.length; i++) {
+      byDate[measurements[i].measurement_date] = measurements[i];
+      if (measurements[i].measurement_date === today) todayRec = measurements[i];
+      if (measurements[i].measurement_date === yesterday) yesterdayRec = measurements[i];
+    }
+
+    var html = '<div class="detail-section">';
+    html += '<div class="detail-title">🚰 飲水測定</div>';
+
+    // 状態表示
+    if (yesterdayRec && yesterdayRec.status) {
+      html += '<div style="margin-bottom:10px;">';
+      html += '<span class="water-status-badge ' + waterStatusClass(yesterdayRec.status) + '">' + escapeHtml(yesterdayRec.status) + '</span>';
+      html += ' <span style="font-size:12px;color:var(--text-dim);">昨日 ' + (yesterdayRec.total_intake_ml != null ? yesterdayRec.total_intake_ml + 'ml' : '') + '</span>';
+      if (yesterdayRec.intake_per_kg != null) html += ' <span style="font-size:11px;color:var(--text-dim);">(' + yesterdayRec.intake_per_kg + 'ml/kg)</span>';
+      html += '</div>';
+    } else if (yesterdayRec && yesterdayRec.set_weight_g != null && yesterdayRec.measure_weight_g == null) {
+      html += '<div style="margin-bottom:10px;padding:8px;background:rgba(250,204,21,0.12);border-radius:6px;font-size:12px;">⏳ 昨日のセットあり — 計測待ち</div>';
+    }
+
+    // 入力フォーム: 昨日の計測 + 今日のセット
+    html += '<div style="background:var(--surface);border-radius:8px;padding:10px 12px;margin-bottom:12px;">';
+
+    // 昨日の計測入力
+    if (yesterdayRec && yesterdayRec.set_weight_g != null && yesterdayRec.measure_weight_g == null) {
+      html += '<div style="font-size:12px;font-weight:700;margin-bottom:6px;">📏 昨日の残り水を計測</div>';
+      html += '<div class="water-input-group">';
+      html += '<div><div style="font-size:10px;color:var(--text-dim);">セット時</div><div style="font-size:13px;font-weight:600;">' + yesterdayRec.set_weight_g + 'g</div></div>';
+      html += '<div><div style="font-size:10px;color:var(--text-dim);">残り重量(g)</div><input type="number" id="waterMeasureInput" class="form-input" step="1" min="0" placeholder="0"></div>';
+      html += '<button class="btn btn-primary" style="font-size:12px;padding:6px 12px;" onclick="submitWaterMeasure(' + yesterdayRec.id + ')">計測</button>';
+      html += '</div>';
+    }
+
+    // 今日のセット
+    var setMarginTop = (yesterdayRec && yesterdayRec.set_weight_g != null && yesterdayRec.measure_weight_g == null) ? 'margin-top:12px;' : '';
+    html += '<div style="font-size:12px;font-weight:700;margin-bottom:6px;' + setMarginTop + '">🫗 今日の器+水をセット</div>';
+    if (todayRec && todayRec.set_weight_g != null) {
+      html += '<div style="font-size:12px;color:var(--text-dim);">✅ セット済み: <b>' + todayRec.set_weight_g + 'g</b>';
+      html += ' <button class="btn-outline" style="font-size:10px;padding:2px 6px;" onclick="deleteWaterRecord(' + todayRec.id + ')">取消</button></div>';
+    } else {
+      html += '<div class="water-input-group">';
+      html += '<div><div style="font-size:10px;color:var(--text-dim);">器+水の重量(g)</div><input type="number" id="waterSetInput" class="form-input" step="1" min="0" placeholder="0"></div>';
+      html += '<button class="btn btn-primary" style="font-size:12px;padding:6px 12px;" onclick="submitWaterSet()">セット</button>';
+      html += '</div>';
+    }
+    html += '</div>';
+
+    // 直近14日の履歴
+    html += '<div style="font-size:12px;font-weight:700;margin-bottom:8px;">📊 直近14日間</div>';
+    var days = buildRecentDays(14);
+    var maxMl = 1;
+    for (var di = 0; di < days.length; di++) {
+      var rec = byDate[days[di]];
+      if (rec && rec.total_intake_ml != null && rec.total_intake_ml > maxMl) maxMl = rec.total_intake_ml;
+    }
+
+    for (var di = 0; di < days.length; di++) {
+      var day = days[di];
+      var rec = byDate[day];
+      var dayLabel = day.slice(5).replace('-', '/');
+      html += '<div class="water-history-row">';
+      html += '<span class="water-history-date">' + escapeHtml(dayLabel) + '</span>';
+      if (rec && rec.total_intake_ml != null) {
+        var pct = Math.min(100, Math.round(rec.total_intake_ml / maxMl * 100));
+        html += '<div class="water-history-bar"><div class="water-history-fill" style="width:' + pct + '%;background:' + waterBarColor(rec.status) + ';"></div></div>';
+        html += '<span class="water-history-val">' + rec.total_intake_ml + 'ml</span>';
+        html += '<span class="water-history-status"><span class="water-status-badge ' + waterStatusClass(rec.status) + '" style="font-size:10px;padding:1px 5px;">' + escapeHtml(rec.status || '—') + '</span></span>';
+      } else if (rec && rec.set_weight_g != null) {
+        html += '<div class="water-history-bar"></div>';
+        html += '<span class="water-history-val" style="color:var(--text-dim);">⏳</span>';
+        html += '<span class="water-history-status" style="font-size:10px;color:var(--text-dim);">計測待ち</span>';
+      } else {
+        html += '<div class="water-history-bar"></div>';
+        html += '<span class="water-history-val" style="color:var(--text-dim);">—</span>';
+        html += '<span class="water-history-status" style="font-size:10px;color:var(--text-dim);">未記録</span>';
+      }
+      html += '</div>';
+    }
+
+    html += '</div>';
+    waterMeasureArea.innerHTML = html;
+  }
+
+  window.submitWaterSet = function () {
+    var inp = document.getElementById('waterSetInput');
+    if (!inp || !inp.value) { alert('重量を入力してください'); return; }
+    var g = parseFloat(inp.value);
+    if (isNaN(g) || g <= 0) { alert('正の数値を入力してください'); return; }
+    fetch(API_BASE + '/health/water', {
+      method: 'POST', headers: apiHeaders(),
+      body: JSON.stringify({ cat_id: catId, set_weight_g: g }),
+    }).then(function (r) { return r.json(); }).then(function (d) {
+      if (d.error) { alert('エラー: ' + (d.message || d.error)); return; }
+      loadWaterSection();
+    }).catch(function () { alert('保存に失敗しました'); });
+  };
+
+  window.submitWaterMeasure = function (id) {
+    var inp = document.getElementById('waterMeasureInput');
+    if (!inp || !inp.value) { alert('残り重量を入力してください'); return; }
+    var g = parseFloat(inp.value);
+    if (isNaN(g) || g < 0) { alert('0以上の数値を入力してください'); return; }
+    fetch(API_BASE + '/health/water/' + id, {
+      method: 'PUT', headers: apiHeaders(),
+      body: JSON.stringify({ measure_weight_g: g }),
+    }).then(function (r) { return r.json(); }).then(function (d) {
+      if (d.error) { alert('エラー: ' + (d.message || d.error)); return; }
+      loadWaterSection();
+    }).catch(function () { alert('保存に失敗しました'); });
+  };
+
+  window.toggleWaterTracking = function (on) {
+    fetch(API_BASE + '/cats/' + encodeURIComponent(catId), {
+      method: 'PUT', headers: apiHeaders(),
+      body: JSON.stringify({ water_tracking: on ? 1 : 0 }),
+    }).then(function (r) { return r.json(); }).then(function (d) {
+      if (d.error) { alert('エラー: ' + (d.message || d.error)); return; }
+      if (currentCatData) currentCatData.water_tracking = on ? 1 : 0;
+      var lbl = document.getElementById('waterTrackingToggle');
+      if (lbl && lbl.parentElement) {
+        var sp = lbl.parentElement.querySelector('span');
+        if (sp) sp.textContent = on ? 'ON' : 'OFF';
+      }
+      loadWaterSection().then(function () {
+        if (on && waterSectionWrap) {
+          waterSectionWrap.classList.remove('cat-detail-fold--collapsed');
+          var tb = waterSectionWrap.querySelector('.cat-detail-fold__toggle');
+          if (tb) tb.setAttribute('aria-expanded', 'true');
+          setTimeout(function () {
+            waterSectionWrap.scrollIntoView({ behavior: 'smooth', block: 'center' });
+          }, 150);
+        }
+      });
+    }).catch(function () { alert('更新に失敗しました'); });
+  };
+
+  window.deleteWaterRecord = function (id) {
+    if (!confirm('この飲水記録を取り消しますか？')) return;
+    fetch(API_BASE + '/health/water/' + id, {
+      method: 'DELETE', headers: apiHeaders(),
+    }).then(function (r) { return r.json(); }).then(function (d) {
+      if (d.error) { alert('エラー: ' + (d.message || d.error)); return; }
+      loadWaterSection();
+    }).catch(function () { alert('削除に失敗しました'); });
   };
 
   // ── 投薬プリセット ─────────────────────────────────────────────────────────────
@@ -8489,22 +9604,24 @@ function closeCatDetailFoldSection(btn) {
 
   // 猫詳細「猫ナビ」: 一覧（cats-overview）と同じ左下🐾・同系パレット。タブ→項目ボタン→折りたたみを開いてスクロール。一覧へはパレット内。
   (function buildCatDetailCatNav() {
-    var TAB_LABELS = ['\u6982\u8981', '\u65E5\u3005\u306E\u8A18\u9332', '\u533B\u7642\u30FB\u4E88\u5B9A'];
+    /** タブ順: 日々の記録 → 概要 → 医療・予定（一覧と同じ中身は tab 番号で紐づく） */
+    var TAB_LABELS = ['\u65E5\u3005\u306E\u8A18\u9332', '\u6982\u8981', '\u533B\u7642\u30FB\u4E88\u5B9A'];
     var SECTIONS = [
-      { id: 'catHeaderArea', label: '\uD83D\uDD1D \u30D8\u30C3\u30C0\u30FC', tab: 0 },
-      { id: 'scoreCardArea', label: '\uD83C\uDFE5 \u5065\u5EB7\u30B9\u30B3\u30A2', tab: 0 },
-      { id: 'basicInfoArea', label: '\uD83D\uDCCB \u57FA\u672C\u60C5\u5831', tab: 0 },
-      { id: 'intakeInfoArea', label: '\uD83D\uDCE5 \u5F15\u304D\u53D7\u3051', tab: 0 },
-      { id: 'adoptionInfoArea', label: '\uD83C\uDFE0 \u8B72\u6E21\u95A2\u9023', tab: 0 },
-      { id: 'catNotesArea', label: '\uD83D\uDCDD \u6CE8\u610F\u4E8B\u9805', tab: 0 },
-      { id: 'catTasksArea', label: '\u2705 \u30BF\u30B9\u30AF', tab: 0 },
-      { id: 'healthRecordsArea', label: '\u2696\uFE0F \u4F53\u91CD\u8A18\u9332', tab: 1 },
-      { id: 'weightChartArea', label: '\u2696\uFE0F \u4F53\u91CD\u63A8\u79FB', tab: 1 },
-      { id: 'calorieArea', label: '\uD83D\uDD25 \u30AB\u30ED\u30EA\u30FC', tab: 1 },
-      { id: 'feedingArea', label: '\uD83C\uDF7D \u7D66\u990A\u30D7\u30E9\u30F3', tab: 1 },
-      { id: 'careArea', label: '\uD83E\uDDFE \u30B1\u30A2', tab: 1 },
-      { id: 'stoolArea', label: '\uD83D\uDEBD \u6392\u4FBF', tab: 1 },
-      { id: 'urineArea', label: '\uD83D\uDCA7 \u6392\u5C3F', tab: 1 },
+      { id: 'catHeaderArea', label: '\uD83D\uDD1D \u30D8\u30C3\u30C0\u30FC', tab: 1 },
+      { id: 'scoreCardArea', label: '\uD83C\uDFE5 \u5065\u5EB7\u30B9\u30B3\u30A2', tab: 1 },
+      { id: 'basicInfoArea', label: '\uD83D\uDCCB \u57FA\u672C\u60C5\u5831', tab: 1 },
+      { id: 'intakeInfoArea', label: '\uD83D\uDCE5 \u5F15\u304D\u53D7\u3051', tab: 1 },
+      { id: 'adoptionInfoArea', label: '\uD83C\uDFE0 \u8B72\u6E21\u95A2\u9023', tab: 1 },
+      { id: 'catNotesArea', label: '\uD83D\uDCDD \u6CE8\u610F\u4E8B\u9805', tab: 1 },
+      { id: 'catTasksArea', label: '\u2705 \u30BF\u30B9\u30AF', tab: 1 },
+      { id: 'healthRecordsArea', label: '\u2696\uFE0F \u4F53\u91CD\u8A18\u9332', tab: 0 },
+      { id: 'weightChartArea', label: '\u2696\uFE0F \u4F53\u91CD\u63A8\u79FB', tab: 0 },
+      { id: 'calorieArea', label: '\uD83D\uDD25 \u30AB\u30ED\u30EA\u30FC', tab: 0 },
+      { id: 'feedingArea', label: '\uD83C\uDF7D \u7D66\u990A\u30D7\u30E9\u30F3', tab: 0 },
+      { id: 'careArea', label: '\uD83E\uDDFE \u30B1\u30A2', tab: 0 },
+      { id: 'stoolArea', label: '\uD83D\uDEBD \u6392\u4FBF', tab: 0 },
+      { id: 'urineArea', label: '\uD83D\uDCA7 \u6392\u5C3F', tab: 0 },
+      { id: 'waterMeasureArea', label: '\uD83D\uDEB0 \u98F2\u6C34\u6E2C\u5B9A', tab: 0 },
       { id: 'medicationScheduleArea', label: '\uD83D\uDC8A \u304A\u85AC', tab: 2 },
       { id: 'vetScheduleArea', label: '\uD83D\uDCC5 \u75C5\u9662\u4E88\u5B9A', tab: 2 },
       { id: 'clinicRecordsArea', label: '\uD83C\uDFE5 \u75C5\u9662\u8A18\u9332', tab: 2 },
@@ -8616,7 +9733,15 @@ function closeCatDetailFoldSection(btn) {
       for (var i = 0; i < SECTIONS.length; i++) {
         var s = SECTIONS[i];
         if (s.tab !== tabIdx) continue;
-        if (!document.getElementById(s.id)) continue;
+        var navEl = document.getElementById(s.id);
+        if (!navEl) continue;
+        var navWrap = navEl.closest('.cat-detail-fold');
+        if (navWrap) {
+          if (navWrap.style.display === 'none') continue;
+          try {
+            if (window.getComputedStyle(navWrap).display === 'none') continue;
+          } catch (_) {}
+        }
         h += '<button type="button" class="cat-nav-item" data-cd-nav-target="' + s.id + '">' + s.label + '</button>';
       }
       listEl.innerHTML = h || '<div class="dim" style="color:var(--text-dim);">\u3053\u306E\u30BF\u30D6\u306B\u9805\u76EE\u306F\u3042\u308A\u307E\u305B\u3093</div>';
@@ -8630,6 +9755,8 @@ function closeCatDetailFoldSection(btn) {
     }
 
     function cdNavOpen() {
+      /** 開くたび先頭タブ（日々の記録）を選ぶ — 前回の概要/医療は保持しない */
+      _cdNavActiveTab = 0;
       cdNavInjectStyles();
       cdNavPopulateTabs();
       cdNavPopulateList(_cdNavActiveTab);
@@ -8699,6 +9826,14 @@ function closeCatDetailFoldSection(btn) {
         }
       }
     });
+
+    window.nyagiCdNavRefresh = function () {
+      try {
+        if (_cdNavPalette && _cdNavPalette.classList.contains('open')) {
+          cdNavPopulateList(_cdNavActiveTab);
+        }
+      } catch (_) {}
+    };
 
     document.body.appendChild(_cdNavFab);
     document.body.appendChild(_cdNavBackdrop);

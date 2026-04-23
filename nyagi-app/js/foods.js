@@ -15,6 +15,7 @@ var currentFilter = 'all';
 var currentSpeciesFilter = 'all';
 var currentListTextFilter = '';
 var currentPreviewUrl = '';
+var _editFoodId = null;
 
 // ── 認証 ──────────────────────────────────────────────────────────────────────
 
@@ -562,6 +563,17 @@ function showDetail(foodId) {
     '</div>';
 
   document.getElementById('modalBody').innerHTML = html;
+
+  // 編集ボタン・無効化ボタンをヘッダに配置
+  var headerActions = document.getElementById('modalHeaderActions');
+  if (headerActions) {
+    var editBtnHtml = '<button class="btn-edit-food" onclick="openFoodEditForm(\'' + escAttr(foodId) + '\')">✏️ 編集</button>';
+    var activeBtnHtml = food.active
+      ? '<button class="btn-deactivate" onclick="toggleFoodActive(\'' + escAttr(foodId) + '\', false)">無効化</button>'
+      : '<button class="btn-deactivate" style="background:rgba(74,222,128,0.15);color:#4ade80;" onclick="toggleFoodActive(\'' + escAttr(foodId) + '\', true)">有効化</button>';
+    headerActions.innerHTML = editBtnHtml + ' ' + activeBtnHtml;
+  }
+
   document.getElementById('detailModal').classList.add('open');
 
   _detailFoodId = foodId;
@@ -887,10 +899,236 @@ function removeFoodDictEntry(foodId, variant, variantType) {
     });
 }
 
+// ── フード編集フォーム ─────────────────────────────────────────────────────────
+
+function openFoodEditForm(foodId) {
+  var food = null;
+  for (var i = 0; i < allFoods.length; i++) {
+    if (allFoods[i].id === foodId) { food = allFoods[i]; break; }
+  }
+  if (!food) return;
+  _editFoodId = foodId;
+
+  var ftCatMap = { therapeutic: '療法食', complete: '総合栄養食', supplement: '一般食', treat: 'おやつ' };
+  var curCat = ftCatMap[food.food_type] || food.category || '総合栄養食';
+
+  function fv(v) { return v != null ? escAttr(String(v)) : ''; }
+  function selOpt(opts, cur) {
+    return opts.map(function(o) {
+      return '<option value="' + o[0] + '"' + (o[0] === cur ? ' selected' : '') + '>' + o[1] + '</option>';
+    }).join('');
+  }
+
+  var catOpts = selOpt([['療法食','療法食'],['総合栄養食','総合栄養食'],['一般食','一般食'],['おやつ','おやつ']], curCat);
+  var formOpts = selOpt([['dry','ドライ'],['wet','ウェット'],['semi_moist','セミモイスト'],['liquid','リキッド'],['treat','トリーツ']], food.form || 'dry');
+  var spOpts = selOpt([['cat','🐱 猫用'],['dog','🐶 犬用']], food.species || 'cat');
+
+  var html =
+    '<div class="food-edit-form">' +
+    '<div class="food-edit-row">' +
+      '<div class="food-edit-field">' +
+        '<div class="food-edit-label">ブランド</div>' +
+        '<input type="text" id="eBrand" class="food-edit-input" value="' + fv(food.brand) + '" placeholder="ロイヤルカナン">' +
+      '</div>' +
+      '<div class="food-edit-field">' +
+        '<div class="food-edit-label">製品名 *</div>' +
+        '<input type="text" id="eName" class="food-edit-input required" value="' + fv(food.name) + '">' +
+      '</div>' +
+    '</div>' +
+    '<div class="food-edit-row">' +
+      '<div class="food-edit-field">' +
+        '<div class="food-edit-label">カテゴリ *</div>' +
+        '<select id="eCategory" class="food-edit-select">' + catOpts + '</select>' +
+      '</div>' +
+      '<div class="food-edit-field">' +
+        '<div class="food-edit-label">形態</div>' +
+        '<select id="eForm" class="food-edit-select">' + formOpts + '</select>' +
+      '</div>' +
+      '<div class="food-edit-field">' +
+        '<div class="food-edit-label">対象</div>' +
+        '<select id="eSpecies" class="food-edit-select">' + spOpts + '</select>' +
+      '</div>' +
+    '</div>' +
+    '<div class="food-edit-row">' +
+      '<div class="food-edit-field">' +
+        '<div class="food-edit-label">kcal/100g *</div>' +
+        '<input type="number" id="eKcal" class="food-edit-input required" value="' + fv(food.kcal_per_100g) + '" step="0.1">' +
+      '</div>' +
+      '<div class="food-edit-field">' +
+        '<div class="food-edit-label">たんぱく質 %</div>' +
+        '<input type="number" id="eProtein" class="food-edit-input" value="' + fv(food.protein_pct) + '" step="0.1">' +
+      '</div>' +
+      '<div class="food-edit-field">' +
+        '<div class="food-edit-label">脂質 %</div>' +
+        '<input type="number" id="eFat" class="food-edit-input" value="' + fv(food.fat_pct) + '" step="0.1">' +
+      '</div>' +
+    '</div>' +
+    '<div class="food-edit-row">' +
+      '<div class="food-edit-field">' +
+        '<div class="food-edit-label">粗繊維 %</div>' +
+        '<input type="number" id="eFiber" class="food-edit-input" value="' + fv(food.fiber_pct) + '" step="0.1">' +
+      '</div>' +
+      '<div class="food-edit-field">' +
+        '<div class="food-edit-label">水分 %</div>' +
+        '<input type="number" id="eWater" class="food-edit-input" value="' + fv(food.water_pct) + '" step="0.1">' +
+      '</div>' +
+      '<div class="food-edit-field">' +
+        '<div class="food-edit-label">1食(g)</div>' +
+        '<input type="number" id="eServing" class="food-edit-input" value="' + fv(food.serving_size_g) + '" step="0.1">' +
+      '</div>' +
+    '</div>' +
+    '<div class="food-edit-row">' +
+      '<div class="food-edit-field">' +
+        '<div class="food-edit-label">リン (mg/100g)</div>' +
+        '<input type="number" id="ePhosphorus" class="food-edit-input" value="' + fv(food.phosphorus_mg_per_100g) + '" step="0.1">' +
+      '</div>' +
+      '<div class="food-edit-field">' +
+        '<div class="food-edit-label">ナトリウム (mg/100g)</div>' +
+        '<input type="number" id="eSodium" class="food-edit-input" value="' + fv(food.sodium_mg_per_100g) + '" step="0.1">' +
+      '</div>' +
+    '</div>' +
+    '<div class="food-edit-row">' +
+      '<div class="food-edit-field">' +
+        '<div class="food-edit-label">用途</div>' +
+        '<input type="text" id="ePurpose" class="food-edit-input" value="' + fv(food.purpose) + '" placeholder="下部尿路疾患">' +
+      '</div>' +
+      '<div class="food-edit-field">' +
+        '<div class="food-edit-label">フレーバー</div>' +
+        '<input type="text" id="eFlavor" class="food-edit-input" value="' + fv(food.flavor) + '" placeholder="チキン">' +
+      '</div>' +
+    '</div>' +
+    '<div class="food-edit-row">' +
+      '<div class="food-edit-field full">' +
+        '<div class="food-edit-label">商品URL</div>' +
+        '<input type="url" id="eProductUrl" class="food-edit-input" value="' + fv(food.product_url) + '" placeholder="https://">' +
+      '</div>' +
+    '</div>' +
+    '<div class="food-edit-row">' +
+      '<div class="food-edit-field full">' +
+        '<div class="food-edit-label">メモ</div>' +
+        '<input type="text" id="eNotes" class="food-edit-input" value="' + fv(food.notes) + '">' +
+      '</div>' +
+    '</div>' +
+    '<div class="food-edit-actions">' +
+      '<button class="btn-cancel-edit" onclick="cancelFoodEdit()">キャンセル</button>' +
+      '<button class="btn-save-food" id="eSaveBtn" onclick="submitFoodEdit()">保存</button>' +
+    '</div>' +
+    '</div>';
+
+  document.getElementById('modalTitle').textContent = '✏️ ' + food.name;
+  document.getElementById('modalHeaderActions').innerHTML = '';
+  document.getElementById('modalBody').innerHTML = html;
+}
+
+function cancelFoodEdit() {
+  _editFoodId = null;
+  if (_detailFoodId) showDetail(_detailFoodId);
+}
+
+function eFloatOrNull(id) {
+  var el = document.getElementById(id);
+  if (!el || el.value === '') return null;
+  var v = parseFloat(el.value);
+  return isNaN(v) ? null : v;
+}
+
+function submitFoodEdit() {
+  var foodId = _editFoodId;
+  if (!foodId) return;
+
+  var nameEl = document.getElementById('eName');
+  var kcalEl = document.getElementById('eKcal');
+  var name = nameEl ? nameEl.value.trim() : '';
+  var kcal = kcalEl ? parseFloat(kcalEl.value) : NaN;
+
+  if (!name) { showToast('製品名は必須です', 'warning'); return; }
+  if (isNaN(kcal) || kcal <= 0) { showToast('カロリーは必須です', 'warning'); return; }
+
+  var catVal = document.getElementById('eCategory').value;
+  var ftMap = { '療法食': 'therapeutic', '総合栄養食': 'complete', '一般食': 'supplement', 'おやつ': 'treat' };
+
+  var body = {
+    name: name,
+    brand: (document.getElementById('eBrand').value.trim()) || null,
+    category: catVal,
+    food_type: ftMap[catVal] || 'complete',
+    form: document.getElementById('eForm').value,
+    species: document.getElementById('eSpecies').value,
+    kcal_per_100g: kcal,
+    protein_pct: eFloatOrNull('eProtein'),
+    fat_pct: eFloatOrNull('eFat'),
+    fiber_pct: eFloatOrNull('eFiber'),
+    water_pct: eFloatOrNull('eWater'),
+    serving_size_g: eFloatOrNull('eServing'),
+    phosphorus_mg_per_100g: eFloatOrNull('ePhosphorus'),
+    sodium_mg_per_100g: eFloatOrNull('eSodium'),
+    purpose: document.getElementById('ePurpose').value.trim() || null,
+    flavor: document.getElementById('eFlavor').value.trim() || null,
+    product_url: document.getElementById('eProductUrl').value.trim() || null,
+    notes: document.getElementById('eNotes').value.trim() || null,
+  };
+
+  var saveBtn = document.getElementById('eSaveBtn');
+  if (saveBtn) { saveBtn.disabled = true; saveBtn.textContent = '保存中...'; }
+
+  fetch(API_BASE + '/foods/' + encodeURIComponent(foodId), {
+    method: 'PUT',
+    headers: apiHeaders(),
+    cache: 'no-store',
+    body: JSON.stringify(body),
+  })
+    .then(function (r) { return r.json(); })
+    .then(function (data) {
+      if (saveBtn) { saveBtn.disabled = false; saveBtn.textContent = '保存'; }
+      if (data.error) {
+        showToast(data.message || data.error || '保存失敗', 'error');
+        return;
+      }
+      // allFoods を更新
+      for (var i = 0; i < allFoods.length; i++) {
+        if (allFoods[i].id === foodId) { allFoods[i] = data.food; break; }
+      }
+      renderFoodList();
+      _editFoodId = null;
+      _detailFoodId = foodId;
+      showDetail(foodId);
+      showToast('保存しました', 'success');
+    })
+    .catch(function () {
+      if (saveBtn) { saveBtn.disabled = false; saveBtn.textContent = '保存'; }
+      showToast('通信エラー', 'error');
+    });
+}
+
+function toggleFoodActive(foodId, activate) {
+  var label = activate ? '有効化' : '無効化';
+  if (!confirm(label + 'しますか？')) return;
+
+  fetch(API_BASE + '/foods/' + encodeURIComponent(foodId), {
+    method: 'PUT',
+    headers: apiHeaders(),
+    cache: 'no-store',
+    body: JSON.stringify({ active: activate ? 1 : 0 }),
+  })
+    .then(function (r) { return r.json(); })
+    .then(function (data) {
+      if (data.error) { showToast(data.message || data.error || '失敗', 'error'); return; }
+      for (var i = 0; i < allFoods.length; i++) {
+        if (allFoods[i].id === foodId) { allFoods[i] = data.food; break; }
+      }
+      renderFoodList();
+      _detailFoodId = foodId;
+      showDetail(foodId);
+      showToast(label + 'しました', 'success');
+    })
+    .catch(function () { showToast('通信エラー', 'error'); });
+}
+
 function closeModal() {
   document.getElementById('detailModal').classList.remove('open');
   _detailFoodId = null;
   _foodDictEditCtx = null;
+  _editFoodId = null;
 }
 
 // ── トースト ───────────────────────────────────────────────────────────────────

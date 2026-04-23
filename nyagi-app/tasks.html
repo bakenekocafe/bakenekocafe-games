@@ -49,6 +49,44 @@
       margin-bottom: 12px;
       flex-wrap: wrap;
     }
+    /* まとめて操作モード */
+    body.bulk-mode #btnBulkMode {
+      background: #3b82f6 !important;
+      color: #fff !important;
+      border-color: #3b82f6 !important;
+      font-weight: 700;
+    }
+    /* 選択されたタスク行のハイライト */
+    .task-item.bulk-selected {
+      background: rgba(59,130,246,0.12) !important;
+      border-color: rgba(59,130,246,0.5) !important;
+    }
+    /* 一括モード時のチェックボックス */
+    .bulk-check {
+      width: 22px;
+      height: 22px;
+      border-radius: 4px;
+      border: 2px solid rgba(255,255,255,0.3);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 14px;
+      cursor: pointer;
+      flex-shrink: 0;
+      transition: background 0.15s, border-color 0.15s;
+    }
+    .bulk-check.checked {
+      background: #3b82f6;
+      border-color: #3b82f6;
+    }
+    /* 一括モード中はアクションボタンを非表示（completed/skipped は関係なし） */
+    body.bulk-mode .task-item.pending .task-actions-row {
+      display: none;
+    }
+    /* 下部バーの余白（タスク一覧が隠れないように） */
+    body.bulk-mode #taskListArea {
+      padding-bottom: 72px;
+    }
     .filter-select, .filter-date {
       flex: 1;
       min-width: 0;
@@ -573,9 +611,11 @@
         <a href="dashboard.html">ダッシュボード</a>
         <a href="cats.html">猫一覧</a>
         <a href="tasks.html" class="nav-current">タスク</a>
+        <a href="bulletin.html">掲示板</a>
+        <a href="inquiries.html">📮 問い合わせ</a>
         <a href="foods.html">フード</a>
         <a href="medicines.html">薬</a>
-        <a href="manual.html">📖 マニュアル</a>
+        <a href="manual.html?v=235">📖 マニュアル</a>
       </nav>
     </div>
   </div>
@@ -626,6 +666,7 @@
           <option value="skipped">スキップ</option>
         </select>
         <button class="filter-btn" onclick="loadTasks()">更新</button>
+        <button class="filter-btn" id="btnBulkMode" onclick="toggleBulkMode()" style="background:var(--surface);border:1px solid rgba(255,255,255,0.15);color:var(--text);white-space:nowrap;">まとめて操作</button>
       </div>
       <div id="progressArea"></div>
       <div id="taskListArea"><div class="loading"><span class="spinner"></span> 読み込み中...</div></div>
@@ -749,9 +790,122 @@
         <label class="form-label">メモ（任意）</label>
         <textarea id="ntNote" class="form-textarea" placeholder="詳細を記入..."></textarea>
       </div>
+      <div style="display:flex;align-items:center;gap:8px;margin:0 0 12px;padding:8px 12px;background:rgba(74,108,247,0.1);border-radius:8px;border:1px solid rgba(74,108,247,0.3);">
+        <input type="checkbox" id="ntSendSlack" style="width:16px;height:16px;cursor:pointer;flex-shrink:0;">
+        <label for="ntSendSlack" style="font-size:12px;color:var(--text-dim);cursor:pointer;line-height:1.4;">📨 保存後にSlackへ共有する</label>
+      </div>
       <div class="modal-actions">
         <button class="btn btn-outline" onclick="closeNewTaskModal()">キャンセル</button>
         <button class="btn btn-primary" onclick="submitNewTask()">追加</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- 連続スキップ日数の確認（閾値以上でスキップ理由の前に表示） -->
+  <!-- まとめて操作: 下部固定アクションバー -->
+  <div id="bulkActionBar" style="display:none;position:fixed;bottom:0;left:0;right:0;z-index:500;background:var(--bg);border-top:2px solid #3b82f6;padding:10px 16px;padding-bottom:max(10px,env(safe-area-inset-bottom,0px));">
+    <div style="max-width:540px;margin:0 auto;display:flex;align-items:center;gap:10px;">
+      <span id="bulkCountLabel" style="flex:1;font-size:13px;font-weight:700;color:#3b82f6;white-space:nowrap;"></span>
+      <button type="button" class="btn btn-outline" id="btnBulkSelectAll" style="font-size:12px;padding:6px 10px;white-space:nowrap;">全選択</button>
+      <button type="button" class="btn btn-primary" id="btnBulkDone" style="font-size:13px;padding:8px 14px;white-space:nowrap;">✅ 完了</button>
+      <button type="button" class="btn btn-outline" id="btnBulkSkip" style="font-size:13px;padding:8px 14px;white-space:nowrap;border-color:#facc15;color:#facc15;">⏭ スキップ</button>
+    </div>
+  </div>
+
+  <!-- まとめてスキップ: 理由入力モーダル -->
+  <div id="bulkSkipModal" class="modal-overlay">
+    <div class="modal-box">
+      <div class="modal-title">⏭ まとめてスキップ</div>
+      <p id="bulkSkipCountText" style="font-size:13px;color:var(--text-dim);margin:-8px 0 14px;"></p>
+      <div class="skip-reason-chips" style="margin-bottom:10px;">
+        <div class="skip-chip" onclick="bulkSelectSkipChip(this)">店休日</div>
+        <div class="skip-chip" onclick="bulkSelectSkipChip(this)">猫が嫌がった</div>
+        <div class="skip-chip" onclick="bulkSelectSkipChip(this)">体調不良で延期</div>
+        <div class="skip-chip" onclick="bulkSelectSkipChip(this)">在庫切れ</div>
+        <div class="skip-chip" onclick="bulkSelectSkipChip(this)">不要と判断</div>
+        <div class="skip-chip" onclick="bulkSelectSkipChip(this)">時間切れ</div>
+      </div>
+      <div class="form-group">
+        <label class="form-label">理由（任意）</label>
+        <input type="text" id="bulkSkipReasonText" class="form-input" placeholder="その他の理由...">
+      </div>
+      <div class="modal-actions">
+        <button type="button" class="btn btn-outline" onclick="closeBulkSkipModal()">キャンセル</button>
+        <button type="button" class="btn btn-primary" id="btnBulkSkipSubmit">スキップする</button>
+      </div>
+    </div>
+  </div>
+
+  <div id="skipStreakGuardModal" class="modal-overlay">
+    <div class="modal-box">
+      <div class="modal-title">スキップの確認</div>
+      <input type="hidden" id="skipStreakGuardTaskId" value="">
+      <input type="hidden" id="skipStreakGuardCatId" value="">
+      <input type="hidden" id="skipStreakGuardMorningUrine" value="">
+      <input type="hidden" id="skipStreakGuardHallMed" value="">
+      <input type="hidden" id="skipStreakGuardEveningMed" value="">
+      <input type="hidden" id="skipStreakGuardFeeding" value="">
+      <input type="hidden" id="skipStreakGuardEveningFeed" value="">
+      <input type="hidden" id="skipStreakGuardWaterMeas" value="">
+      <p id="skipStreakGuardMsg" style="font-size:14px;line-height:1.55;margin:0 0 16px;color:var(--text);"></p>
+      <div class="modal-actions">
+        <button type="button" class="btn btn-outline" onclick="closeSkipStreakGuardModal()">キャンセル</button>
+        <button type="button" class="btn btn-primary" onclick="confirmSkipStreakAndOpenReason()">理由を入力してスキップ</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- 朝投薬ガード：未完了アラートモーダル（iOS Safari で alert() が抑制される対策） -->
+  <div id="morningMedGuardModal" class="modal-overlay">
+    <div class="modal-box">
+      <div class="modal-title" style="color:#f87171;">⛔ 朝の投薬が未完了です</div>
+      <p id="morningMedGuardMsg" style="font-size:13px;line-height:1.65;margin:0 0 12px;white-space:pre-wrap;word-break:break-all;color:var(--text);"></p>
+      <div class="modal-actions">
+        <button type="button" class="btn btn-primary" onclick="closeMorningMedGuardModal()">閉じる（投薬記録に戻る）</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- 朝ごはんガード：未記録アラートモーダル -->
+  <div id="morningFeedingGuardModal" class="modal-overlay">
+    <div class="modal-box">
+      <div class="modal-title" style="color:#f87171;">⛔ 朝ごはんが未記録の猫がいます</div>
+      <p id="morningFeedingGuardMsg" style="font-size:13px;line-height:1.65;margin:0 0 12px;white-space:pre-wrap;word-break:break-all;color:var(--text);"></p>
+      <div class="modal-actions">
+        <button type="button" class="btn btn-primary" onclick="closeMorningFeedingGuardModal()">閉じる（給餌記録に戻る）</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- 夜ごはんガード：未記録アラートモーダル -->
+  <div id="eveningFeedingGuardModal" class="modal-overlay">
+    <div class="modal-box">
+      <div class="modal-title" style="color:#f87171;">⛔ 夜ごはんが未記録の猫がいます</div>
+      <p id="eveningFeedingGuardMsg" style="font-size:13px;line-height:1.65;margin:0 0 12px;white-space:pre-wrap;word-break:break-all;color:var(--text);"></p>
+      <div class="modal-actions">
+        <button type="button" class="btn btn-primary" onclick="closeEveningFeedingGuardModal()">閉じる（給餌記録に戻る）</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- 夜投薬ガード：未完了アラートモーダル -->
+  <div id="eveningMedGuardModal" class="modal-overlay">
+    <div class="modal-box">
+      <div class="modal-title" style="color:#f87171;">⛔ 夜の投薬が未完了です</div>
+      <p id="eveningMedGuardMsg" style="font-size:13px;line-height:1.65;margin:0 0 12px;white-space:pre-wrap;word-break:break-all;color:var(--text);"></p>
+      <div class="modal-actions">
+        <button type="button" class="btn btn-primary" onclick="closeEveningMedGuardModal()">閉じる（投薬記録に戻る）</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- 飲水測定（水交換）ガード：セット・計測未完了アラートモーダル -->
+  <div id="waterMeasurementGuardModal" class="modal-overlay">
+    <div class="modal-box">
+      <div class="modal-title" style="color:#f87171;">⛔ 飲水測定（セット・計測）が未完了です</div>
+      <p id="waterMeasurementGuardMsg" style="font-size:13px;line-height:1.65;margin:0 0 12px;white-space:pre-wrap;word-break:break-all;color:var(--text);"></p>
+      <div class="modal-actions">
+        <button type="button" class="btn btn-primary" onclick="closeWaterMeasurementGuardModal()">閉じる（猫一覧に戻る）</button>
       </div>
     </div>
   </div>
@@ -776,6 +930,47 @@
       <div class="modal-actions">
         <button class="btn btn-outline" onclick="closeSkipModal()">キャンセル</button>
         <button class="btn btn-primary" onclick="submitSkip()">スキップ</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- タスク編集モーダル -->
+  <div id="taskEditModal" class="modal-overlay">
+    <div class="modal-box">
+      <div class="modal-title">✏️ タスクを編集</div>
+      <input type="hidden" id="teTaskId" value="">
+      <div class="form-group">
+        <label class="form-label">タイトル *</label>
+        <input type="text" id="teTitle" class="form-input" placeholder="タスク名">
+      </div>
+      <div class="form-group">
+        <label class="form-label">優先度</label>
+        <select id="tePriority" class="form-select">
+          <option value="normal">通常</option>
+          <option value="high">高</option>
+          <option value="urgent">緊急</option>
+          <option value="low">低</option>
+        </select>
+      </div>
+      <div class="form-group">
+        <label class="form-label">実行日（任意）</label>
+        <input type="date" id="teScheduledDate" class="form-input">
+      </div>
+      <div class="form-group">
+        <label class="form-label">期日（任意）</label>
+        <input type="date" id="teDeadlineDate" class="form-input">
+      </div>
+      <div class="form-group">
+        <label class="form-label">メモ（任意）</label>
+        <textarea id="teNote" class="form-textarea" placeholder="内容・変更理由など"></textarea>
+      </div>
+      <div style="display:flex;align-items:center;gap:8px;margin:0 0 12px;padding:8px 12px;background:rgba(74,108,247,0.1);border-radius:8px;border:1px solid rgba(74,108,247,0.3);">
+        <input type="checkbox" id="teSendSlack" style="width:16px;height:16px;cursor:pointer;flex-shrink:0;">
+        <label for="teSendSlack" style="font-size:12px;color:var(--text-dim);cursor:pointer;line-height:1.4;">📨 保存後にSlackへ共有する</label>
+      </div>
+      <div class="modal-actions">
+        <button class="btn btn-outline" onclick="closeTaskEditModal()">キャンセル</button>
+        <button class="btn btn-primary" onclick="submitTaskEdit()">保存</button>
       </div>
     </div>
   </div>
@@ -908,6 +1103,10 @@
         <label class="form-label">説明（任意）</label>
         <input type="text" id="tmplDescription" class="form-input" placeholder="補足説明">
       </div>
+      <div style="display:flex;align-items:center;gap:8px;margin:0 0 12px;padding:8px 12px;background:rgba(74,108,247,0.1);border-radius:8px;border:1px solid rgba(74,108,247,0.3);">
+        <input type="checkbox" id="tmplSendSlack" style="width:16px;height:16px;cursor:pointer;flex-shrink:0;">
+        <label for="tmplSendSlack" style="font-size:12px;color:var(--text-dim);cursor:pointer;line-height:1.4;">📨 保存後にSlackへ共有する</label>
+      </div>
       <div class="modal-actions">
         <button class="btn btn-outline" onclick="closeNewTemplateModal()">キャンセル</button>
         <button class="btn btn-primary" id="tmplSubmitBtn" onclick="submitNewTemplate()">保存</button>
@@ -1028,10 +1227,10 @@
   <script src="config.js?v=305"></script>
   <script src="js/nyagi-boot-overlay.js?v=213"></script>
   <script src="js/login-gate.js?v=213"></script>
-  <script src="js/nyagi-jst.js?v=1"></script>
-  <script src="js/app.js?v=220"></script>
+  <script src="js/nyagi-jst.js?v=2"></script>
+  <script src="js/app.js?v=231"></script>
   <script src="js/nyagi-scroll-restore.js?v=217"></script>
-    <script src="js/tasks.js?v=304"></script>
-  <script src="js/voice-console.js?v=216"></script>
+    <script src="js/tasks.js?v=313"></script>
+  <script src="js/voice-console.js?v=217"></script>
 </body>
 </html>

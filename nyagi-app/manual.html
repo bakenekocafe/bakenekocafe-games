@@ -4,6 +4,9 @@
   <meta charset="UTF-8">
   <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
   <meta http-equiv="Pragma" content="no-cache">
+  <script>
+  (function(){if(!navigator.serviceWorker)return;navigator.serviceWorker.getRegistrations().then(function(r){for(var i=0;i<r.length;i++){r[i].update();if(r[i].waiting)r[i].waiting.postMessage({type:'SKIP_WAITING'})}});var f=!1;navigator.serviceWorker.addEventListener('controllerchange',function(){if(!f){f=!0;location.reload()}})})();
+  </script>
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
   <title>NYAGI 操作マニュアル</title>
   <link rel="stylesheet" href="style.css?v=209">
@@ -113,7 +116,10 @@
       <nav class="header-nav">
         <a href="dashboard.html">ダッシュボード</a>
         <a href="cats.html">猫一覧</a>
-        <a href="manual.html" class="nav-current">マニュアル</a>
+        <a href="tasks.html">タスク</a>
+        <a href="bulletin.html">掲示板</a>
+        <a href="inquiries.html">📮 問い合わせ</a>
+        <a href="manual.html?v=235" class="nav-current">マニュアル</a>
       </nav>
     </div>
   </div>
@@ -123,312 +129,480 @@
     <div class="toc" id="toc">
       <b style="font-size:13px;color:var(--text-dim);">目次（タップで移動）</b>
       <a href="#sec-login">1. ログイン</a>
-      <a href="#sec-dashboard">2. ダッシュボード</a>
-      <a href="#sec-catlist">3. 猫一覧</a>
-      <a href="#sec-catdetail">4. 猫詳細</a>
-      <a href="#sec-feeding">5. 給餌プラン（3種類）</a>
-      <a href="#sec-quickfed">6. ワンクリック「あげた」</a>
-      <a href="#sec-preset">7. プリセット管理</a>
-      <a href="#sec-health">8. 健康記録</a>
-      <a href="#sec-meds">9. 投薬管理</a>
-      <a href="#sec-vet">10. 病院スケジュール</a>
-      <a href="#sec-voice">11. 音声入力</a>
-      <a href="#sec-score">12. 健康スコア</a>
-      <a href="#sec-tasks">13. タスク</a>
-      <a href="#sec-foods">14. フードDB</a>
-      <a href="#sec-trouble">15. トラブルシューティング</a>
+      <a href="#sec-top">2. NYAGIトップ</a>
+      <a href="#sec-dashboard">3. ダッシュボード</a>
+      <a href="#sec-filter">4. フィルタ設定</a>
+      <a href="#sec-catlist">5. 猫一覧</a>
+      <a href="#sec-catdetail">6. 猫詳細</a>
+      <a href="#sec-feeding">7. ごはん管理</a>
+      <a href="#sec-health">8. 体調・ケア記録</a>
+      <a href="#sec-meds">9. お薬管理</a>
+      <a href="#sec-vet">10. 病院予定・病院記録</a>
+      <a href="#sec-bulletin">11. 掲示板</a>
+      <a href="#sec-tasks">12. タスク（概要）</a>
+      <a href="#sec-tasks-kinds" style="padding-left:14px;font-size:13px;">　12-1 タスクの種類</a>
+      <a href="#sec-tasks-event" style="padding-left:14px;font-size:13px;">　12-2 イベントタスク</a>
+      <a href="#sec-tasks-sort" style="padding-left:14px;font-size:13px;">　12-3 並び順（ソート）</a>
+      <a href="#sec-tasks-template" style="padding-left:14px;font-size:13px;">　12-4 テンプレート・一括生成</a>
+      <a href="#sec-tasks-ui" style="padding-left:14px;font-size:13px;">　12-5 画面のタブ</a>
+      <a href="#sec-tasks-howto" style="padding-left:14px;font-size:13px;">　12-6 操作手順（作り方・ケース別）</a>
+      <a href="#sec-tasks-event-vs-project" style="padding-left:14px;font-size:13px;">　12-7 イベントとプロジェクトの違い</a>
+      <a href="#sec-foods">13. フードDB</a>
+      <a href="#sec-medicine-master">14. 薬マスター</a>
+      <a href="#sec-voice-dict">15. 音声辞書</a>
+      <a href="#sec-intake">16. 引き受け申請</a>
+      <a href="#sec-trouble">17. トラブルシューティング</a>
     </div>
 
     <!-- 1. ログイン -->
     <div class="manual-section" id="sec-login">
       <h2>🔑 1. ログイン</h2>
       <div class="manual-body">
-        <p>初回アクセス時にログイン画面が表示されます。</p>
-        <div class="step"><span class="step-num">1</span>管理キーとスタッフIDを入力</div>
+        <p>NYAGI は現在、<b>4桁パスワード</b>でログインします。スタッフIDを個別入力する方式ではありません。</p>
+        <div class="step"><span class="step-num">1</span><code>index.html</code> か各画面のログインゲートで 4桁パスワードを入力</div>
         <div class="step"><span class="step-num">2</span>「ログイン」をタップ</div>
-        <p>ログイン情報はブラウザに保存されるので、次回以降は自動ログインです。</p>
-        <div class="tip">💡 ログアウトしたい場合は、ブラウザの「サイトデータを削除」を使います。</div>
+        <div class="step"><span class="step-num">3</span>認証が通ると、他画面でもそのまま利用できます</div>
+        <p>認証情報は端末内に保存されるため、通常は次回以降も自動で再利用されます。</p>
+        <div class="tip">💡 明示的にログアウトしたいときは、トップ画面の「ログアウト」を使ってください。</div>
       </div>
     </div>
 
-    <!-- 2. ダッシュボード -->
+    <!-- 2. NYAGIトップ -->
+    <div class="manual-section" id="sec-top">
+      <h2>🏠 2. NYAGIトップ</h2>
+      <div class="manual-body">
+        <p>トップ画面は、<b>音声入力</b>と<b>テキスト入力</b>の入口です。</p>
+        <ul>
+          <li><b>🎤 音声入力</b>: 録音して送信。認識候補が出た場合はその場で選び直せます</li>
+          <li><b>⌨️ テキスト入力</b>: 例「こはだ うんちした 普通」のように直接送信できます</li>
+          <li><b>入力履歴</b>: 最近送った内容を確認できます</li>
+          <li><b>下部ボタン</b>: ダッシュボード / 猫一覧 / スタッフ登録へ移動できます</li>
+        </ul>
+        <div class="tip">💡 音声が使えない端末では、案内が「音声非対応」に変わります。その場合はテキスト入力を使ってください。</div>
+      </div>
+    </div>
+
+    <!-- 3. ダッシュボード -->
     <div class="manual-section" id="sec-dashboard">
-      <h2>📊 2. ダッシュボード</h2>
+      <h2>📊 3. ダッシュボード</h2>
       <div class="manual-body">
-        <p>全猫の今日の状況を一覧で確認できるメイン画面です。</p>
+        <p>全体状況を確認するメイン画面です。拠点とステータスで絞り込んだ内容がまとめて表示されます。</p>
         <ul>
-          <li><b>拠点フィルタ</b>: BAKENEKO CAFE / 猫又療養所 / 遠藤宅 / 預かり隊 で絞り込み</li>
+          <li><b>拠点フィルタ</b>: BAKENEKO CAFE / 猫又療養所 / 遠藤宅 / 預かり隊</li>
           <li><b>ステータスフィルタ</b>: 在籍 / 卒業 / トライアル中</li>
-          <li><b>アラート</b>: 🔴 要注意 / 🟡 経過観察の猫が上部に表示</li>
-          <li><b>🏥 健康スコア</b>: 拠点・ステータスで絞り込んだ<strong>全猫</strong>を表示（スコアが低い順＝要注意が上。未算出は末尾）</li>
-          <li><b>🏥 病院スケジュール</b>: 30日以内の予定 + それ以降の予定。見出しタップで折りたたみ可（開閉状態は端末に記憶）</li>
+          <li><b>📈 今日の進捗</b>: タスク・給餌・投薬などの進捗を上部で一覧表示。タップで該当カードへ移動できます</li>
+          <li><b>アラート</b>: 要注意・経過観察の猫が上部に出ます</li>
+          <li><b>異常記録 / 未記録</b>: 当日の気になる記録や未入力項目を確認できます</li>
+          <li><b>🏥 健康スコア</b>: フィルタに一致した全猫を、注意順で表示します</li>
+          <li><b>📅 明日の予定</b>: 明日対応予定の内容をまとめて確認できます</li>
+          <li><b>🏥 病院スケジュール</b>: 直近30日とそれ以降の予定を折りたたみ表示します</li>
         </ul>
-        <div class="tip">💡 拠点・ステータスの選択はブラウザに記憶されます。</div>
+        <div class="tip">💡 拠点・ステータスの選択と、折りたたみ状態の一部は端末側に保存されます。</div>
       </div>
     </div>
 
-    <!-- 3. 猫一覧 -->
+    <!-- 4. フィルタ設定 -->
+    <div class="manual-section" id="sec-filter">
+      <h2>🎛 4. フィルタ設定</h2>
+      <div class="manual-body">
+        <p>NYAGI では、画面ごとに表示対象を絞り込めます。まずは上部のフィルタを確認すると、必要な情報に早くたどり着けます。</p>
+        <ul>
+          <li><b>ダッシュボード</b>: 拠点 / ステータスで全体表示を切り替えます</li>
+          <li><b>猫一覧</b>: 拠点表示と、猫ごと / 項目ごとの見方を切り替えます</li>
+          <li><b>掲示板</b>: 拠点 / 猫 / 項目（注意事項・病院記録・病院予定・業務連絡）で絞り込めます</li>
+          <li><b>タスク</b>: 日付 / 状態 / 拠点 / タブ（今日のタスク・プロジェクト・監視中・テンプレート）で切り替えます</li>
+          <li><b>フードDB</b>: カテゴリ / 対象動物 / 文字検索で絞り込みます</li>
+          <li><b>薬マスター</b>: 対象動物と文字検索で絞り込みます</li>
+          <li><b>音声辞書</b>: 拠点で辞書一覧を絞り込みます</li>
+          <li><b>引き受け申請</b>: ステータス / フェーズ / 申請者名やメールの文字検索が使えます</li>
+        </ul>
+        <div class="tip">💡 ダッシュボードなど一部の画面では、最後に選んだフィルタが端末に記憶されます。表示件数が少ないときは、拠点やステータスが絞られたままになっていないか確認してください。</div>
+      </div>
+    </div>
+
+    <!-- 5. 猫一覧 -->
     <div class="manual-section" id="sec-catlist">
-      <h2>🐱 3. 猫一覧</h2>
+      <h2>🐱 5. 猫一覧</h2>
       <div class="manual-body">
-        <p>2つの表示モードがあります。</p>
+        <p>猫一覧には、<b>猫ごと</b>と<b>項目ごと</b>の2モードがあります。</p>
         <ul>
-          <li><b>猫ごと</b>: 1カード＝1匹。体重・給餌・排便・排尿・投薬・ケアをまとめて表示</li>
-          <li><b>項目ごと</b>: タスク・排便・排尿・体重・投薬・ごはん・ケア・医療の項目別に全猫を表示</li>
+          <li><b>猫ごと</b>: 1枚のカードに、その猫のごはん・排泄・投薬・ケア・体重などをまとめて表示</li>
+          <li><b>項目ごと</b>: ごはん・排便・排尿・体重・投薬・ケア・医療など、同じ項目を全猫分並べて確認</li>
+          <li><b>＋ 新しい猫を登録</b>: 名前・所属・種別を入力して新規登録できます</li>
         </ul>
-        <p>健康スコアが低い（要注意な）猫が上に表示されます。</p>
+        <p>基本的に、注意が必要な猫が上に来る構成です。</p>
       </div>
     </div>
 
-    <!-- 4. 猫詳細 -->
+    <!-- 6. 猫詳細 -->
     <div class="manual-section" id="sec-catdetail">
-      <h2>📋 4. 猫詳細ページ</h2>
+      <h2>📋 6. 猫詳細</h2>
       <div class="manual-body">
-        <p>各猫の全情報が集まるページです。上から順に：</p>
+        <p>猫詳細は、各猫の情報を<b>折りたたみセクション</b>で管理する画面です。初期状態では閉じている項目が多いので、見たい行をタップして開きます。</p>
         <ul>
-          <li>⭐ 健康スコアカード（総合点 + 内訳）</li>
-          <li>📏 基本情報（名前・年齢・体重・拠点など）</li>
-          <li>📈 体重グラフ（推移を折れ線表示）</li>
-          <li>🔥 カロリー評価（必要量 vs 摂取量）</li>
-          <li>🍽 給餌プラン（← 今回追加された新機能！）</li>
-          <li>🩹 ケア実施記録</li>
-          <li>💩 排便・🚽 排尿記録</li>
-          <li>💊 投薬スケジュール</li>
-          <li>🏥 病院記録</li>
-          <li>📝 注意事項メモ</li>
+          <li><b>🏥 健康スコア</b></li>
+          <li><b>📋 基本情報</b></li>
+          <li><b>📥 引き受け情報 / 🏠 譲渡関連情報</b></li>
+          <li><b>📝 注意事項</b>: 添付付き保存や Slack 送信にも対応</li>
+          <li><b>✅ この猫のタスク</b></li>
+          <li><b>⚖️ 体重記録 / 体重推移</b></li>
+          <li><b>🔥 カロリー評価 / 🍽 給餌プラン</b></li>
+          <li><b>🪮 ケア / 🚽 排便 / 💧 排尿 / 🚰 飲水測定</b></li>
+          <li><b>💊 お薬管理 / 📅 病院予定 / 🏥 病院記録</b></li>
+          <li><b>📋 未完了アクション</b></li>
         </ul>
+        <div class="tip">💡 名前変更時は旧名が音声辞書に自動登録されます。呼び名変更後の音声入力にも反映されます。</div>
       </div>
     </div>
 
-    <!-- 5. 給餌プラン -->
+    <!-- 7. ごはん管理 -->
     <div class="manual-section" id="sec-feeding">
-      <h2>🍽 5. 給餌プラン（3種類）</h2>
+      <h2>🍽 7. ごはん管理</h2>
       <div class="manual-body">
-        <p>猫ごとに最大<b>16件</b>の給餌プランを登録できます。3つの方法があります。</p>
+        <p>ごはん関連は猫詳細の「🍽 給餌プラン」で管理します。</p>
 
-        <h3 style="font-size:14px;margin:12px 0 6px;color:var(--primary);">① スタッフ指定メニュー</h3>
-        <p>スタッフが手動でフードと量を選んで登録します。</p>
-        <div class="step"><span class="step-num">1</span>猫詳細の給餌プランで「<b>+ 追加</b>」をタップ</div>
-        <div class="step"><span class="step-num">2</span>食事区分（朝/昼/夕/おやつ/サプリ）を選択</div>
-        <div class="step"><span class="step-num">3</span>フードDBから選択 → 量(g)を入力 → カロリーが自動表示</div>
-        <div class="step"><span class="step-num">4</span>予定時刻（任意）を設定</div>
-        <div class="step"><span class="step-num">5</span>保存</div>
+        <h3 style="font-size:14px;margin:12px 0 6px;color:var(--primary);">プランを追加する</h3>
+        <div class="step"><span class="step-num">1</span>「+ 追加」をタップ</div>
+        <div class="step"><span class="step-num">2</span>食事区分・フード・量(g)を入力</div>
+        <div class="step"><span class="step-num">3</span>必要に応じて予定時刻やメモを入れて保存</div>
+        <p>フードは検索しながら選べます。カロリー表示も自動反映されます。</p>
 
-        <h3 style="font-size:14px;margin:12px 0 6px;color:#c4b5fd;">② プリセットメニュー</h3>
-        <p>あらかじめ作った献立テンプレートを猫に適用します。</p>
-        <div class="step"><span class="step-num">1</span>「<b>📋 プリセット</b>」ボタンをタップ</div>
-        <div class="step"><span class="step-num">2</span>一覧からプリセットを選んで「適用」</div>
-        <p>適用後は個別に編集・削除できます。<span style="font-size:9px;background:rgba(168,139,250,0.2);color:#c4b5fd;padding:1px 4px;border-radius:3px;">プリセット</span> タグが付きます。</p>
+        <h3 style="font-size:14px;margin:12px 0 6px;color:#c4b5fd;">プリセットを使う</h3>
+        <div class="step"><span class="step-num">1</span>「📋 プリセット」を開く</div>
+        <div class="step"><span class="step-num">2</span>一覧から適用、または管理画面で作成・編集</div>
+        <p>現在は、<b>紐づけプリセット</b>と<b>プリセット管理</b>の両方があります。自動入れ替えの対象を変えたいときは「紐づけ」、中身を変えたいときは「管理」を使います。</p>
 
-        <h3 style="font-size:14px;margin:12px 0 6px;color:#4ade80;">③ NYAGI提案メニュー</h3>
-        <p>カロリー不足時にNYAGIが自動でフードを提案します。</p>
-        <p>カロリー評価セクションに表示される提案を採用すると、プランに追加されます。</p>
-        <p style="font-size:12px;color:var(--text-dim);margin-top:8px;">※必要カロリーは体重・種別・ライフステージ・BCS・タグ等から自動算出します。<b>犬</b>の安静時代謝量（RER）は臨床でよく使う <b>30×体重(kg)+70 kcal/日</b> を基準に、MER係数を掛けます（猫は 70×kg<sup>0.75</sup>）。獣医指示の目標カロリー（手入力）がある場合はそれが優先されます。</p>
+        <h3 style="font-size:14px;margin:12px 0 6px;color:#4ade80;">あげた / 残し / 手動ログ</h3>
+        <ul>
+          <li><b>チェック操作</b>: プラン行のチェックから「あげた記録」を開けます</li>
+          <li><b>とりあえずあげた</b>: 摂取率を後で入れたいときに使えます</li>
+          <li><b>残した量(g)</b></li>
+          <li><b>給餌ログを記録</b>: プラン外の食事も手動追加できます</li>
+          <li><b>🎤 音声で記録</b>: 給餌プランの中から直接音声記録できます</li>
+        </ul>
 
-        <div class="warn">⚠️ 1匹あたり合計16件まで。超える場合は不要なプランを削除してから追加してください。</div>
+        <div class="tip">💡 カロリー評価には、摂取率が入った給餌ログが反映されます。食べ残しがあったときは残し量まで入力してください。</div>
       </div>
     </div>
 
-    <!-- 6. ワンクリック「あげた」 -->
-    <div class="manual-section" id="sec-quickfed">
-      <h2>✅ 6. ワンクリック「あげた」</h2>
-      <div class="manual-body">
-        <p>給餌プランの各フード横にチェックボックスがあります。</p>
-        <div class="step"><span class="step-num">1</span>⬜ をタップ → 即座に「あげた」が記録されます</div>
-        <div class="step"><span class="step-num">2</span>実際の時刻が自動で記録されます</div>
-        <div class="step"><span class="step-num">3</span>あげた後は ✅ に変わります</div>
-
-        <h3 style="font-size:14px;margin:10px 0 6px;">食べ残しがあった場合</h3>
-        <div class="step"><span class="step-num">1</span>✅ の右にある 🍽 ボタンをタップ</div>
-        <div class="step"><span class="step-num">2</span>「食べた割合(%)」を修正（例: 70%）</div>
-        <div class="step"><span class="step-num">3</span>保存</div>
-
-        <h3 style="font-size:14px;margin:10px 0 6px;">プラン外のフードをあげた場合</h3>
-        <p>「<b>📝 記録</b>」ボタンから手動で給餌ログを追加できます。</p>
-      </div>
-    </div>
-
-    <!-- 7. プリセット管理 -->
-    <div class="manual-section" id="sec-preset">
-      <h2>📋 7. プリセット管理</h2>
-      <div class="manual-body">
-        <p>よく使う献立パターンをテンプレートとして保存できます。</p>
-
-        <h3 style="font-size:14px;margin:10px 0 6px;">プリセットを作る</h3>
-        <div class="step"><span class="step-num">1</span>「📋 プリセット」→ 画面下の「プリセット管理」</div>
-        <div class="step"><span class="step-num">2</span>「+ 新規プリセット」→ 名前と説明を入力</div>
-        <div class="step"><span class="step-num">3</span>「+ フード追加」でフード・量・時刻を登録（複数OK）</div>
-
-        <h3 style="font-size:14px;margin:10px 0 6px;">プリセットを猫に適用する</h3>
-        <div class="step"><span class="step-num">1</span>猫詳細 →「📋 プリセット」→ 適用したいプリセットの「適用」</div>
-        <p>プリセットの全フードが猫のプランに追加されます。</p>
-
-        <div class="tip">💡 プリセット例: 「腎臓ケアセット」「子猫スターター」「シニア療法食」など</div>
-      </div>
-    </div>
-
-    <!-- 8. 健康記録 -->
+    <!-- 8. 体調・ケア記録 -->
     <div class="manual-section" id="sec-health">
-      <h2>🩺 8. 健康記録</h2>
+      <h2>🩺 8. 体調・ケア記録</h2>
       <div class="manual-body">
-        <p>猫詳細ページから体重・排便・排尿・嘔吐・行動などを記録できます。</p>
-        <div class="step"><span class="step-num">1</span>各セクションの「+ 追加」をタップ</div>
-        <div class="step"><span class="step-num">2</span>値を選択 or 入力して保存</div>
-        <p>記録できる項目：</p>
+        <p>体調や日常ケアは、猫詳細の各セクションから個別に入力します。</p>
         <ul>
-          <li><b>体重</b>: 数値(kg) → 体重グラフに自動反映</li>
-          <li><b>排便</b>: 健康/軟便/下痢/血便/便秘 + 時刻</li>
-          <li><b>排尿</b>: 正常/頻尿/血尿 + 時刻</li>
-          <li><b>嘔吐</b>: 食物/毛玉/液体/泡</li>
-          <li><b>行動</b>: 元気/普通/ぐったり</li>
+          <li><b>⚖️ 体重記録</b>: 数値を記録すると、体重推移グラフに反映されます</li>
+          <li><b>🚽 排便状況</b>: 健康 / 硬い / 軟便 / 下痢 / 血便などを記録</li>
+          <li><b>💧 排尿状況</b>: なし / 少量 / 普通 / 多い / 血尿などを記録</li>
+          <li><b>🚰 飲水測定</b>: 対象猫では飲水量の履歴を確認・記録できます</li>
+          <li><b>🪮 ケア実施状況</b>: ブラシや処置など、実施 / スキップを残せます</li>
+          <li><b>📝 注意事項</b>: 画像・PDF付きで保存でき、必要に応じて Slack にも共有できます</li>
         </ul>
-        <div class="tip">💡 音声入力にも対応。「なめこ うんち 普通」のように話すだけでOK。</div>
+        <div class="tip">💡 一部の入力欄には 🎤 ボタンがあります。短いメモや本文は音声入力でも補助できます。</div>
       </div>
     </div>
 
-    <!-- 9. 投薬管理 -->
+    <!-- 9. お薬管理 -->
     <div class="manual-section" id="sec-meds">
-      <h2>💊 9. 投薬管理</h2>
+      <h2>💊 9. お薬管理</h2>
       <div class="manual-body">
-        <p>猫ごとの投薬スケジュールを管理します。</p>
+        <p>猫詳細の「💊 お薬管理」で、個別スケジュールと投薬プリセットを扱います。</p>
         <ul>
-          <li><b>スケジュール登録</b>: 薬名・用量・時間帯（朝/昼/夕/就寝前）・頻度</li>
-          <li><b>投薬ログ</b>: 毎日自動生成 → 「投薬済み」「スキップ」をタップで記録</li>
-          <li><b>猫一覧/ダッシュボード</b>: 投薬進捗(✅ 2/3 完了)が表示</li>
+          <li><b>スケジュール</b>: 薬名・用量・単位・頻度・タイミング・投与経路・開始日/終了日を設定</li>
+          <li><b>対応頻度</b>: 毎日 / 隔日A・B / 3日に1回 / 週3回 / 週1回 / 月末のみ / 必要時 など</li>
+          <li><b>当日ログ</b>: 行ごとに実施・スキップを記録</li>
+          <li><b>🔗 紐づけ投薬プリセット</b>: 自動入れ替えに使うプリセットを設定</li>
+          <li><b>📋 プリセット</b>: プリセットの中身を作成・編集し、「全て適用」で即時反映</li>
         </ul>
+        <div class="warn">⚠️ プリセット由来の行は、通常の個別編集ではなく「📋 プリセット」側で変更します。</div>
       </div>
     </div>
 
-    <!-- 10. 病院スケジュール -->
+    <!-- 10. 病院予定・病院記録 -->
     <div class="manual-section" id="sec-vet">
-      <h2>🏥 10. 病院スケジュール</h2>
+      <h2>🏥 10. 病院予定・病院記録</h2>
       <div class="manual-body">
-        <p>ワクチン・健康診断などの予定を管理します。</p>
-
-        <h3 style="font-size:14px;margin:10px 0 6px;">ダッシュボードで確認</h3>
-        <p>30日以内の予定 + それ以降の予定が表示されます。</p>
+        <p>通院関連は、<b>予定</b>と<b>記録</b>を分けて管理します。</p>
         <ul>
-          <li><b>次回目安</b>: 推奨される受診時期（自動計算）</li>
-          <li><b>予約</b>: 実際に病院で予約した日時</li>
+          <li><b>📅 病院予定</b>: 予定日・予約時刻・病院名・メモを登録。必要なら Slack 通知も可能</li>
+          <li><b>🏥 病院記録</b>: 診察内容・病院名・添付ファイルを保存。閲覧モーダルから詳細確認できます</li>
+          <li><b>添付対応</b>: 病院記録には PDF / 画像を添付できます</li>
+          <li><b>ダッシュボード連携</b>: 直近予定はダッシュボードの病院スケジュールにも出ます</li>
         </ul>
-
-        <h3 style="font-size:14px;margin:10px 0 6px;">予約を入力する</h3>
-        <div class="step"><span class="step-num">1</span>ダッシュボードの病院スケジュールで「予約日時を入力」をタップ</div>
-        <div class="step"><span class="step-num">2</span>日付と時刻を入力して保存</div>
-
-        <h3 style="font-size:14px;margin:10px 0 6px;">受診済みにする</h3>
-        <div class="step"><span class="step-num">1</span>猫詳細 → 病院記録セクション</div>
-        <div class="step"><span class="step-num">2</span>該当の予定で「受診済み」をタップ</div>
-        <div class="tip">💡 ワクチン・健康診断を「受診済み」にすると、<b>自動で1年後の次回予定</b>が作成されます。</div>
+        <div class="tip">💡 記録系は「保存してSlackに送信」ボタンがあるので、登録と共有を一度に済ませられます。</div>
       </div>
     </div>
 
-    <!-- 11. 音声入力 -->
-    <div class="manual-section" id="sec-voice">
-      <h2>🎤 11. 音声入力</h2>
+    <!-- 11. 掲示板 -->
+    <div class="manual-section" id="sec-bulletin">
+      <h2>📌 11. 掲示板</h2>
       <div class="manual-body">
-        <p>スマホのマイクで話すだけで記録できます。</p>
-
-        <h3 style="font-size:14px;margin:10px 0 6px;">使い方</h3>
-        <div class="step"><span class="step-num">1</span>🎤 ボタンをタップ</div>
-        <div class="step"><span class="step-num">2</span>猫の名前 + 記録内容を話す</div>
-        <div class="step"><span class="step-num">3</span>認識結果を確認して記録</div>
-
-        <h3 style="font-size:14px;margin:10px 0 6px;">話し方の例</h3>
+        <p>掲示板は、業務連絡と猫ごとの注意事項・病院情報をまとめて見る画面です。</p>
         <ul>
-          <li>「<b>なめこ 朝ごはん あげた</b>」→ 給餌記録</li>
-          <li>「<b>こはだ うんち 普通</b>」→ 排便記録</li>
-          <li>「<b>おかき 体重 3.5キロ</b>」→ 体重記録</li>
-          <li>「<b>みたらし 薬 朝 あげた</b>」→ 投薬記録</li>
-          <li>「<b>きなこ 吐いた 毛玉</b>」→ 嘔吐記録</li>
+          <li><b>業務連絡を投稿</b>: タイトル・本文・添付ファイル・固定設定で投稿</li>
+          <li><b>フィルタ</b>: 拠点 / 猫 / 項目（注意事項・病院記録・病院予定・業務連絡）で絞り込み</li>
+          <li><b>業務連絡カード</b>: 上部に折りたたみ表示。初期状態は閉じています</li>
+          <li><b>猫関連タイムライン</b>: 注意事項・病院記録・病院予定を新しい順で表示します</li>
         </ul>
-
-        <h3 style="font-size:14px;margin:10px 0 6px;">給餌プランでの音声入力</h3>
-        <p>猫詳細の給餌プランセクションに「🎤 音声で記録」ボタンがあります。</p>
-        <p>猫名を省略して「<b>朝ごはん 1回目 あげた</b>」のように話せます。</p>
-
-        <div class="warn">⚠️ 音声認識はiOS Safari/Chrome/Androidに対応。一部のブラウザでは動作しません。</div>
+        <div class="tip">💡 掲示板は「猫ごとのメモ一覧」でもあります。注意事項や病院登録をしたあと、共有確認に使うと便利です。</div>
       </div>
     </div>
 
-    <!-- 12. 健康スコア -->
-    <div class="manual-section" id="sec-score">
-      <h2>⭐ 12. 健康スコア</h2>
-      <div class="manual-body">
-        <p>各猫の健康状態を0〜100点で自動評価します。</p>
-        <ul>
-          <li><b>🟢 80〜100</b>: 良好</li>
-          <li><b>🟡 60〜79</b>: 注意</li>
-          <li><b>🟠 40〜59</b>: 要注意</li>
-          <li><b>🔴 0〜39</b>: 警告</li>
-        </ul>
-        <p>スコアの内訳：</p>
-        <ul>
-          <li>体重変動 / 食欲(給餌状況) / 投薬コンプライアンス / 通院状況 / 行動・異常</li>
-        </ul>
-        <p>毎日自動計算されます。猫一覧・ダッシュボードともにスコア順で表示されます。</p>
-        <div class="tip">💡 スコアが低い猫から優先的にケアしてください。</div>
-      </div>
-    </div>
-
-    <!-- 13. タスク -->
+    <!-- 12. タスク -->
     <div class="manual-section" id="sec-tasks">
-      <h2>✅ 13. タスク</h2>
+      <h2>✅ 12. タスク（概要）</h2>
       <div class="manual-body">
-        <p>拠点ごとの日常タスクを管理します。</p>
+        <p>タスク画面は、単なるチェックリストではなく、<b>毎日のお仕事（ルーティン）・イベント・監視・プロジェクト</b>をまとめた管理画面です。ここでは「<b>10歳の子に説明するつもりで</b>」しくみを書きます。</p>
         <ul>
-          <li><b>ルーティンタスク</b>: 毎日自動生成（掃除・水交換・体重測定など）</li>
-          <li><b>単発タスク</b>: スタッフが手動で追加</li>
-          <li><b>期限表示</b>: イベントなど暦日の期限があるタスクは、一覧に「期限 M/D（曜）」を表示（その日のルーティンは日付は省略し、帯の時刻のみ）</li>
+          <li><b>今日のタスク</b>タブ: 選んだ日の「やることリスト」。チェックを付けたり、メモを足したりできます</li>
+          <li><b>プロジェクト</b>タブ: 大きな仕事を、木の枝のように小分けして管理します</li>
+          <li><b>監視中</b>タブ: しばらく様子を見続けたいことを置いておく場所です</li>
+          <li><b>テンプレート</b>: 「毎朝これを出す」などの型を作り、朝の一括生成で今日の行にコピーします</li>
+          <li><b>🔒 業務終了</b>: その日の締めとして、未処理や引き継ぎを確認します</li>
         </ul>
-        <div class="step"><span class="step-num">1</span>タスク画面で未完了タスクを確認</div>
-        <div class="step"><span class="step-num">2</span>タスクをタップ → 「完了」にする</div>
+        <div class="tip">💡 猫に紐づけたタスクは、<b>猫詳細</b>や<b>猫一覧</b>の「今日のタスク」にも出ます。イベントで期限が過ぎていると、猫詳細では目立つ表示になります。</div>
+
+        <h3 id="sec-tasks-kinds" style="font-size:15px;margin:16px 0 8px;">12-1. タスクの種類（ざっくり言うと）</h3>
+        <p>NYAGI の「1行＝1タスク」には、次のタイプがあります。混同しやすいので名前だけ先に覚えてください。</p>
+        <ul>
+          <li><b>ルーティン（通常）</b>…「その日の日付にやること」。開店準備や給餌チェックなど、毎日回る作業が中心です。</li>
+          <li><b>イベント</b>…「<b>期限</b>」が主役のタスク。イベント会場の設営のように、「いつまでに終わらせるか」が大事なものに使います（後述）。</li>
+          <li><b>監視</b>…「様子を見る」系。テンプレで監視タイプにすると専用タブにまとまり、猫の切り替えや状態の記録向きです。</li>
+        </ul>
+        <p>あわせて、タスクには <b>属性（カテゴリ）</b> があります。開店準備・イベント・猫のお世話・医療・清掃・閉店・<b>プロジェクト</b>・その他、というラベルで、一覧を色分けしたり進捗バーを並べたりするのに使います。<b>属性「プロジェクト」</b>は主に <b>テンプレート</b>から付けられます（12-7 参照）。<b>プロジェクトタブのツリー</b>とは別物ですが、どちらも「大きな仕事のかたまり」に関係するので、木で全体像を作りつつ、今日のタスクではテンプレの属性をプロジェクトに寄せると探しやすくなります。</p>
+        <div class="warn">⚠️ 「イベント属性」と「イベント<b>タイプ</b>のタスク」は名前が似ています。<b>属性</b>は分類ラベル、<b>タイプ</b>はデータの種類です。</div>
+
+        <h3 id="sec-tasks-event" style="font-size:15px;margin:16px 0 8px;">12-2. イベントタスク（使い方）</h3>
+        <p><b>いつ使う？</b>　「〇月〇日までに片付ける」「〇日のイベントまでに申込みを終える」のように、<b>締め切り</b>があり、当日だけでなく前からリストに載せておきたいとき向けです。ルーティンは「その日が来たら出る」一方、イベントは<b>期限が来る前から</b>「まだ終わってないよ」と一覧に残ります。</p>
+        <p><b>データの考え方（裏側のルール）</b>　システム上、イベント行は <b>期限日</b> を <code>deadline_date</code>（なければ <code>due_date</code>）に入れます。ルーティンは「予定日」として <code>scheduled_date</code> を使います。だからテンプレートの種類を「イベント」にすると、自動生成時も期限の置き方が変わります。</p>
+        <ul>
+          <li><b>未完了・進行中</b>のイベントは、画面上で選んでいる日付が<b>期限と同じか、期限より後</b>のときに出ます。まだ先の未来の期限だけのときは、その日が近づくまで一覧に出ません（予定表がごちゃごちゃにならないため）。</li>
+          <li>一覧の対象はおおむね<b>今日から数えて約30日先まで</b>の範囲でまとめられます（API が「ここまで先のイベントも見るよ」という終わり日を返します）。</li>
+          <li><b>完了・スキップ済み</b>のイベントは、「その作業を終えた日」が、見ている日付と一致するときに表示されます（その日の記録として振り返りやすいように）。</li>
+          <li>期限を過ぎても未完了だと、一覧の<b>上の方に寄せて表示</b>され、経過日数のバッジが付くことがあります。猫詳細でも、期限超過のイベントは強調されます。</li>
+        </ul>
+        <div class="step"><span class="step-num">1</span><b>テンプレート</b>で新規作成し、種別で「<b>イベント</b>」を選ぶ</div>
+        <div class="step"><span class="step-num">2</span>繰り返し（毎日／曜日／月次など）を設定。イベントでも繰り返しルールは使えます</div>
+        <div class="step"><span class="step-num">3</span>朝の「<b>テンプレートから一括生成</b>」で、その日の行ができる。イベントはその日が<b>期限</b>になります</div>
+        <div class="step"><span class="step-num">4</span>テンプレ画面の一括生成で、チェック「<b>イベントを指定日に強制生成</b>」を入れると、<b>イベント型テンプレだけ</b>曜日・月次などの繰り返しルールを無視して、その日付の行を作れます（臨時のイベント日に使います）</div>
+        <div class="step"><span class="step-num">5</span>終わったら「完了」。やらない日は「スキップ」と理由メモを残すと、あとから状況が分かりやすいです</div>
+        <div class="tip">💡 迷ったら「<b>締切があるか？</b>」で判断。毎日同じ時間にやるだけならルーティン、〇日までに終わらせるならイベント、のイメージです。</div>
+
+        <h3 id="sec-tasks-sort" style="font-size:15px;margin:16px 0 8px;">12-3. 並び順（ソート）— なぜこの順番？</h3>
+        <p>「今日のタスク」一覧の並びは、コンピュータが次のルールで決めています（上から順に効きます）。</p>
+        <ol style="padding-left:22px;margin-bottom:8px;">
+          <li style="margin-bottom:6px;"><b>期限切れのイベントを先頭へ</b>… 今日見ている日付より前の期限で、まだ完了していないイベントは、いちばん上に近づきます。火事場のバケツを先に届けるイメージです。</li>
+          <li style="margin-bottom:6px;"><b>日付の早い順</b>… 予定日・期限日・<code>due_date</code> をまとめた「並べる用の日付」が早い行が先です。</li>
+          <li style="margin-bottom:6px;"><b>並び順番号（sort_order）</b>… テンプレートやタスクに書いた数字が小さいほど上。同じ日なら「店長が決めた順」として使えます。</li>
+          <li style="margin-bottom:6px;"><b>優先度（priority）</b>… <code>urgent</code>（緊急）→ <code>high</code> → <code>normal</code> → <code>low</code> の順で上に来ます。</li>
+          <li style="margin-bottom:6px;"><b>猫の名前</b>… まだ同じなら、五十音っぽく猫名で並べ替えます。</li>
+          <li style="margin-bottom:6px;"><b>時刻（due_time）</b>… 同じ猫なら、時刻の早い方が上。</li>
+          <li style="margin-bottom:6px;"><b>タイトル</b>… 最後のおまじないです。</li>
+        </ol>
+        <p><b>属性グループ（開店・イベント・猫のお世話…）の並び</b>は、アプリ側の決め台詞の順です。画面の進捗バーも、その順で並びます。中身のタスク行は、上のルールで並びます。</p>
+        <div class="tip">💡 「並び順番号」を使うと、店舗ごとの決まり文句（「まず解錠、その次に給餌チェック」など）を崩さず並べ替えられます。優先度は緊急時の上書きに使うと分かりやすいです。</div>
+
+        <h3 id="sec-tasks-template" style="font-size:15px;margin:16px 0 8px;">12-4. テンプレートと一括生成</h3>
+        <ul>
+          <li><b>テンプレート</b>は「型」です。毎日・特定の曜日・毎月・<b>1回だけ</b>など、繰り返しルールを付けられます。</li>
+          <li><b>一括生成</b>を押すと、選んだ日付に合うテンプレートだけがコピーされ、今日のタスクの行が増えます。すでに同じテンプレから同じ日の行があるときはスキップされます。</li>
+          <li><b>1回だけ（once）</b>のテンプレは、一度生成されると自動でオフになるので、使い捨てのイベント用にも向きます。</li>
+          <li>生成が終わったあと、<b>Slack に共有</b>ボタンが出ることがあります。朝礼で「今日これが増えました」と流す用途です。</li>
+        </ul>
+
+        <h3 id="sec-tasks-ui" style="font-size:15px;margin:16px 0 8px;">12-5. 画面のタブの使い分け</h3>
+        <ul>
+          <li><b>今日のタスク</b>… 日付・拠点・担当・状態で絞り込み。属性ごとの進捗バーをタップすると、その属性のところまでスクロールできます。</li>
+          <li><b>プロジェクト</b>… プロジェクト一覧から開くと、親子のノード（やることの階層）を編集します。大掃除や移転準備のチェックリスト向けです。</li>
+          <li><b>監視中</b>… 監視タイプのタスクだけを密度高く一覧します。猫の入れ替えや状態変更が中心の画面です。</li>
+        </ul>
+
+        <h3 id="sec-tasks-howto" style="font-size:15px;margin:16px 0 8px;">12-6. 操作手順（画面の押し方・ケース別）</h3>
+        <p>共通の入口は <code>tasks.html</code>（タスク画面）です。左上の<b>拠点</b>を合わせてから作業してください。</p>
+
+        <h4 style="font-size:14px;margin:12px 0 6px;color:var(--primary);">ケース A｜「その日だけ」のイベントを、すぐ手で1件作る（おすすめ）</h4>
+        <p>譲渡会・セール当日など、<b>その日限りで終わらせたい用事</b>向けです。行は消えずDBに残りますが、<b>翌日以降の日付で一覧を見ると出てこない</b>ので、運用上は「その日のリストからは消えた」と考えて大丈夫です。</p>
+        <div class="step"><span class="step-num">1</span>タブ <b>今日のタスク</b> を開く</div>
+        <div class="step"><span class="step-num">2</span>下の <b>+ タスクを追加</b> をタップ</div>
+        <div class="step"><span class="step-num">3</span><b>タイトル</b>を入力（例: 「4/20 譲渡会ブース片付け」）</div>
+        <div class="step"><span class="step-num">4</span><b>タスク種類</b>で <b>イベント</b> を選ぶ</div>
+        <div class="step"><span class="step-num">5</span><b>指定期日</b>に、その用事の期限日（＝その日だけやりたい日）を入れる。必要なら <b>指定実行日</b>にも<b>同じ日付</b>を入れると分かりやすいです</div>
+        <div class="step"><span class="step-num">6</span>属性・猫・依頼先・優先度は店のルールに合わせて設定（任意）</div>
+        <div class="step"><span class="step-num">7</span><b>追加</b>をタップする</div>
+        <div class="step"><span class="step-num">8</span>画面上部の<b>日付</b>を、その期日と同じ日に合わせて <b>更新</b>。一覧に出たら、その日のうちに <b>完了</b> または <b>スキップ</b></div>
+        <div class="tip">💡 フィルタの状態が <b>未完了</b> だけのときは、完了すると一覧から消えて見えます。あとから確認したいときは状態を <b>すべて</b> か <b>完了</b> に変えてください。</div>
+
+        <h4 style="font-size:14px;margin:12px 0 6px;color:var(--primary);">ケース B｜「1回だけ」のテンプレから、朝に1行だけ生やす（チームで繰り返し使わない）</h4>
+        <p>毎年は不要で、<b>今年の〇月〇日だけ</b>出したいとき向け。一括生成をしたあと、<b>テンプレートが自動でオフ</b>になるので「うっかり明日も同じ行が増える」ことがありません。</p>
+        <div class="step"><span class="step-num">1</span>タブ <b>テンプレート</b> を開く</div>
+        <div class="step"><span class="step-num">2</span><b>+ 追加</b> をタップ</div>
+        <div class="step"><span class="step-num">3</span><b>テンプレートID</b>（英字・数字・アンダースコア推奨。例: <code>tmpl_sale_20260420</code>）</div>
+        <div class="step"><span class="step-num">4</span><b>タイトル</b>・<b>タスク種類: イベント</b>・属性などを入力</div>
+        <div class="step"><span class="step-num">5</span><b>繰り返し</b>で <b>1回のみ</b> を選んで保存</div>
+        <div class="step"><span class="step-num">6</span>イベント当日の朝: <b>生成日</b>をその日に合わせ、<b>⚡ 一括生成</b> を実行</div>
+        <div class="step"><span class="step-num">7</span>タブを <b>今日のタスク</b> に戻り、同じ日付で更新して行ができているか確認 → 終わったら完了</div>
+        <div class="tip">💡 繰り返しが「曜日指定」などで、当日がルールに合わないテンプレだけ先に作ってあるときは、一括生成の横のチェック <b>イベントを指定日に強制生成</b> をオンにすると、その日付で無理やり1行作れます。</div>
+
+        <h4 style="font-size:14px;margin:12px 0 6px;color:var(--primary);">ケース C｜毎朝同じルーティンを量産する（開店チェックなど）</h4>
+        <div class="step"><span class="step-num">1</span><b>テンプレート</b> → <b>+ 追加</b></div>
+        <div class="step"><span class="step-num">2</span><b>タスク種類: ルーティン</b>、<b>繰り返し: 毎日</b>（または曜日指定）</div>
+        <div class="step"><span class="step-num">3</span>保存したら、毎朝 <b>一括生成</b> でその日の行を作る（自動Cronがある運用なら手動は不要な日もあります）</div>
+
+        <h4 style="font-size:14px;margin:12px 0 6px;color:var(--primary);">ケース D｜何日か前から「期限が迫ってるよ」と出したいイベント</h4>
+        <p>テンプレまたは手入力で <b>イベント</b> を作り、<b>指定期日</b>を本番日にします。一覧の日付を<b>期限と同じ日か、期限より後</b>にすると、未完了のままだと上の方に出て目立ちます（期限を過ぎた未完了は強調）。</p>
+
+        <h4 style="font-size:14px;margin:12px 0 6px;color:var(--primary);">ケース E｜猫を付けた監視タスク</h4>
+        <div class="step"><span class="step-num">1</span>タブ <b>監視中</b> または <b>+ 監視タスクを追加</b></div>
+        <div class="step"><span class="step-num">2</span><b>タスク種類: 監視</b>、<b>監視期限</b>を必ず意識して入力</div>
+        <div class="step"><span class="step-num">3</span>猫を選ぶと、猫詳細のタスク欄にも関係が出やすくなります</div>
+
+        <div class="warn">⚠️ 「完了したらデータベースから物理削除」ではありません。<b>一覧とフィルタで見えなくなる</b>イメージです。監査のため行は残ります。</div>
+        <div class="warn">⚠️ 業務終了は未処理タスクの確認に使います。締めの前に、イベントの期限超過が残っていないかも見ておくと安心です。</div>
+
+        <h3 id="sec-tasks-event-vs-project" style="font-size:15px;margin:16px 0 8px;">12-7. イベントタスクと「プロジェクト」の違い（混同ポイントの整理）</h3>
+        <p>会話で「プロジェクトタスク」と言うと、人によって<b>別のもの</b>を指していることがあります。NYAGI では次のように分けると噛み合います。</p>
+
+        <p style="font-size:13px;font-weight:700;margin:10px 0 6px;">まず結論（1行ずつ）</p>
+        <ul>
+          <li><b>イベントタスク</b>＝「<b>締切</b>」が軸の<b>1行のタスク</b>（種類は <b>イベント</b>）。<b>今日のタスク</b>に並び、ここで完了／スキップします。</li>
+          <li><b>プロジェクト（タブ）</b>＝大きな仕事を<b>親子のツリー</b>で分解する<b>別の画面</b>。木のノードを追うイメージです。</li>
+          <li><b>属性「📁 プロジェクト」</b>＝進捗バー用の<b>分類ラベル</b>（データ上は <code>project</code>）。<b>タスク種類に「プロジェクト」はありません</b>（種類はルーティン／イベント／監視の3つだけです）。</li>
+        </ul>
+
+        <p style="font-size:13px;font-weight:700;margin:12px 0 6px;">比べてみる表</p>
+        <table style="width:100%;border-collapse:collapse;font-size:12px;margin-bottom:10px;">
+          <thead>
+            <tr style="background:rgba(0,0,0,0.25);">
+              <th style="border:1px solid rgba(255,255,255,0.12);padding:6px 8px;text-align:left;width:22%;">比較軸</th>
+              <th style="border:1px solid rgba(255,255,255,0.12);padding:6px 8px;text-align:left;">イベントタスク</th>
+              <th style="border:1px solid rgba(255,255,255,0.12);padding:6px 8px;text-align:left;">プロジェクト（タブのツリー）</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td style="border:1px solid rgba(255,255,255,0.08);padding:6px 8px;vertical-align:top;">主な画面</td>
+              <td style="border:1px solid rgba(255,255,255,0.08);padding:6px 8px;vertical-align:top;"><b>今日のタスク</b>（日付つき一覧）</td>
+              <td style="border:1px solid rgba(255,255,255,0.08);padding:6px 8px;vertical-align:top;"><b>プロジェクト</b>タブ（一覧→詳細の木）</td>
+            </tr>
+            <tr>
+              <td style="border:1px solid rgba(255,255,255,0.08);padding:6px 8px;vertical-align:top;">何を表すか</td>
+              <td style="border:1px solid rgba(255,255,255,0.08);padding:6px 8px;vertical-align:top;"><b>〇日までに片付ける</b>など、<b>期限</b>が決まった用事の1件</td>
+              <td style="border:1px solid rgba(255,255,255,0.08);padding:6px 8px;vertical-align:top;"><b>段取り全体</b>（大項目→中項目→小項目）</td>
+            </tr>
+            <tr>
+              <td style="border:1px solid rgba(255,255,255,0.08);padding:6px 8px;vertical-align:top;">完了の感じ</td>
+              <td style="border:1px solid rgba(255,255,255,0.08);padding:6px 8px;vertical-align:top;">その<b>1行</b>を完了にすると、その行はルールどおり一覧から見えなくなる（日付・フィルタ次第）</td>
+              <td style="border:1px solid rgba(255,255,255,0.08);padding:6px 8px;vertical-align:top;">ノードを<b>順番にチェック</b>。ノードと「今日のタスク」の行が<b>紐づいている場合</b>は、片方を完了するともう片方も進むことがあります（運用で連携したとき）</td>
+            </tr>
+            <tr>
+              <td style="border:1px solid rgba(255,255,255,0.08);padding:6px 8px;vertical-align:top;">向いている例</td>
+              <td style="border:1px solid rgba(255,255,255,0.08);padding:6px 8px;vertical-align:top;">譲渡会当日チェック、申込締切までの作業、〇日までの片付け</td>
+              <td style="border:1px solid rgba(255,255,255,0.08);padding:6px 8px;vertical-align:top;">店舗改装、引越し準備、大型イベントの<b>工程表</b>そのもの</td>
+            </tr>
+          </tbody>
+        </table>
+
+        <p style="font-size:13px;font-weight:700;margin:10px 0 6px;">属性「📁 プロジェクト」との関係（画面の実装メモ）</p>
+        <p><b>テンプレート</b>を追加・編集するときの「属性」には <b>📁 プロジェクト</b> を選べます。こうして生成された行は、今日のタスクの進捗バーで <b>プロジェクトの山</b>に入ります。一方、画面下の <b>+ タスクを追加</b> モーダルの属性プルダウンは、現状（マニュアル更新時点）では <b>開店準備〜その他まで</b>に限られており、<b>ここから直接「📁 プロジェクト」は選べません</b>。大改装の締切を「プロジェクト山」に載せたいときは、<b>テンプレート</b>で属性をプロジェクトにして一括生成する、などのやり方になります。</p>
+        <p><b>種類＝イベント</b> と <b>属性＝プロジェクト</b> は<b>独立</b>です。テンプレートで両方付ければ、「締切付きの用事」が「プロジェクト山」に並びます。</p>
+
+        <div class="tip">💡 迷ったら「<b>締切の1行として回したい？</b>」→イベント。「<b>全体の段取り表を木で見たい？</b>」→プロジェクトタブ。両方使うなら、<b>木で全体像</b>＋<b>締切が近いところだけ今日のタスクにイベント行</b>、の二段構えが分かりやすいです。</div>
+        <div class="warn">⚠️ 「イベント<b>属性</b>」（分類ラベル）と「イベント<b>種類</b>のタスク」は別物です。属性は進捗バーの色分け、種類は期限の扱いが変わります（12-1 の注意と同じです）。</div>
       </div>
     </div>
 
-    <!-- 14. フードDB -->
+    <!-- 13. フードDB -->
     <div class="manual-section" id="sec-foods">
-      <h2>🥫 14. フードDB</h2>
+      <h2>🥫 13. フードDB</h2>
       <div class="manual-body">
-        <p>猫用フードのデータベースです。カロリー・栄養素・ブランドなどを管理します。</p>
+        <p>フードDBは、給餌に使う製品情報を登録・検索する画面です。</p>
         <ul>
-          <li><b>登録済み</b>: ロイヤルカナン / ヒルズ を中心に多数登録済み</li>
-          <li><b>検索</b>: ブランド・名前・カテゴリで絞り込み</li>
-          <li><b>新規登録</b>: URLを貼ると自動でカロリーを読み取り</li>
+          <li><b>製品名 or URL 検索</b>: 自動取得候補から選び、プレビューを確認して登録できます</li>
+          <li><b>入力項目</b>: ブランド / 製品名 / カテゴリ / 形態 / 対象動物 / kcal / 栄養成分など</li>
+          <li><b>一覧絞り込み</b>: 療法食 / 総合栄養食 / 一般食・おやつ / 猫用 / 犬用</li>
+          <li><b>辞書編集</b>: 製品名の表記ゆれ・別名辞書を詳細モーダルから追加・編集できます</li>
         </ul>
-        <p>給餌プランでフードを選ぶとき、ここに登録されたデータが使われます。</p>
       </div>
     </div>
 
-    <!-- 15. トラブルシューティング -->
-    <div class="manual-section" id="sec-trouble">
-      <h2>🔧 15. トラブルシューティング</h2>
+    <!-- 14. 薬マスター -->
+    <div class="manual-section" id="sec-medicine-master">
+      <h2>💊 14. 薬マスター</h2>
       <div class="manual-body">
-        <h3 style="font-size:14px;margin:8px 0 6px;">画面が更新されない</h3>
-        <div class="step"><span class="step-num">1</span>各画面のヘッダー（ナビの上）の「🔄 キャッシュクリア」をタップ（ダッシュボードは下部にもあります）</div>
-        <div class="step"><span class="step-num">2</span>自動でリロードされます</div>
-
-        <h3 style="font-size:14px;margin:8px 0 6px;">ログインできない</h3>
-        <p>管理キーとスタッフIDが正しいか確認してください。それでもダメな場合はブラウザのサイトデータを削除してやり直してください。</p>
-
-        <h3 style="font-size:14px;margin:8px 0 6px;">データが表示されない</h3>
+        <p>薬マスターは、投薬スケジュールの元になる薬データベースです。</p>
         <ul>
-          <li>インターネット接続を確認</li>
-          <li>拠点フィルタ・ステータスフィルタが正しいか確認</li>
-          <li>ページを下に引っ張ってリロード</li>
+          <li><b>薬名 or URL 検索</b>: 候補取得後、プレビューして登録できます</li>
+          <li><b>編集項目</b>: 薬名 / 一般名 / カテゴリ / 対象動物 / 剤型 / 単位 / 備考</li>
+          <li><b>一覧フィルタ</b>: 猫用 / 犬用 / 共通</li>
+          <li><b>＋ ボタン</b>: 手動で新しい薬を追加できます</li>
+        </ul>
+      </div>
+    </div>
+
+    <!-- 15. 音声辞書 -->
+    <div class="manual-section" id="sec-voice-dict">
+      <h2>🎤 15. 音声辞書</h2>
+      <div class="manual-body">
+        <p>音声辞書画面では、猫名の聞き違い対策を行います。</p>
+        <ul>
+          <li><b>辞書一覧</b>: 拠点ごとに、猫名の別表記・誤変換を確認できます</li>
+          <li><b>手動で辞書に追加</b>: よくある誤認識を任意の猫へ紐づけられます</li>
+          <li><b>誤認識ログ</b>: 解決できなかった名前トークンを集計表示します</li>
+          <li><b>ログから辞書へ</b>: ログ行を選び、そのまま辞書登録できます</li>
+          <li><b>自動追加</b>: 条件を満たすログをサーバー側ルールで辞書化できます</li>
+        </ul>
+      </div>
+    </div>
+
+    <!-- 16. 引き受け申請 -->
+    <div class="manual-section" id="sec-intake">
+      <h2>📥 16. 引き受け申請</h2>
+      <div class="manual-body">
+        <p><code>intake-admin.html</code> は、<b>スタッフ向けの申請管理画面</b>です。先にNYAGI本体へログインしておく必要があります。</p>
+        <ul>
+          <li><b>招待リンク発行</b>: 外部申請者向けの setup URL を作成します</li>
+          <li><b>申請一覧</b>: draft / submitted / under_review / approved などで絞り込み可能</li>
+          <li><b>申請者一覧</b>: フェーズやメール・名前で検索できます</li>
+          <li><b>詳細パネル</b>: 選択した申請・申請者の内容を右側で確認します</li>
+        </ul>
+        <div class="tip">💡 外部の申請者が使うのは別ページです。この画面は招待・審査をするスタッフ専用です。</div>
+      </div>
+    </div>
+
+    <!-- 17. トラブルシューティング -->
+    <div class="manual-section" id="sec-trouble">
+      <h2>🔧 17. トラブルシューティング</h2>
+      <div class="manual-body">
+        <h3 style="font-size:14px;margin:8px 0 6px;">画面が古い / 表示がおかしい</h3>
+        <div class="step"><span class="step-num">1</span>各画面ヘッダー上部の「🔄 キャッシュクリア」をタップ</div>
+        <div class="step"><span class="step-num">2</span>必要なら <code>clear-cache.html</code> を開いて再読込</div>
+
+        <h3 style="font-size:14px;margin:8px 0 6px;">ログインが通らない</h3>
+        <ul>
+          <li>4桁パスワードが正しいか確認</li>
+          <li>一度ログアウトして再ログイン</li>
+          <li>それでもだめならサイトデータ削除後に再試行</li>
         </ul>
 
         <h3 style="font-size:14px;margin:8px 0 6px;">音声入力が動かない</h3>
         <ul>
-          <li>ブラウザの「マイクのアクセス許可」が必要です</li>
-          <li>Safari/Chrome を推奨。Firefox は非対応の場合あり</li>
+          <li>ブラウザのマイク許可を確認</li>
+          <li>Safari / Chrome 系を推奨</li>
+          <li>非対応表示のときはテキスト入力へ切り替え</li>
+        </ul>
+
+        <h3 style="font-size:14px;margin:8px 0 6px;">添付できない</h3>
+        <ul>
+          <li>ファイルサイズ制限を超えていないか確認</li>
+          <li>病院記録・注意事項は主に画像/PDF、掲示板は画像やOffice系も対応</li>
+          <li>通信が不安定なときは、添付を減らして再送してください</li>
         </ul>
       </div>
     </div>
 
     <div class="version-info" id="versionInfo">
-      マニュアル最終更新: 2026-03-18<br>
-      NYAGI v85
+      マニュアル最終更新: 2026-04-17<br>
+      確認対象: 2026-04-17 時点の NYAGI UI（12-7: イベント／プロジェクトタブ／属性project の整理。+タスク追加モーダルの属性は開店〜その他まで）
     </div>
 
   </div>

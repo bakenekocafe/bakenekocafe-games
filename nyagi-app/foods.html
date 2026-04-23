@@ -430,6 +430,109 @@
 
     .loading { text-align: center; padding: 30px; color: var(--text-dim); font-size: 13px; }
     .empty-msg { text-align: center; padding: 30px; color: var(--text-dim); font-size: 13px; }
+
+    /* ── フード編集フォーム ───────────────────── */
+    .modal-title-row {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      margin-bottom: 14px;
+    }
+    .modal-title-row .modal-title {
+      flex: 1;
+      margin-bottom: 0;
+    }
+    .btn-edit-food {
+      background: var(--primary);
+      color: #fff;
+      border: none;
+      border-radius: 8px;
+      padding: 6px 14px;
+      font-size: 12px;
+      font-weight: 700;
+      cursor: pointer;
+      white-space: nowrap;
+    }
+    .btn-deactivate {
+      background: rgba(248,113,113,0.15);
+      color: #f87171;
+      border: none;
+      border-radius: 8px;
+      padding: 6px 12px;
+      font-size: 12px;
+      font-weight: 700;
+      cursor: pointer;
+      white-space: nowrap;
+    }
+    .food-edit-form {
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+    }
+    .food-edit-row {
+      display: flex;
+      gap: 8px;
+    }
+    .food-edit-field {
+      flex: 1;
+      min-width: 0;
+    }
+    .food-edit-field.full { flex-basis: 100%; }
+    .food-edit-label {
+      font-size: 10px;
+      color: var(--text-dim);
+      margin-bottom: 3px;
+    }
+    .food-edit-input, .food-edit-select {
+      width: 100%;
+      box-sizing: border-box;
+      background: var(--bg);
+      border: 1px solid var(--surface-alt);
+      border-radius: 6px;
+      padding: 8px 10px;
+      color: var(--text);
+      font-size: 12px;
+    }
+    .food-edit-input:focus, .food-edit-select:focus {
+      border-color: var(--primary);
+      outline: none;
+    }
+    .food-edit-input.required { border-left: 3px solid var(--primary); }
+    .food-edit-actions {
+      display: flex;
+      gap: 8px;
+      margin-top: 6px;
+    }
+    .btn-save-food {
+      flex: 1;
+      background: var(--success);
+      color: #fff;
+      border: none;
+      border-radius: 8px;
+      padding: 11px;
+      font-size: 13px;
+      font-weight: 700;
+      cursor: pointer;
+    }
+    .btn-save-food:disabled { opacity: 0.5; }
+    .btn-cancel-edit {
+      background: var(--surface-alt);
+      color: var(--text-dim);
+      border: none;
+      border-radius: 8px;
+      padding: 11px 18px;
+      font-size: 13px;
+      cursor: pointer;
+    }
+    .food-active-toggle {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 8px 10px;
+      background: rgba(0,0,0,0.12);
+      border-radius: 8px;
+    }
+    .food-active-toggle label { font-size: 12px; color: var(--text-dim); cursor: pointer; }
   </style>
 </head>
 <body>
@@ -442,10 +545,12 @@
         <a href="dashboard.html">ダッシュボード</a>
         <a href="cats.html">猫一覧</a>
         <a href="tasks.html">タスク</a>
+        <a href="bulletin.html">掲示板</a>
+        <a href="inquiries.html">📮 問い合わせ</a>
         <a href="foods.html" class="nav-current">フード</a>
         <a href="voice-dict.html">🎤 辞書</a>
         <a href="medicines.html">薬</a>
-        <a href="manual.html">📖 マニュアル</a>
+        <a href="manual.html?v=235">📖 マニュアル</a>
       </nav>
     </div>
   </div>
@@ -585,7 +690,10 @@
   <!-- 詳細モーダル -->
   <div class="modal-overlay" id="detailModal">
     <div class="modal-box">
-      <div class="modal-title" id="modalTitle"></div>
+      <div class="modal-title-row">
+        <div class="modal-title" id="modalTitle"></div>
+        <div id="modalHeaderActions"></div>
+      </div>
       <div id="modalBody"></div>
       <button class="modal-close" onclick="closeModal()">閉じる</button>
     </div>
@@ -605,10 +713,10 @@
   <script src="config.js?v=213"></script>
   <script src="js/nyagi-boot-overlay.js?v=213"></script>
   <script src="js/login-gate.js?v=213"></script>
-  <script src="js/nyagi-jst.js?v=1"></script>
-  <script src="js/app.js?v=220"></script>
+  <script src="js/nyagi-jst.js?v=2"></script>
+  <script src="js/app.js?v=231"></script>
   <script src="js/nyagi-search-normalize.js?v=1"></script>
-  <script src="js/foods.js?v=216"></script>
-  <script src="js/voice-console.js?v=216"></script>
+  <script src="js/foods.js?v=217"></script>
+  <script src="js/voice-console.js?v=217"></script>
 </body>
 </html>

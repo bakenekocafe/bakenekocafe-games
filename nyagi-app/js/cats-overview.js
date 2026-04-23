@@ -89,6 +89,18 @@
     });
   }
 
+  /** JST の現在時刻から 朝/昼/夜 を自動判定 */
+  function currentJstSlot() {
+    var h = parseInt(new Date().toLocaleTimeString('en-GB', {
+      timeZone: 'Asia/Tokyo',
+      hour: '2-digit',
+      hour12: false,
+    }), 10);
+    if (h >= 5 && h < 12) return '朝';
+    if (h >= 12 && h < 18) return '昼';
+    return '夜';
+  }
+
   /** feeding_logs.served_time を表示用 HH:mm に */
   function ovFmtFedServedTime(raw) {
     if (raw == null || raw === '') return '';
@@ -187,6 +199,130 @@
   var OPT_SLOT = '<option value="">帯</option><option value="朝">朝</option><option value="昼">昼</option><option value="夜">夜</option><option value="途中">途中</option>';
   var OPT_CARE_TYPE = '<option value="">項目</option><option value="care:ブラシ">ブラシ</option><option value="care:アゴ">アゴ</option><option value="care:耳">耳</option><option value="care:爪切り">爪切り</option><option value="care:肉球">肉球</option><option value="care:お尻">お尻</option><option value="eye_discharge:目ヤニ拭き">目ヤニ拭き</option>';
   var OPT_CARE_DONE = '<option value="1">実施</option><option value="0">スキップ</option>';
+  /** 排便6種・排尿7種（OPT_STOOL_STATUS / OPT_URINE_STATUS の空以外と同一文言） */
+  var STOOL_STATUS_OPTIONS = ['健康', '硬い', '軟便', '下痢', '血便小', '血便大（異常）'];
+  var URINE_STATUS_OPTIONS = ['なし（異常）', 'なし', '少量', '普通', '多い', '血尿小', '血尿大（異常）'];
+
+  /** 編集ブロック内の状態グリッド（hidden + ボタン）。タップで hidden に値をセットし見た目を同期 */
+  function syncExcretionStatusGridFromHidden(hiddenEl) {
+    if (!hiddenEl || hiddenEl.tagName !== 'INPUT' || hiddenEl.type !== 'hidden') return;
+    var grid = hiddenEl.nextElementSibling;
+    if (!grid || !grid.classList || !grid.classList.contains('ov-ex-status-grid')) return;
+    var v = hiddenEl.value || '';
+    var btns = grid.querySelectorAll('.ov-ex-st-btn');
+    for (var i = 0; i < btns.length; i++) {
+      var b = btns[i];
+      b.classList.toggle('ov-ex-st-btn--on', (b.getAttribute('data-ex-value') || '') === v);
+    }
+  }
+
+  function buildStoolStatusGridHtml(hiddenClasses) {
+    var h = '<input type="hidden" class="' + hiddenClasses + '" value="">';
+    h += '<div class="ov-ex-status-grid" data-ex-kind="stool" role="group" aria-label="排便の状態">';
+    for (var si = 0; si < STOOL_STATUS_OPTIONS.length; si++) {
+      var labS = STOOL_STATUS_OPTIONS[si];
+      h += '<button type="button" class="ov-ex-st-btn" data-ex-value="' + escAttr(labS) + '">' + esc(labS) + '</button>';
+    }
+    h += '</div>';
+    return h;
+  }
+
+  function buildUrineStatusGridHtml(hiddenClasses) {
+    var h = '<input type="hidden" class="' + hiddenClasses + '" value="">';
+    h += '<div class="ov-ex-status-grid" data-ex-kind="urine" role="group" aria-label="排尿の状態">';
+    for (var ui = 0; ui < URINE_STATUS_OPTIONS.length; ui++) {
+      var labU = URINE_STATUS_OPTIONS[ui];
+      h += '<button type="button" class="ov-ex-st-btn" data-ex-value="' + escAttr(labU) + '">' + esc(labU) + '</button>';
+    }
+    h += '</div>';
+    return h;
+  }
+
+  /** 猫1頭: 健康+自動スロット で即 POST */
+  function ovQuickPostExcretionForCat(catId, kind, btn) {
+    if (!catId) return;
+    var slot = currentJstSlot();
+    postHealthRecord({
+      cat_id: catId,
+      record_type: kind,
+      record_date: todayJstYmd(),
+      recorded_time: nowJstHm(),
+      value: '健康',
+      details: slot,
+    }, btn);
+  }
+
+  /** 一括: 全猫 or 未記録の猫に 健康+自動スロット で順番に POST */
+  function ovBulkPostExcretion(kind, btn, onlyEmpty) {
+    var today = todayJstYmd();
+    var slot = currentJstSlot();
+    var targets = [];
+    for (var ci = 0; ci < catsData.length; ci++) {
+      var cat = catsData[ci];
+      if (onlyEmpty) {
+        var arr = kind === 'urine' ? (cat.urine_today || []) : (cat.stool_today || []);
+        var hasToday = false;
+        for (var hi = 0; hi < arr.length; hi++) {
+          if ((arr[hi].record_date || '') === today) { hasToday = true; break; }
+        }
+        if (hasToday) continue;
+      }
+      targets.push(cat.id);
+    }
+    if (targets.length === 0) {
+      alert(onlyEmpty ? '全員すでに本日の記録があります' : '対象の猫がありません');
+      return;
+    }
+    var label = kind === 'urine' ? '排尿' : '排便';
+    var msg = onlyEmpty
+      ? ('本日まだ記録なしの ' + targets.length + ' 頭に ' + label + '「健康」（' + slot + '帯）を記録します。よろしいですか？')
+      : ('表示中の全 ' + targets.length + ' 頭に ' + label + '「健康」（' + slot + '帯）を記録します（同日複数件になります）。よろしいですか？');
+    if (!confirm(msg)) return;
+    var prevText = btn.textContent;
+    btn.disabled = true;
+    btn.textContent = '…';
+    function bodyFor(cid) {
+      return { cat_id: cid, record_type: kind, record_date: today, recorded_time: nowJstHm(), value: '健康', details: slot };
+    }
+    function runSeq(idx) {
+      if (idx >= targets.length) {
+        btn.disabled = false;
+        btn.textContent = prevText;
+        fetchCatsDataSilent();
+        return;
+      }
+      postHealthRecordPromise(bodyFor(targets[idx]))
+        .then(function (res) {
+          if (!res.ok || (res.data && res.data.error)) {
+            btn.disabled = false;
+            btn.textContent = prevText;
+            alert('エラー: ' + ((res.data && (res.data.message || res.data.error)) || 'HTTP'));
+            return;
+          }
+          runSeq(idx + 1);
+        })
+        .catch(function () {
+          btn.disabled = false;
+          btn.textContent = prevText;
+          alert('保存に失敗しました');
+        });
+    }
+    runSeq(0);
+  }
+
+  function renderExcretionBulkBar(kind) {
+    var emoji = kind === 'urine' ? '💧' : '💩';
+    var label = kind === 'urine' ? '排尿' : '排便';
+    var h = '<div class="ov-ex-bulk-bar" data-bulk-kind="' + kind + '">';
+    h += '<div class="ov-ex-bulk-row">';
+    h += '<button type="button" class="btn btn-primary btn-ov-ex-bulk-only">' + emoji + ' 未記録の猫を一括記録（健康）</button>';
+    h += '<button type="button" class="btn btn-outline btn-ov-ex-bulk-all">全員追加</button>';
+    h += '</div>';
+    h += '<p class="dim ov-ex-bulk-sub">現在のJST時刻から帯（朝/昼/夜）を自動判定します</p>';
+    h += '</div>';
+    return h;
+  }
+
   /** ワンタップまとめ記録（ブラシ・アゴ・耳・お尻・目ヤニ）。爪切り・肉球は個別フォームから */
   var OV_CARE_BUNDLE_SPECS = [
     { value: 'care:ブラシ', label: 'ブラシ' },
@@ -1907,7 +2043,7 @@
   }
 
   function saveInlineStool(catId, form, btn) {
-    var st = form.querySelector('.ov-sel-st');
+    var st = form.querySelector('select.ov-sel-st') || form.querySelector('input.ov-sel-st');
     var slot = form.querySelector('.ov-sel-slot');
     var dt = form.querySelector('.ov-inp-date');
     var value = st && st.value;
@@ -1926,7 +2062,7 @@
   }
 
   function saveInlineUrine(catId, form, btn) {
-    var st = form.querySelector('.ov-sel-ur');
+    var st = form.querySelector('select.ov-sel-ur') || form.querySelector('input.ov-sel-ur');
     var slot = form.querySelector('.ov-sel-slot');
     var dt = form.querySelector('.ov-inp-date');
     var value = st && st.value;
@@ -2317,6 +2453,48 @@
         }).catch(function () { alert('削除に失敗しました'); });
         return;
       }
+      var bulkOnlyBtn = ev.target.closest && ev.target.closest('.btn-ov-ex-bulk-only');
+      if (bulkOnlyBtn) {
+        ev.preventDefault();
+        ev.stopPropagation();
+        var barOnly = bulkOnlyBtn.closest('.ov-ex-bulk-bar');
+        if (!barOnly) return;
+        ovBulkPostExcretion(barOnly.getAttribute('data-bulk-kind') || 'stool', bulkOnlyBtn, true);
+        return;
+      }
+      var bulkAllBtn = ev.target.closest && ev.target.closest('.btn-ov-ex-bulk-all');
+      if (bulkAllBtn) {
+        ev.preventDefault();
+        ev.stopPropagation();
+        var barAll = bulkAllBtn.closest('.ov-ex-bulk-bar');
+        if (!barAll) return;
+        ovBulkPostExcretion(barAll.getAttribute('data-bulk-kind') || 'stool', bulkAllBtn, false);
+        return;
+      }
+      var quickBtn = ev.target.closest && ev.target.closest('.btn-ov-ex-quick');
+      if (quickBtn) {
+        ev.preventDefault();
+        ev.stopPropagation();
+        var qForm = quickBtn.closest('.ov-ex-inline-form');
+        if (!qForm) return;
+        ovQuickPostExcretionForCat(
+          qForm.getAttribute('data-cat-id'),
+          qForm.getAttribute('data-ex-inline-kind') || 'stool',
+          quickBtn
+        );
+        return;
+      }
+      var exStBtn = ev.target.closest && ev.target.closest('.ov-ex-st-btn');
+      if (exStBtn && exStBtn.closest('.ov-ex-status-grid')) {
+        ev.preventDefault();
+        ev.stopPropagation();
+        var gridBtn = exStBtn.closest('.ov-ex-status-grid');
+        var hidBtn = gridBtn && gridBtn.previousElementSibling;
+        if (!hidBtn || hidBtn.tagName !== 'INPUT' || hidBtn.type !== 'hidden') return;
+        hidBtn.value = exStBtn.getAttribute('data-ex-value') || '';
+        syncExcretionStatusGridFromHidden(hidBtn);
+        return;
+      }
       var hrEdit = ev.target.closest && ev.target.closest('.btn-ov-hr-edit');
       if (hrEdit) {
         ev.preventDefault();
@@ -2330,7 +2508,12 @@
         var selE = rowE.querySelector(kindE === 'urine' ? '.ov-ex-sel-ur' : '.ov-ex-sel-st');
         if (selE) {
           selE.value = mappedE;
-          if (selE.value !== mappedE && rawE) selE.value = rawE;
+          if (selE.tagName === 'INPUT' && selE.type === 'hidden') {
+            if (!selE.value && rawE) selE.value = String(rawE);
+            syncExcretionStatusGridFromHidden(selE);
+          } else if (selE.tagName === 'SELECT' && selE.value !== mappedE && rawE) {
+            selE.value = rawE;
+          }
         }
         var slotE = rowE.querySelector('.ov-ex-sel-slot');
         if (slotE) slotE.value = rowE.getAttribute('data-hr-details') || '';
@@ -2355,7 +2538,7 @@
         var idS = rowS.getAttribute('data-record-id');
         var voiceOnlyS = rowS.getAttribute('data-voice-input-id');
         var kindS = rowS.getAttribute('data-hr-kind') || 'stool';
-        var stS = rowS.querySelector(kindS === 'urine' ? '.ov-ex-sel-ur' : '.ov-ex-sel-st');
+        var stS = rowS.querySelector(kindS === 'urine' ? 'input.ov-ex-sel-ur, select.ov-ex-sel-ur' : 'input.ov-ex-sel-st, select.ov-ex-sel-st');
         var slotS = rowS.querySelector('.ov-ex-sel-slot');
         var dtS = rowS.querySelector('.ov-ex-inp-date');
         var valS = stS && stS.value;
@@ -2414,12 +2597,46 @@
         ovSaveVomitRecord(vomitSave);
         return;
       }
+      var vomitFb = ev.target.closest && ev.target.closest('.btn-ov-vomit-fallback-del');
+      if (vomitFb) {
+        ev.preventDefault();
+        ev.stopPropagation();
+        var cidFb = vomitFb.getAttribute('data-cat-id');
+        if (cidFb) ovFetchAndDeleteTodaysVomitForCat(cidFb, vomitFb);
+        return;
+      }
       var vomitDel = ev.target.closest && ev.target.closest('.btn-ov-vomit-del');
       if (vomitDel) {
         ev.preventDefault();
         ev.stopPropagation();
-        var rid = vomitDel.getAttribute('data-record-id');
-        if (rid) ovDeleteVomitRecord(rid, vomitDel);
+        ovDeleteVomitRecord(vomitDel);
+        return;
+      }
+      var pccVomitSave = ev.target.closest && ev.target.closest('.btn-pcc-vomit-save');
+      if (pccVomitSave) {
+        ev.preventDefault();
+        ev.stopPropagation();
+        var formV = pccVomitSave.closest('.ov-pcc-vomit-form');
+        if (!formV) return;
+        var catIdV = formV.getAttribute('data-cat-id');
+        if (!catIdV) return;
+        var cntEl = formV.querySelector('.ov-pcc-vomit-count');
+        var dateEl = formV.querySelector('.ov-pcc-vomit-date');
+        var noteEl = formV.querySelector('.ov-pcc-vomit-note');
+        var count = cntEl ? cntEl.value : '1';
+        var rd = dateEl ? dateEl.value : todayJstYmd();
+        if (!rd) { alert('日付を入力してください'); return; }
+        var noteText = noteEl ? noteEl.value.trim() : '';
+        var detailsV = noteText ? JSON.stringify({ note: noteText }) : null;
+        postHealthRecord({
+          cat_id: catIdV,
+          record_type: 'vomiting',
+          record_date: rd,
+          recorded_time: nowJstHm(),
+          value: count + '回',
+          details: detailsV,
+        }, pccVomitSave);
+        if (noteEl) noteEl.value = '';
         return;
       }
       var careChipItem = ev.target.closest && ev.target.closest('.care-chip-tap');
@@ -2487,20 +2704,16 @@
   }
 
   function buildStoolInlineEdit(c) {
-    return '<div class="inline-form" data-cat-id="' + escAttr(c.id) + '">' +
-      '<select class="ov-inline-select ov-sel-st">' + OPT_STOOL_STATUS + '</select>' +
-      '<select class="ov-inline-select ov-sel-slot">' + OPT_SLOT + '</select>' +
-      '<input type="date" class="ov-inline-date ov-inp-date" value="' + escAttr(todayJstYmd()) + '">' +
-      '<button type="button" class="btn btn-primary btn-ov-save" data-kind="stool">保存</button>' +
+    return '<div class="inline-form ov-ex-inline-form" data-cat-id="' + escAttr(c.id) + '" data-ex-inline-kind="stool">' +
+      '<button type="button" class="btn btn-primary btn-ov-ex-quick">💩 記録（健康）</button>' +
+      '<span class="dim ov-ex-quick-auto">現在帯を自動判定</span>' +
       '</div>';
   }
 
   function buildUrineInlineEdit(c) {
-    return '<div class="inline-form" data-cat-id="' + escAttr(c.id) + '">' +
-      '<select class="ov-inline-select ov-sel-ur">' + OPT_URINE_STATUS + '</select>' +
-      '<select class="ov-inline-select ov-sel-slot">' + OPT_SLOT + '</select>' +
-      '<input type="date" class="ov-inline-date ov-inp-date" value="' + escAttr(todayJstYmd()) + '">' +
-      '<button type="button" class="btn btn-primary btn-ov-save" data-kind="urine">保存</button>' +
+    return '<div class="inline-form ov-ex-inline-form" data-cat-id="' + escAttr(c.id) + '" data-ex-inline-kind="urine">' +
+      '<button type="button" class="btn btn-primary btn-ov-ex-quick">💧 記録（健康）</button>' +
+      '<span class="dim ov-ex-quick-auto">現在帯を自動判定</span>' +
       '</div>';
   }
 
@@ -2544,6 +2757,51 @@
       '<input type="date" class="ov-inline-date ov-inp-date" value="' + escAttr(todayJstYmd()) + '">' +
       '<button type="button" class="btn btn-primary btn-ov-save" data-kind="care" style="font-size:11px;padding:6px 12px;white-space:nowrap;">保存</button>' +
       '</div></div></div>';
+  }
+
+  /** overview の嘔吐回数（NaN や数字以外の文字列でも表示が破綻しないように） */
+  function overviewParseVomitCount(v) {
+    if (v == null || v === '') return 0;
+    var n = Number(v);
+    if (isFinite(n) && !isNaN(n)) return n;
+    var s = String(v).trim();
+    var m = s.match(/(\d+)/);
+    if (m) return parseInt(m[1], 10) || 0;
+    return 0;
+  }
+
+  /** 猫ごとカード下: はき戻し（overview の vomit_today / vomit_7d / vomit_today_entries） */
+  function buildPccVomitStrip(c) {
+    var vt = overviewParseVomitCount(c.vomit_today);
+    var v7 = overviewParseVomitCount(c.vomit_7d);
+    var entries = c.vomit_today_entries || [];
+    var h = '';
+    h += '<div class="pcc-vomit-strip" onclick="event.stopPropagation();">';
+    h += '<div style="font-size:11px;color:var(--text-dim);line-height:1.4;margin-bottom:6px;">今日 <b>' + vt + '</b>回 · 直近7日 計<b>' + v7 + '</b>回</div>';
+    for (var ei = 0; ei < entries.length; ei++) {
+      var e = entries[ei];
+      var tl = e.time ? esc(String(e.time)) + ' ' : '';
+      var lab = e.label != null && e.label !== '' ? String(e.label) : (e.value != null ? String(e.value) : '記録');
+      var vid = e.voice_input_id != null && e.voice_input_id !== '' ? escAttr(String(e.voice_input_id)) : '';
+      var rid = e.record_id != null && e.record_id !== '' ? escAttr(String(e.record_id)) : '';
+      h += '<div class="pcc-vomit-entry-line">';
+      h += '<span style="flex:1;min-width:0;color:var(--text-main);">' + tl + esc(lab) + '</span>';
+      var eYmd = overviewClientRecordDateYmd(e.record_date != null && e.record_date !== '' ? e.record_date : todayJstYmd());
+      h += '<button type="button" class="btn-ov-vomit-del" data-vomit-record-ymd="' + escAttr(eYmd) + '" data-voice-id="' + vid + '" data-record-id="' + rid + '" style="font-size:10px;padding:4px 10px;border-radius:6px;border:1px solid rgba(248,113,113,0.4);background:rgba(248,113,113,0.12);color:#f87171;">削除</button>';
+      h += '</div>';
+    }
+    /* 条件付きだとキャッシュ・APIずれでボタンが消えるため、猫ごとに常に「再取得して削除」を出す */
+    h += '<div class="pcc-vomit-actions" style="margin:4px 0 10px;display:flex;flex-direction:column;align-items:stretch;gap:4px;">';
+    h += '<button type="button" class="btn-ov-vomit-fallback-del" data-cat-id="' + escAttr(String(c.id)) + '" style="font-size:12px;font-weight:700;padding:10px 12px;border-radius:8px;border:1px solid rgba(248,113,113,0.55);background:rgba(248,113,113,0.22);color:#fda4af;width:100%;box-sizing:border-box;">本日分のみ削除（再取得）</button>';
+    h += '<span class="dim" style="font-size:9px;line-height:1.35;">本日（JST）のはき戻し・嘔吐だけをAPIから探して削除します。過去日は猫詳細の健康記録から削除してください。</span>';
+    h += '</div>';
+    h += '<div class="ov-pcc-vomit-form" data-cat-id="' + escAttr(String(c.id)) + '" style="display:flex;flex-wrap:wrap;gap:6px;align-items:center;margin-top:6px;">';
+    h += '<select class="ov-inline-select ov-pcc-vomit-count" style="width:64px;flex-shrink:0;"><option value="1">1回</option><option value="2">2回</option><option value="3">3回</option></select>';
+    h += '<input type="date" class="ov-inline-input ov-pcc-vomit-date" style="width:120px;flex-shrink:0;" value="' + escAttr(todayJstYmd()) + '">';
+    h += '<input type="text" class="ov-inline-input ov-pcc-vomit-note" placeholder="メモ" style="flex:1;min-width:72px;">';
+    h += '<button type="button" class="btn btn-primary btn-pcc-vomit-save" style="white-space:nowrap;">記録</button>';
+    h += '</div></div>';
+    return h;
   }
 
   var MODE_KEY = 'nyagi_cats_mode';
@@ -2900,6 +3158,7 @@
     var html = '<div class="cat-grid">';
     for (var i = 0; i < catsData.length; i++) {
       var c = catsData[i];
+      html += '<div class="pcc-card-wrap">';
       html += '<a href="' + catLink(c.id) + '" class="per-cat-card" data-cat-slug="' + escAttr(c.id) + '">';
 
       // ヘッダー: 名前 + ステータス + スコア
@@ -3056,6 +3315,8 @@
       html += buildCareIndividualFormForPcc(c);
 
       html += '</a>';
+      html += buildPccVomitStrip(c);
+      html += '</div>';
     }
     html += '</div>';
     cardArea.innerHTML = html;
@@ -3180,22 +3441,26 @@
 
   function excretionEditBlockStool() {
     return '<div class="ov-ex-edit">' +
-      '<select class="ov-inline-select ov-ex-sel-st">' + OPT_STOOL_STATUS + '</select>' +
+      '<p class="dim ov-ex-edit-hint">状態を選んで保存（帯・日付も変更可）</p>' +
+      buildStoolStatusGridHtml('ov-inline-input ov-ex-sel-st') +
+      '<div class="ov-ex-inline-hr-row">' +
       '<select class="ov-inline-select ov-ex-sel-slot">' + OPT_SLOT + '</select>' +
       '<input type="date" class="ov-inline-date ov-ex-inp-date">' +
       '<button type="button" class="btn btn-primary btn-ov-hr-save">保存</button>' +
       '<button type="button" class="btn btn-ov-hr-cancel">取消</button>' +
-      '</div>';
+      '</div></div>';
   }
 
   function excretionEditBlockUrine() {
     return '<div class="ov-ex-edit">' +
-      '<select class="ov-inline-select ov-ex-sel-ur">' + OPT_URINE_STATUS + '</select>' +
+      '<p class="dim ov-ex-edit-hint">状態を選んで保存（帯・日付も変更可）</p>' +
+      buildUrineStatusGridHtml('ov-inline-input ov-ex-sel-ur') +
+      '<div class="ov-ex-inline-hr-row">' +
       '<select class="ov-inline-select ov-ex-sel-slot">' + OPT_SLOT + '</select>' +
       '<input type="date" class="ov-inline-date ov-ex-inp-date">' +
       '<button type="button" class="btn btn-primary btn-ov-hr-save">保存</button>' +
       '<button type="button" class="btn btn-ov-hr-cancel">取消</button>' +
-      '</div>';
+      '</div></div>';
   }
 
   function buildStoolEntriesHtml(stoolArr) {
@@ -3260,6 +3525,7 @@
     var html = '<div class="item-card">';
     html += '<div class="item-card-title">💩 排便 <small class="dim">直近3日</small></div>';
     html += '<div class="item-card-body">';
+    html += renderExcretionBulkBar('stool');
     for (var i = 0; i < catsData.length; i++) {
       var c = catsData[i];
       var stool = c.stool_today || [];
@@ -3273,6 +3539,7 @@
     var html = '<div class="item-card">';
     html += '<div class="item-card-title">🚽 排尿 <small class="dim">直近3日</small></div>';
     html += '<div class="item-card-body">';
+    html += renderExcretionBulkBar('urine');
     for (var i = 0; i < catsData.length; i++) {
       var c = catsData[i];
       var urine = c.urine_today || [];
@@ -3286,10 +3553,26 @@
 
   var _vomitRecentCache = null;
 
+  /**
+   * 猫ナビ cnPopulateList は各 .item-card 内の [data-cat-slug] を数える。
+   * はき戻しカードはフォーム＋非同期テーブル主体のため、従来の itemRow が無い → 非表示の行だけ足す。
+   */
+  function cnHiddenCatSlugsForNavHtml() {
+    var h = '<div class="cn-item-card-cat-slugs" aria-hidden="true" style="display:none">';
+    for (var a = 0; a < catsData.length; a++) {
+      var cx = catsData[a];
+      h += '<div class="item-row" data-cat-slug="' + escAttr(cx.id) + '">';
+      h += '<span class="item-cat-name">' + alertDot(cx.alert_level) + esc(cx.name) + '</span></div>';
+    }
+    h += '</div>';
+    return h;
+  }
+
   function renderItemCard_Vomit() {
     var html = '<div class="item-card">';
     html += '<div class="item-card-title">🤮 はき戻し記録</div>';
     html += '<div class="item-card-body">';
+    html += cnHiddenCatSlugsForNavHtml();
 
     html += '<div class="ov-vomit-form" id="ovVomitForm">';
     html += '<div class="ov-vomit-row">';
@@ -3347,6 +3630,7 @@
     }
     var catNameMap = {};
     for (var ci = 0; ci < catsData.length; ci++) catNameMap[catsData[ci].id] = catsData[ci].name;
+    var todayV = todayJstYmd();
     var html = '<table class="ov-vomit-table"><thead><tr><th>日付</th><th>猫</th><th>回数</th><th>メモ</th><th></th></tr></thead><tbody>';
     for (var j = 0; j < filtered.length; j++) {
       var r = filtered[j];
@@ -3360,10 +3644,18 @@
       if (r.details) {
         try { var dp = JSON.parse(r.details); note = dp.note || dp.finding || r.details; } catch (_) { note = r.details; }
       }
+      var rowYmd = overviewClientRecordDateYmd(r.record_date);
+      var isTodayRow = rowYmd === todayV;
       html += '<tr><td>' + esc(rd) + '</td><td>' + esc(cn) + '</td><td>' + esc(cnt) + '</td><td class="ov-vomit-note-cell">' + esc(note || '') + '</td>';
-      html += '<td><button type="button" class="btn-ov-vomit-del" data-record-id="' + r.id + '" title="削除">✕</button></td></tr>';
+      var vVoice = r.voice_input_id != null && r.voice_input_id !== '' ? escAttr(String(r.voice_input_id)) : '';
+      if (isTodayRow) {
+        html += '<td><button type="button" class="btn-ov-vomit-del" data-vomit-record-ymd="' + escAttr(rowYmd) + '" data-voice-id="' + vVoice + '" data-record-id="' + escAttr(String(r.id)) + '" title="本日分のみ削除">✕</button></td></tr>';
+      } else {
+        html += '<td class="dim" style="font-size:10px;text-align:center;">—</td></tr>';
+      }
     }
     html += '</tbody></table>';
+    html += '<div class="dim" style="font-size:10px;margin-top:6px;line-height:1.35;">✕ は本日（日本時間）の行のみ削除できます。過去日は猫詳細の健康記録から削除してください。</div>';
     el.innerHTML = html;
   }
 
@@ -3390,22 +3682,113 @@
     if (noteInp) noteInp.value = '';
   }
 
-  function ovDeleteVomitRecord(recordId, btn) {
-    if (!confirm('この記録を削除しますか？')) return;
-    var prevText = btn ? btn.textContent : '';
-    if (btn) { btn.disabled = true; btn.textContent = '…'; }
-    fetch(apiOpsBase() + '/health/records/' + encodeURIComponent(recordId), {
+  function ovDeleteVomitRecord(btn) {
+    if (!btn) return;
+    var vid = btn.getAttribute('data-voice-id') || '';
+    var rid = btn.getAttribute('data-record-id') || '';
+    if (!vid && !rid) {
+      alert('削除対象のIDがありません');
+      return;
+    }
+    var ymdAttr = btn.getAttribute('data-vomit-record-ymd');
+    if (ymdAttr != null && String(ymdAttr).trim() !== '') {
+      if (overviewClientRecordDateYmd(ymdAttr) !== todayJstYmd()) {
+        alert('はき戻し記録の削除は、本日（日本時間）の分のみ行えます。過去日は猫詳細の健康記録から削除してください。');
+        return;
+      }
+    }
+    if (!confirm('このはき戻し（本日分）記録を削除しますか？')) return;
+    var prevText = btn.textContent;
+    btn.disabled = true;
+    btn.textContent = '…';
+    var url = vid
+      ? apiOpsBase() + '/voice/inputs/' + encodeURIComponent(vid) + '/excretion'
+      : apiOpsBase() + '/health/records/' + encodeURIComponent(rid);
+    fetch(url, {
       method: 'DELETE',
       headers: apiHeaders(),
       cache: 'no-store',
     }).then(function (r) { return r.json(); })
       .then(function (data) {
-        if (btn) { btn.disabled = false; btn.textContent = prevText; }
+        btn.disabled = false;
+        btn.textContent = prevText;
         if (data.error) { alert('削除失敗: ' + (data.message || data.error)); return; }
         fetchData(0);
       })
       .catch(function () {
-        if (btn) { btn.disabled = false; btn.textContent = prevText; }
+        btn.disabled = false;
+        btn.textContent = prevText;
+        alert('削除に失敗しました');
+      });
+  }
+
+  /** record_date を YYYY-MM-DD に（API の表記ブレ対策・フォールバック削除の日付一致用） */
+  function overviewClientRecordDateYmd(d) {
+    if (d == null || d === '') return '';
+    var s = String(d).trim();
+    if (s.length >= 10) return s.slice(0, 10);
+    return s;
+  }
+
+  /** 一覧に vomit_today_entries が無いが件数だけ付いているとき、猫別取得で本日分を削除 */
+  function ovFetchAndDeleteTodaysVomitForCat(catId, btn) {
+    if (!confirm('この猫の「本日（JST）」のはき戻し／嘔吐に該当する健康記録だけをAPIから取得して削除します。よろしいですか？')) return;
+    var prevText = btn.textContent;
+    btn.disabled = true;
+    btn.textContent = '取得中…';
+    var today = todayJstYmd();
+    fetch(
+      apiOpsBase() + '/health/records?cat_id=' + encodeURIComponent(catId) + '&type=vomiting&limit=50',
+      { headers: apiHeaders(), cache: 'no-store' }
+    )
+      .then(function (r) { return r.json(); })
+      .then(function (data) {
+        btn.disabled = false;
+        btn.textContent = prevText;
+        if (data.error) {
+          alert('取得失敗: ' + (data.message || data.error));
+          return;
+        }
+        var recs = data.records || [];
+        var hits = [];
+        for (var i = 0; i < recs.length; i++) {
+          if (String(recs[i].cat_id || '') !== String(catId)) continue;
+          if (overviewClientRecordDateYmd(recs[i].record_date) !== today) continue;
+          if (recs[i].id != null && recs[i].id !== '') hits.push(recs[i].id);
+        }
+        if (hits.length === 0) {
+          alert('本日分の該当レコードが見つかりませんでした。日付・拠点フィルタを確認するか、猫詳細の健康記録から削除してください。');
+          return;
+        }
+        if (hits.length > 1 && !confirm('本日該当が ' + hits.length + ' 件あります。まとめて削除しますか？')) return;
+        ovDeleteHealthRecordIdsSequential(hits, 0);
+      })
+      .catch(function () {
+        btn.disabled = false;
+        btn.textContent = prevText;
+        alert('取得に失敗しました');
+      });
+  }
+
+  function ovDeleteHealthRecordIdsSequential(ids, idx) {
+    if (idx >= ids.length) {
+      fetchData(0);
+      return;
+    }
+    fetch(apiOpsBase() + '/health/records/' + encodeURIComponent(ids[idx]), {
+      method: 'DELETE',
+      headers: apiHeaders(),
+      cache: 'no-store',
+    })
+      .then(function (r) { return r.json(); })
+      .then(function (data) {
+        if (data.error) {
+          alert('削除失敗: ' + (data.message || data.error));
+          return;
+        }
+        ovDeleteHealthRecordIdsSequential(ids, idx + 1);
+      })
+      .catch(function () {
         alert('削除に失敗しました');
       });
   }
@@ -4257,6 +4640,19 @@
 
     var row = card.querySelector('[data-cat-slug="' + catSlug + '"]');
     if (!row) return;
+
+    if (row.closest && row.closest('.cn-item-card-cat-slugs')) {
+      var vomForm = card.querySelector('#ovVomitForm');
+      if (vomForm) {
+        var vsel = vomForm.querySelector('.ov-vomit-cat');
+        if (vsel) vsel.value = catSlug;
+        setTimeout(function () {
+          vomForm.scrollIntoView({ behavior: 'smooth', block: 'center' });
+          cnHighlight(vomForm);
+        }, wasCollapsed ? 400 : 50);
+      }
+      return;
+    }
 
     setTimeout(function () {
       row.scrollIntoView({ behavior: 'smooth', block: 'center' });

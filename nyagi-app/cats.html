@@ -64,6 +64,26 @@
       gap: 10px;
       margin-bottom: 20px;
     }
+    .pcc-card-wrap {
+      display: block;
+    }
+    .pcc-card-wrap .per-cat-card {
+      border-radius: 10px 10px 0 0;
+    }
+    .pcc-vomit-strip {
+      background: var(--surface);
+      border-radius: 0 0 10px 10px;
+      padding: 10px 12px 12px;
+      border-top: 1px solid rgba(255, 255, 255, 0.06);
+      font-size: 12px;
+    }
+    .pcc-vomit-entry-line {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 8px;
+      margin-bottom: 4px;
+    }
     .per-cat-card {
       background: var(--surface);
       border-radius: 10px;
@@ -758,11 +778,81 @@
       margin-top: 6px;
     }
     .item-card-body .ov-ex-edit {
-      flex-direction: row;
+      flex-direction: column;
+      flex-wrap: nowrap;
+      align-items: stretch;
+      gap: 8px;
+      margin-top: 4px;
+    }
+    .ov-ex-status-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 4px 6px;
+      width: 100%;
+      max-width: 22rem;
+      box-sizing: border-box;
+    }
+    .ov-ex-st-btn {
+      margin: 0;
+      padding: 4px 6px;
+      font-size: 10px !important;
+      line-height: 1.25;
+      border-radius: 6px;
+      border: 1px solid rgba(255, 255, 255, 0.14);
+      background: rgba(255, 255, 255, 0.06);
+      color: inherit;
+      cursor: pointer;
+      text-align: center;
+      -webkit-tap-highlight-color: rgba(255, 255, 255, 0.08);
+    }
+    .ov-ex-st-btn--on {
+      border-color: rgba(96, 165, 250, 0.65);
+      background: rgba(59, 130, 246, 0.22);
+      box-shadow: 0 0 0 1px rgba(59, 130, 246, 0.15);
+    }
+    .ov-ex-inline-hr-row,
+    .ov-ex-inline-slot-row {
+      display: flex;
       flex-wrap: wrap;
       align-items: center;
       gap: 6px 8px;
-      margin-top: 4px;
+      width: 100%;
+    }
+    .ov-ex-bulk-bar {
+      padding: 8px 10px;
+      margin: 0 0 10px 0;
+      border-radius: 8px;
+      border: 1px dashed rgba(255, 255, 255, 0.14);
+      background: rgba(0, 0, 0, 0.15);
+      box-sizing: border-box;
+    }
+    .ov-ex-bulk-row {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 6px 8px;
+      align-items: center;
+    }
+    .ov-ex-bulk-row .btn {
+      font-size: 12px !important;
+      padding: 7px 12px !important;
+    }
+    .ov-ex-bulk-sub {
+      font-size: 10px;
+      margin: 4px 0 0;
+      line-height: 1.4;
+    }
+    .ov-ex-inline-form .ov-ex-quick-auto {
+      font-size: 10px;
+      margin-left: 4px;
+    }
+    .ov-ex-inline-form .btn-ov-ex-quick {
+      font-size: 12px !important;
+      padding: 7px 12px !important;
+    }
+    .ov-ex-edit-hint {
+      font-size: 10px;
+      margin: 0 0 4px;
+      line-height: 1.35;
     }
     .item-card-body .ov-ex-edit .ov-inline-select,
     .item-card-body .ov-ex-edit .ov-inline-date {
@@ -780,6 +870,11 @@
       align-self: center;
     }
     /* 排便・排尿ブロックの「新規追加」行: 42% 伸びをやめて内容幅ベース */
+    .item-card-body .item-row-editable:has(.item-values-excretion) .item-inline-edit .inline-form.ov-ex-inline-form {
+      flex-direction: column;
+      align-items: stretch;
+      gap: 8px;
+    }
     .item-card-body .item-row-editable:has(.item-values-excretion) .item-inline-edit .inline-form {
       display: flex;
       flex-wrap: wrap;
@@ -1426,6 +1521,7 @@
         <a href="dashboard.html">ダッシュボード</a>
         <a href="cats.html" class="nav-current">猫一覧</a>
         <a href="tasks.html">タスク</a>
+        <a href="inquiries.html">問い合わせ</a>
         <a href="foods.html">フード</a>
         <a href="voice-dict.html">🎤 辞書</a>
         <a href="medicines.html">薬</a>
@@ -1642,7 +1738,7 @@
   <script src="js/login-gate.js?v=214"></script>
   <script src="js/nyagi-jst.js?v=1"></script>
   <script src="js/app.js?v=225"></script>
-  <script src="js/cats-overview.js?v=326"></script>
+  <script src="js/cats-overview.js?v=332"></script>
   <script src="js/voice-console.js?v=216"></script>
 </body>
 </html>

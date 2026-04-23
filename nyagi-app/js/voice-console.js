@@ -17,8 +17,28 @@
   var currentMode = MODE_FAB;
   var recognition = null;
   var isRecording = false;
-  var hasSpeechApi = !!(window.SpeechRecognition || window.webkitSpeechRecognition);
   var lastTranscript = '';
+
+  function isLikelyIOS() {
+    return /iPad|iPhone|iPod/.test(navigator.userAgent) ||
+      (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+  }
+
+  /** 読み込み直後だけでなく、録音直前にも再確認（環境によっては遅延公開される） */
+  function hasSpeechApiNow() {
+    try {
+      return !!(window.SpeechRecognition || window.webkitSpeechRecognition);
+    } catch (_) {
+      return false;
+    }
+  }
+
+  function insecureSpeechHint() {
+    if (typeof window.isSecureContext !== 'undefined' && window.isSecureContext) return '';
+    var h = location.hostname;
+    if (h === 'localhost' || h === '127.0.0.1') return '';
+    return ' http（ローカルIP等）ではブラウザが音声認識を無効にしていることがあります。https または localhost を試してください。';
+  }
 
   // ── DOM 参照（後で設定） ──────────────────────────────────────
   var fab, miniBar, overlay, panel;
@@ -100,6 +120,7 @@
     panel = document.createElement('div');
     panel.className = 'vc-panel';
 
+    var hasSpeechApi = hasSpeechApiNow();
     var submitLabel = ctx.mode === 'food_search' ? '検索' : '送信';
     var editPlaceholder = ctx.mode === 'food_search'
       ? '製品名を入力 or 録音...'
@@ -141,7 +162,11 @@
           '<button class="vc-submit-btn">' + submitLabel + '</button>' +
         '</div>' +
         '<div class="vc-result"></div>' +
-        (!hasSpeechApi ? '<div class="vc-unsupported">この端末は音声認識に対応していません。テキスト入力をお使いください。</div>' : '') +
+        (!hasSpeechApi
+          ? '<div class="vc-unsupported">この端末は音声認識に対応していません。テキスト入力をお使いください。' +
+            escHtml(insecureSpeechHint()) +
+            '</div>'
+          : '') +
       '</div>';
 
     panelContext   = panel.querySelector('.vc-panel-context');
@@ -223,12 +248,17 @@
   }
 
   function startRec() {
-    if (!hasSpeechApi) return;
+    if (!hasSpeechApiNow()) {
+      showPanelResult('この端末では音声認識を利用できません。' + insecureSpeechHint(), 'error');
+      return;
+    }
 
     var SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+    var ios = isLikelyIOS();
     recognition = new SR();
     recognition.lang = 'ja-JP';
-    recognition.continuous = false;
+    // iOS Safari は continuous:false だとすぐ終了して聞き取れないことがある
+    recognition.continuous = ios;
     recognition.interimResults = true;
 
     recognition.onresult = function (event) {
@@ -244,11 +274,19 @@
       }
 
       if (finalText) {
-        lastTranscript = finalText;
-        showTranscript(finalText, false);
-        panelEditTA.value = finalText;
+        var combined;
+        if (ios) {
+          var prev = (panelEditTA.value || '').trim();
+          var add = finalText.trim();
+          combined = prev ? prev + ' ' + add : add;
+        } else {
+          combined = finalText;
+        }
+        lastTranscript = combined;
+        showTranscript(combined, false);
+        panelEditTA.value = combined;
         panelEdit.classList.add('visible');
-        miniText.textContent = finalText;
+        miniText.textContent = combined;
         miniText.classList.remove('interim');
       } else if (interim) {
         showTranscript(interim, true);

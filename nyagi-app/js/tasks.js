@@ -16,6 +16,19 @@
   var staffList = [];
   var currentProjectId = null;
 
+  /** 本日のスキップで連続日数がこの値以上になるとき、確認モーダルを出す（繰越 skip_streak は「本スキップ前」の日数） */
+  var SKIP_STREAK_CONFIRM_FROM = 5;
+
+  function taskSkipStreakNext(carryRaw) {
+    var n = parseInt(String(carryRaw == null ? '0' : carryRaw), 10);
+    if (isNaN(n) || n < 0) n = 0;
+    return n + 1;
+  }
+
+  function taskSkipStreakNeedsConfirm(carryRaw) {
+    return taskSkipStreakNext(carryRaw) >= SKIP_STREAK_CONFIRM_FROM;
+  }
+
   /** 今日の暦日 YYYY-MM-DD（日本時間）。GET /tasks の due_date・テンプレ生成日と一致させる */
   function todayJstYmd() {
     return new Date().toLocaleDateString('sv-SE', { timeZone: 'Asia/Tokyo' });
@@ -251,6 +264,587 @@
     else if (currentTab === 'monitoring') loadMonitoringTasks();
   };
 
+  function normalizeSkipModalCatId(catIdOpt) {
+    if (catIdOpt === undefined || catIdOpt === null || catIdOpt === '' || catIdOpt === 'null') return null;
+    var s = String(catIdOpt).trim();
+    if (!s) return null;
+    // 数値 ID の場合は数値に変換（後方互換）。文字列 ID（cat_xxx 等）はそのまま返す。
+    var n = parseInt(s, 10);
+    if (!isNaN(n) && n > 0 && String(n) === s) return n;
+    return s;
+  }
+
+  /** 前日JST・業務終了Slackと同基準のケア穴があるときだけ確認（API失敗時はブロックしない） */
+  function runCareFieldGuardThen(catIdNum, onProceed) {
+    if (!catIdNum) {
+      onProceed();
+      return;
+    }
+    var loc = getSelectedLocation();
+    var qs = '/tasks/care-field-pending?cat_id=' + encodeURIComponent(String(catIdNum));
+    if (loc && loc !== 'both') qs += '&location=' + encodeURIComponent(loc);
+    fetch(API_BASE + qs, { headers: apiHeaders(), cache: 'no-store' })
+      .then(function (r) {
+        return r.json();
+      })
+      .then(function (data) {
+        if (!data || data.error) {
+          onProceed();
+          return;
+        }
+        if (data.has_pending) {
+          var labels = [];
+          var arr = data.items_for_cat || [];
+          for (var gi = 0; gi < arr.length; gi++) {
+            if (arr[gi] && arr[gi].item_label) labels.push(String(arr[gi].item_label));
+          }
+          var th = data.threshold_days != null ? data.threshold_days : 7;
+          var ref = data.reference_date ? String(data.reference_date) : '前日';
+          var msg =
+            '前日（' +
+            ref +
+            '）時点で、業務終了Slackの「ケア実施（項目別・実施から' +
+            th +
+            '日以上未記録）」と同じ基準に該当しています: ' +
+            (labels.length ? labels.join('、') : '（項目）') +
+            '。\n記録を追いつけずにスキップしますか？';
+          if (!window.confirm(msg)) return;
+        }
+        onProceed();
+      })
+      .catch(function () {
+        onProceed();
+      });
+  }
+
+  /** 「実施未確認のケアを減らす」タスク：昨日→今日のケア穴件数が減少していなければ警告 */
+  var CARE_REDUCTION_TASK_TITLE_SUBSTR = '実施未確認のケアを減らす';
+
+  function taskNeedsCareReductionCheck(task) {
+    if (!task) return false;
+    if ((task.task_type || 'routine') !== 'routine') return false;
+    if (task.cat_id != null && String(task.cat_id).trim() !== '') return false;
+    var title = task.title != null ? String(task.title) : '';
+    return title.indexOf(CARE_REDUCTION_TASK_TITLE_SUBSTR) !== -1;
+  }
+
+  function runCareReductionCheckThen(onProceed) {
+    var loc = getSelectedLocation();
+    var qs = '/tasks/care-reduction-check';
+    if (loc && loc !== 'both') qs += '?location=' + encodeURIComponent(loc);
+    fetch(API_BASE + qs, { headers: apiHeaders(), cache: 'no-store' })
+      .then(function (r) { return r.json(); })
+      .then(function (data) {
+        if (!data || data.error) { onProceed(); return; }
+        if (!data.decreased) {
+          var todayN = data.today_count != null ? data.today_count : '?';
+          var yestN = data.yesterday_count != null ? data.yesterday_count : '?';
+          var items = data.today_items || [];
+          var itemLines = [];
+          for (var i = 0; i < items.length && i < 10; i++) {
+            itemLines.push('  • ' + (items[i].cat_name || '') + ' — ' + (items[i].item_label || '') + '（' + (items[i].days_since_last != null ? items[i].days_since_last : '?') + '日未記録）');
+          }
+          if (items.length > 10) itemLines.push('  … 他' + (items.length - 10) + '件');
+          var ok = window.confirm(
+            '⚠️ ケア穴が減っていません\n\n' +
+            '昨日（' + (data.yesterday_date || '') + '）: ' + yestN + ' 件\n' +
+            '今日（' + (data.today_date || '') + '）: ' + todayN + ' 件\n\n' +
+            (itemLines.length ? '【未記録のまま残っている項目】\n' + itemLines.join('\n') + '\n\n' : '') +
+            'このまま完了しますか？'
+          );
+          if (!ok) return;
+        }
+        onProceed();
+      })
+      .catch(function () { onProceed(); });
+  }
+
+  /** タイトルに「排尿」を含み猫なし（施設単位）のルーチンは全てガード対象 */
+  var MORNING_URINE_TASK_TITLE_SUBSTR = '排尿';
+
+  function taskNeedsMorningUrineNoCatGuard(task) {
+    if (!task) return false;
+    if ((task.task_type || 'routine') !== 'routine') return false;
+    if (task.cat_id != null && String(task.cat_id).trim() !== '') return false;
+    var title = task.title != null ? String(task.title) : '';
+    return title.indexOf(MORNING_URINE_TASK_TITLE_SUBSTR) !== -1;
+  }
+
+  var HALL_MORNING_MEDICATION_TASK_TEMPLATE_ID = 'tmpl_hall_asa_touyaku';
+
+  function taskNeedsHallMorningMedicationGuard(task) {
+    if (!task) return false;
+    if ((task.task_type || 'routine') !== 'routine') return false;
+    return String(task.template_id || '') === HALL_MORNING_MEDICATION_TASK_TEMPLATE_ID;
+  }
+
+  function alertMorningMedicationIncompletePayload(data) {
+    var lines = (data && data.missing_lines) || [];
+    var cats = (data && data.missing_cats) || [];
+    var nameParts = [];
+    var i;
+    for (i = 0; i < cats.length && i < 24; i++) {
+      if (cats[i] && cats[i].cat_name) nameParts.push(String(cats[i].cat_name));
+    }
+    var catStr = nameParts.length ? nameParts.join('、') : '（名前未取得）';
+    if (cats.length > 24) catStr += ' …他' + (cats.length - 24) + '頭';
+    var lineStr = lines.length
+      ? '\n【未完了のお薬（猫名: 薬）】\n' +
+        lines.slice(0, 30).join('\n') +
+        (lines.length > 30 ? '\n…他' + (lines.length - 30) + '件' : '')
+      : '';
+    var ref = data && data.reference_date ? String(data.reference_date) : '';
+    var head = ref ? '対象日: ' + ref + '\n' : '';
+    var msg =
+      (data && data.message ? String(data.message) : '朝の投薬がすべて記録されていません。') +
+      '\n\n' +
+      '■ 未完了のある猫\n' +
+      catStr +
+      lineStr +
+      '\n\n' +
+      head +
+      '投薬記録を済ませてから再度お試しください。';
+    var modal = document.getElementById('morningMedGuardModal');
+    var msgEl = document.getElementById('morningMedGuardMsg');
+    if (modal && msgEl) {
+      msgEl.textContent = msg;
+      modal.classList.add('open');
+    } else {
+      alert(msg);
+    }
+  }
+
+  window.closeMorningMedGuardModal = function () {
+    var modal = document.getElementById('morningMedGuardModal');
+    if (modal) modal.classList.remove('open');
+  };
+
+  var MORNING_FEEDING_TASK_TEMPLATE_ID = 'nekomeshiasa';
+
+  function taskNeedsMorningFeedingGuard(task) {
+    if (!task) return false;
+    if ((task.task_type || 'routine') !== 'routine') return false;
+    return String(task.template_id || '') === MORNING_FEEDING_TASK_TEMPLATE_ID;
+  }
+
+  function alertMorningFeedingIncompletePayload(data) {
+    var cats = (data && data.missing_cats) || [];
+    var nameParts = [];
+    var i;
+    for (i = 0; i < cats.length && i < 24; i++) {
+      if (cats[i] && cats[i].cat_name) nameParts.push(String(cats[i].cat_name));
+    }
+    var catStr = nameParts.length ? nameParts.join('、') : '（名前未取得）';
+    if (cats.length > 24) catStr += ' …他' + (cats.length - 24) + '頭';
+    var ref = data && data.reference_date ? String(data.reference_date) : '';
+    var head = ref ? '対象日: ' + ref + '\n' : '';
+    var msg =
+      (data && data.message ? String(data.message) : '朝ごはんがすべて記録されていません。') +
+      '\n\n' +
+      '■ 未記録の猫\n' +
+      catStr +
+      '\n\n' +
+      head +
+      '全ての猫の朝ごはんを記録してから再度お試しください。';
+    var modal = document.getElementById('morningFeedingGuardModal');
+    var msgEl = document.getElementById('morningFeedingGuardMsg');
+    if (modal && msgEl) {
+      msgEl.textContent = msg;
+      modal.classList.add('open');
+    } else {
+      alert(msg);
+    }
+  }
+
+  window.closeMorningFeedingGuardModal = function () {
+    var modal = document.getElementById('morningFeedingGuardModal');
+    if (modal) modal.classList.remove('open');
+  };
+
+  /** 一覧のフィルタ日・拠点で朝ごはんがすべて記録済みか（API失敗時はブロックしない） */
+  function runMorningFeedingGuardThen(onProceed) {
+    var loc = getSelectedLocation();
+    var fdEl = document.getElementById('filterDate');
+    var date = (fdEl && fdEl.value) ? fdEl.value : todayJstYmd();
+    var qs = '/dashboard/morning-feeding-pending?date=' + encodeURIComponent(date);
+    if (loc && loc !== 'both') qs += '&location=' + encodeURIComponent(loc);
+    fetch(API_BASE + qs, { headers: apiHeaders(), cache: 'no-store' })
+      .then(function (r) {
+        return r.json().catch(function () { return { error: 'parse_error' }; });
+      })
+      .then(function (data) {
+        if (!data) { onProceed(); return; }
+        if (data.error) {
+          console.warn('[MorningFeedGuard] API error:', data.error, data.message);
+          onProceed();
+          return;
+        }
+        if (data.has_pending) {
+          alertMorningFeedingIncompletePayload(data);
+          return;
+        }
+        onProceed();
+      })
+      .catch(function (e) {
+        console.warn('[MorningFeedGuard] fetch failed:', e);
+        onProceed();
+      });
+  }
+
+  var EVENING_FEEDING_TASK_TEMPLATE_ID = 'tmpl_bw_10';
+
+  function taskNeedsEveningFeedingGuard(task) {
+    if (!task) return false;
+    if ((task.task_type || 'routine') !== 'routine') return false;
+    return String(task.template_id || '') === EVENING_FEEDING_TASK_TEMPLATE_ID;
+  }
+
+  function alertEveningFeedingIncompletePayload(data) {
+    var cats = (data && data.missing_cats) || [];
+    var nameParts = [];
+    var i;
+    for (i = 0; i < cats.length && i < 24; i++) {
+      if (cats[i] && cats[i].cat_name) nameParts.push(String(cats[i].cat_name));
+    }
+    var catStr = nameParts.length ? nameParts.join('、') : '（名前未取得）';
+    if (cats.length > 24) catStr += ' …他' + (cats.length - 24) + '頭';
+    var ref = data && data.reference_date ? String(data.reference_date) : '';
+    var head = ref ? '対象日: ' + ref + '\n' : '';
+    var msg =
+      (data && data.message ? String(data.message) : '夜ごはんがすべて記録されていません。') +
+      '\n\n' +
+      '■ 未記録の猫\n' +
+      catStr +
+      '\n\n' +
+      head +
+      '全ての猫の夜ごはんを記録してから再度お試しください。';
+    var modal = document.getElementById('eveningFeedingGuardModal');
+    var msgEl = document.getElementById('eveningFeedingGuardMsg');
+    if (modal && msgEl) {
+      msgEl.textContent = msg;
+      modal.classList.add('open');
+    } else {
+      alert(msg);
+    }
+  }
+
+  window.closeEveningFeedingGuardModal = function () {
+    var modal = document.getElementById('eveningFeedingGuardModal');
+    if (modal) modal.classList.remove('open');
+  };
+
+  /** 一覧のフィルタ日・拠点で夜ごはんがすべて記録済みか（API失敗時はブロックしない） */
+  function runEveningFeedingGuardThen(onProceed) {
+    var loc = getSelectedLocation();
+    var fdEl = document.getElementById('filterDate');
+    var date = (fdEl && fdEl.value) ? fdEl.value : todayJstYmd();
+    var qs = '/dashboard/evening-feeding-pending?date=' + encodeURIComponent(date);
+    if (loc && loc !== 'both') qs += '&location=' + encodeURIComponent(loc);
+    fetch(API_BASE + qs, { headers: apiHeaders(), cache: 'no-store' })
+      .then(function (r) {
+        return r.json().catch(function () { return { error: 'parse_error' }; });
+      })
+      .then(function (data) {
+        if (!data) { onProceed(); return; }
+        if (data.error) {
+          console.warn('[EveningFeedGuard] API error:', data.error, data.message);
+          onProceed();
+          return;
+        }
+        if (data.has_pending) {
+          alertEveningFeedingIncompletePayload(data);
+          return;
+        }
+        onProceed();
+      })
+      .catch(function (e) {
+        console.warn('[EveningFeedGuard] fetch failed:', e);
+        onProceed();
+      });
+  }
+
+  var HALL_EVENING_MEDICATION_TASK_TEMPLATE_ID = 'tmpl_hall_yokujitsu_box';
+
+  function taskNeedsHallEveningMedicationGuard(task) {
+    if (!task) return false;
+    if ((task.task_type || 'routine') !== 'routine') return false;
+    return String(task.template_id || '') === HALL_EVENING_MEDICATION_TASK_TEMPLATE_ID;
+  }
+
+  /* ── 飲水測定（水交換）ガード ─────────────────────────────────────────
+   * tmpl_hall_mizu_koukan タスクは、猫一覧の飲水測定で当日のセットと
+   * 前日の計測が全て済むまで完了／スキップをブロック。
+   * 実務影響を避けるため、この日付以降のタスクにのみガードを適用する。 */
+  var HALL_WATER_MEASUREMENT_TASK_TEMPLATE_ID = 'tmpl_hall_mizu_koukan';
+  var HALL_WATER_MEASUREMENT_GUARD_START_YMD = '2026-04-20';
+
+  /** task の実行日（scheduled_date > deadline_date > due_date の優先順）を YYYY-MM-DD で返す */
+  function taskExecDateYmd(task) {
+    if (!task) return '';
+    var cand = task.scheduled_date || task.deadline_date || task.due_date;
+    if (!cand) return '';
+    var s = String(cand).slice(0, 10);
+    if (s.length !== 10 || s.charAt(4) !== '-') return '';
+    return s;
+  }
+
+  function taskNeedsHallWaterMeasurementGuard(task) {
+    if (!task) return false;
+    if ((task.task_type || 'routine') !== 'routine') return false;
+    if (String(task.template_id || '') !== HALL_WATER_MEASUREMENT_TASK_TEMPLATE_ID) return false;
+    /* 実行日（なければ今日）が開始日以降のときだけガードを適用 */
+    var execYmd = taskExecDateYmd(task) || todayJstYmd();
+    return execYmd >= HALL_WATER_MEASUREMENT_GUARD_START_YMD;
+  }
+
+  function alertHallWaterMeasurementIncompletePayload(data) {
+    var lines = (data && data.missing_lines) || [];
+    var cats = (data && data.missing_cats) || [];
+    var nameParts = [];
+    var i;
+    for (i = 0; i < cats.length && i < 24; i++) {
+      if (cats[i] && cats[i].cat_name) nameParts.push(String(cats[i].cat_name));
+    }
+    var catStr = nameParts.length ? nameParts.join('、') : '（名前未取得）';
+    if (cats.length > 24) catStr += ' …他' + (cats.length - 24) + '頭';
+    var lineStr = lines.length
+      ? '\n【未完了の詳細（猫名: 状態）】\n' +
+        lines.slice(0, 30).join('\n') +
+        (lines.length > 30 ? '\n…他' + (lines.length - 30) + '件' : '')
+      : '';
+    var ref = data && data.reference_date ? String(data.reference_date) : '';
+    var head = ref ? '対象日: ' + ref + '\n' : '';
+    var msg =
+      (data && data.message
+        ? String(data.message)
+        : '猫一覧の飲水測定（セット・計測）がすべて終わっていません。') +
+      '\n\n' +
+      '■ 未完了の猫\n' +
+      catStr +
+      lineStr +
+      '\n\n' +
+      head +
+      '猫一覧の「🚰 飲水測定」でセットと計測を済ませてから再度お試しください。';
+    var modal = document.getElementById('waterMeasurementGuardModal');
+    var msgEl = document.getElementById('waterMeasurementGuardMsg');
+    if (modal && msgEl) {
+      msgEl.textContent = msg;
+      modal.classList.add('open');
+    } else {
+      alert(msg);
+    }
+  }
+
+  window.closeWaterMeasurementGuardModal = function () {
+    var modal = document.getElementById('waterMeasurementGuardModal');
+    if (modal) modal.classList.remove('open');
+  };
+
+  /** 一覧のフィルタ日・拠点で飲水測定（当日セット＋前日計測）がすべて記録済みか（API失敗時はブロックしない） */
+  function runHallWaterMeasurementGuardThen(onProceed) {
+    var loc = getSelectedLocation();
+    var fdEl = document.getElementById('filterDate');
+    var date = (fdEl && fdEl.value) ? fdEl.value : todayJstYmd();
+    /* フロント側でも開始日前はスキップ */
+    if (date < HALL_WATER_MEASUREMENT_GUARD_START_YMD) { onProceed(); return; }
+    var qs = '/dashboard/water-measurement-pending?date=' + encodeURIComponent(date);
+    if (loc && loc !== 'both') qs += '&location=' + encodeURIComponent(loc);
+    fetch(API_BASE + qs, { headers: apiHeaders(), cache: 'no-store' })
+      .then(function (r) {
+        return r.json().catch(function () { return { error: 'parse_error' }; });
+      })
+      .then(function (data) {
+        if (!data) { onProceed(); return; }
+        if (data.error) {
+          console.warn('[WaterMeasurementGuard] API error:', data.error, data.message);
+          onProceed();
+          return;
+        }
+        if (data.has_pending) {
+          alertHallWaterMeasurementIncompletePayload(data);
+          return;
+        }
+        onProceed();
+      })
+      .catch(function (e) {
+        console.warn('[WaterMeasurementGuard] fetch failed:', e);
+        onProceed();
+      });
+  }
+
+  function alertEveningMedicationIncompletePayload(data) {
+    var lines = (data && data.missing_lines) || [];
+    var cats = (data && data.missing_cats) || [];
+    var nameParts = [];
+    var i;
+    for (i = 0; i < cats.length && i < 24; i++) {
+      if (cats[i] && cats[i].cat_name) nameParts.push(String(cats[i].cat_name));
+    }
+    var catStr = nameParts.length ? nameParts.join('、') : '（名前未取得）';
+    if (cats.length > 24) catStr += ' …他' + (cats.length - 24) + '頭';
+    var lineStr = lines.length
+      ? '\n【未完了のお薬（猫名: 薬）】\n' +
+        lines.slice(0, 30).join('\n') +
+        (lines.length > 30 ? '\n…他' + (lines.length - 30) + '件' : '')
+      : '';
+    var ref = data && data.reference_date ? String(data.reference_date) : '';
+    var head = ref ? '対象日: ' + ref + '\n' : '';
+    var msg =
+      (data && data.message ? String(data.message) : '夜の投薬がすべて記録されていません。') +
+      '\n\n' +
+      '■ 未完了のある猫\n' +
+      catStr +
+      lineStr +
+      '\n\n' +
+      head +
+      '投薬記録を済ませてから再度お試しください。';
+    var modal = document.getElementById('eveningMedGuardModal');
+    var msgEl = document.getElementById('eveningMedGuardMsg');
+    if (modal && msgEl) {
+      msgEl.textContent = msg;
+      modal.classList.add('open');
+    } else {
+      alert(msg);
+    }
+  }
+
+  window.closeEveningMedGuardModal = function () {
+    var modal = document.getElementById('eveningMedGuardModal');
+    if (modal) modal.classList.remove('open');
+  };
+
+  /** 一覧のフィルタ日・拠点で夜スロット投薬がすべて記録済みか（API失敗時はブロックしない） */
+  function runHallEveningMedicationGuardThen(onProceed) {
+    var loc = getSelectedLocation();
+    var fdEl = document.getElementById('filterDate');
+    var date = (fdEl && fdEl.value) ? fdEl.value : todayJstYmd();
+    var qs = '/dashboard/evening-medication-pending?date=' + encodeURIComponent(date);
+    if (loc && loc !== 'both') qs += '&location=' + encodeURIComponent(loc);
+    fetch(API_BASE + qs, { headers: apiHeaders(), cache: 'no-store' })
+      .then(function (r) {
+        return r.json().catch(function () { return { error: 'parse_error' }; });
+      })
+      .then(function (data) {
+        if (!data) { onProceed(); return; }
+        if (data.error) {
+          console.warn('[EveningMedGuard] API error:', data.error, data.message);
+          onProceed();
+          return;
+        }
+        if (data.has_pending) {
+          alertEveningMedicationIncompletePayload(data);
+          return;
+        }
+        onProceed();
+      })
+      .catch(function (e) {
+        console.warn('[EveningMedGuard] fetch failed:', e);
+        onProceed();
+      });
+  }
+
+  /** 一覧のフィルタ日・拠点で朝スロット投薬がすべて記録済みか（API失敗時はブロックしない） */
+  function runHallMorningMedicationGuardThen(onProceed) {
+    var loc = getSelectedLocation();
+    var fdEl = document.getElementById('filterDate');
+    var date = (fdEl && fdEl.value) ? fdEl.value : todayJstYmd();
+    var qs = '/dashboard/morning-medication-pending?date=' + encodeURIComponent(date);
+    if (loc && loc !== 'both') qs += '&location=' + encodeURIComponent(loc);
+    fetch(API_BASE + qs, { headers: apiHeaders(), cache: 'no-store' })
+      .then(function (r) {
+        return r.json().catch(function () { return { error: 'parse_error' }; });
+      })
+      .then(function (data) {
+        if (!data) { onProceed(); return; }
+        if (data.error) {
+          console.warn('[HallMedGuard] API error:', data.error, data.message);
+          onProceed();
+          return;
+        }
+        if (data.has_pending) {
+          alertMorningMedicationIncompletePayload(data);
+          return;
+        }
+        onProceed();
+      })
+      .catch(function (e) {
+        console.warn('[HallMedGuard] fetch failed:', e);
+        onProceed();
+      });
+  }
+
+  /** 本日JST・排尿未記録の猫がいる場合はハードブロック（API失敗時はブロックしない） */
+  function runMorningUrineNoCatGuardThen(onProceed) {
+    var loc = getSelectedLocation();
+    var qs = '/dashboard/morning-urine-pending';
+    if (loc && loc !== 'both') qs += '?location=' + encodeURIComponent(loc);
+    fetch(API_BASE + qs, { headers: apiHeaders(), cache: 'no-store' })
+      .then(function (r) {
+        return r.json();
+      })
+      .then(function (data) {
+        if (!data || data.error) {
+          onProceed();
+          return;
+        }
+        if (data.has_pending) {
+          var n = data.missing_count != null ? Number(data.missing_count) : data.missing_cats ? data.missing_cats.length : 0;
+          if (isNaN(n)) n = 0;
+          var cats = data.missing_cats || [];
+          var names = [];
+          var maxN = 12;
+          var mi;
+          for (mi = 0; mi < cats.length && mi < maxN; mi++) {
+            if (cats[mi] && cats[mi].cat_name) names.push(String(cats[mi].cat_name));
+          }
+          var nameStr = names.length ? names.join('、') : '（名前未取得）';
+          if (cats.length > maxN) nameStr += ' …他' + (cats.length - maxN) + '頭';
+          var ref = data.reference_date ? String(data.reference_date) : '';
+          var head = ref ? '本日（' + ref + '）' : '本日';
+          alert(
+            '⛔ 排尿記録が未入力の猫がいます（' + n + ' 頭）\n\n' +
+            nameStr + '\n\n' +
+            head + ' の排尿記録をすべて入力してからタスクを完了／スキップしてください。'
+          );
+          return;
+        }
+        onProceed();
+      })
+      .catch(function () {
+        onProceed();
+      });
+  }
+
+  function chainGuardsToSkipReasonModal(taskId, catNum, morningGuard, hallMedGuard, eveningMedGuard, feedingGuard, eveningFeedGuard, waterMeasGuard) {
+    var hallG = hallMedGuard === 1 || hallMedGuard === '1' || hallMedGuard === true;
+    var eveningG = eveningMedGuard === 1 || eveningMedGuard === '1' || eveningMedGuard === true;
+    var feedingG = feedingGuard === 1 || feedingGuard === '1' || feedingGuard === true;
+    var eveningFeedG = eveningFeedGuard === 1 || eveningFeedGuard === '1' || eveningFeedGuard === true;
+    var waterG = waterMeasGuard === 1 || waterMeasGuard === '1' || waterMeasGuard === true;
+    var tid = taskId;
+    function openR() {
+      openSkipReasonModalOnly(tid);
+    }
+    function afterGuards() {
+      runCareFieldGuardThen(catNum, openR);
+    }
+    function runTemplateGuardThen(next) {
+      if (hallG) runHallMorningMedicationGuardThen(next);
+      else if (eveningG) runHallEveningMedicationGuardThen(next);
+      else if (feedingG) runMorningFeedingGuardThen(next);
+      else if (eveningFeedG) runEveningFeedingGuardThen(next);
+      else if (waterG) runHallWaterMeasurementGuardThen(next);
+      else next();
+    }
+    if (morningGuard) {
+      runMorningUrineNoCatGuardThen(function () {
+        runTemplateGuardThen(afterGuards);
+      });
+    } else {
+      runTemplateGuardThen(afterGuards);
+    }
+  }
+
   var foldedGroups = {};
 
   window.toggleAttrGroup = function (attr) {
@@ -301,11 +895,27 @@
           return;
         }
         renderAttrProgress(data.progress || {}, data.attribute_groups || []);
+        // 編集モーダル用にタスクをキャッシュ
+        var allT = [];
         if (data.attribute_groups && data.attribute_groups.length > 0) {
+          for (var _gi = 0; _gi < data.attribute_groups.length; _gi++) {
+            var _grp = data.attribute_groups[_gi];
+            var _grpTasks = _grp.tasks || [];
+            for (var _gti = 0; _gti < _grpTasks.length; _gti++) {
+              var _grpG = _grpTasks[_gti].groups || [_grpTasks[_gti]];
+              for (var _gg = 0; _gg < _grpG.length; _gg++) {
+                var _ggGroup = _grpG[_gg];
+                var _ggItems = (_ggGroup.pending || []).concat(_ggGroup.done || []).concat(_ggGroup.skipped || []);
+                for (var _ggi = 0; _ggi < _ggItems.length; _ggi++) allT.push(_ggItems[_ggi]);
+              }
+            }
+          }
           renderAttrGroupedTasks(data.attribute_groups);
         } else {
-          renderFlatTasks(data.tasks || []);
+          allT = data.tasks || [];
+          renderFlatTasks(allT);
         }
+        window._cachedTasksForEdit = allT;
         nyagiRestoreScrollY(savedScrollY);
       })
       .catch(function () {
@@ -486,9 +1096,41 @@
   function renderTaskItem(task) {
     var statusClass = task.status === 'done' ? ' done' : task.status === 'skipped' ? ' skipped' : '';
     var checkIcon = task.status === 'done' ? '✅' : task.status === 'skipped' ? '⏭' : '⬜';
+    var morningUrineG = taskNeedsMorningUrineNoCatGuard(task) ? 1 : 0;
+    var hallMedG = taskNeedsHallMorningMedicationGuard(task) ? 1 : 0;
+    var eveningMedG = taskNeedsHallEveningMedicationGuard(task) ? 1 : 0;
+    var feedingG = taskNeedsMorningFeedingGuard(task) ? 1 : 0;
+    var eveningFeedG = taskNeedsEveningFeedingGuard(task) ? 1 : 0;
+    var waterMeasG = taskNeedsHallWaterMeasurementGuard(task) ? 1 : 0;
+    var careReductionG = taskNeedsCareReductionCheck(task) ? 1 : 0;
+    var catIdForGuard = (task.cat_id != null && task.cat_id !== '') ? String(task.cat_id) : '';
 
-    var html = '<div class="task-item' + statusClass + '" id="task-' + task.id + '">';
-    html += '<div class="task-check" onclick="toggleTask(' + task.id + ',\'' + task.status + '\')">' + checkIcon + '</div>';
+    var pendingClass = task.status === 'pending' ? ' pending' : '';
+    var html = '<div class="task-item' + statusClass + pendingClass + '" id="task-' + task.id + '">';
+    html +=
+      '<div class="task-check" onclick="toggleTask(' +
+      task.id +
+      ',\'' +
+      task.status +
+      '\',' +
+      morningUrineG +
+      ',\'' +
+      catIdForGuard.replace(/'/g, '') +
+      '\',' +
+      careReductionG +
+      ',' +
+      hallMedG +
+      ',' +
+      eveningMedG +
+      ',' +
+      feedingG +
+      ',' +
+      eveningFeedG +
+      ',' +
+      waterMeasG +
+      ')">' +
+      checkIcon +
+      '</div>';
     html += '<div class="task-body">';
     html += '<div class="task-title">';
     if (task.cat_name) html += '<span style="color:#a78bfa;">' + escapeHtml(task.cat_name) + ' </span>';
@@ -528,13 +1170,213 @@
     if (task.status === 'pending') {
       html += '<div class="task-actions-row">';
       html += '<button class="task-action-btn" onclick="openNoteModal(' + task.id + ',' + (task.cat_id ? 'true' : 'false') + ')">メモ追記</button>';
-      html += '<button class="task-action-btn" onclick="openSkipModal(' + task.id + ')">スキップ</button>';
+      html += '<button class="task-action-btn" onclick="openTaskEditModal(' + task.id + ')">編集</button>';
+      html +=
+        '<button class="task-action-btn" onclick="openSkipModal(' +
+        task.id +
+        ',' +
+        (task.skip_streak != null ? Number(task.skip_streak) : 0) +
+        ',\'' + catIdForGuard.replace(/'/g, '') + '\'' +
+        ',' +
+        morningUrineG +
+        ',' +
+        hallMedG +
+        ',' +
+        eveningMedG +
+        ',' +
+        feedingG +
+        ',' +
+        eveningFeedG +
+        ',' +
+        waterMeasG +
+        ')">スキップ</button>';
+      html += '</div>';
+    } else if (task.status === 'done' || task.status === 'skipped') {
+      html += '<div class="task-actions-row">';
+      html += '<button class="task-action-btn" onclick="openTaskEditModal(' + task.id + ')">編集</button>';
       html += '</div>';
     }
 
     html += '</div></div>';
     return html;
   }
+
+  // ══════════════════════════════════════════════════════════════════════════════
+  //  まとめて操作（一括選択・一括完了・一括スキップ）
+  // ══════════════════════════════════════════════════════════════════════════════
+
+  var _bulkMode = false;
+  var _bulkSelected = {};   // { taskId: true }
+
+  function bulkSelectedIds() {
+    return Object.keys(_bulkSelected).filter(function (k) { return _bulkSelected[k]; });
+  }
+
+  function updateBulkBar() {
+    var ids = bulkSelectedIds();
+    var bar = document.getElementById('bulkActionBar');
+    var label = document.getElementById('bulkCountLabel');
+    if (!bar) return;
+    if (!_bulkMode) { bar.style.display = 'none'; return; }
+    bar.style.display = 'block';
+    if (label) label.textContent = ids.length > 0 ? ids.length + '件選択中' : '0件選択（タップして選択）';
+    var doneBtn = document.getElementById('btnBulkDone');
+    var skipBtn = document.getElementById('btnBulkSkip');
+    if (doneBtn) doneBtn.disabled = ids.length === 0;
+    if (skipBtn) skipBtn.disabled = ids.length === 0;
+  }
+
+  window.toggleBulkMode = function () {
+    _bulkMode = !_bulkMode;
+    _bulkSelected = {};
+    document.body.classList.toggle('bulk-mode', _bulkMode);
+
+    /* タスク行のチェックボックス列を付け外し */
+    var pendingItems = document.querySelectorAll('.task-item.pending');
+    for (var i = 0; i < pendingItems.length; i++) {
+      var item = pendingItems[i];
+      var taskId = (item.id || '').replace('task-', '');
+      if (_bulkMode) {
+        var bc = document.createElement('div');
+        bc.className = 'bulk-check';
+        bc.setAttribute('data-bulk-id', taskId);
+        bc.addEventListener('click', function (e) {
+          e.stopPropagation();
+          var tid = this.getAttribute('data-bulk-id');
+          _bulkSelected[tid] = !_bulkSelected[tid];
+          this.classList.toggle('checked', !!_bulkSelected[tid]);
+          this.textContent = _bulkSelected[tid] ? '✓' : '';
+          var row = document.getElementById('task-' + tid);
+          if (row) row.classList.toggle('bulk-selected', !!_bulkSelected[tid]);
+          updateBulkBar();
+        });
+        item.insertBefore(bc, item.firstChild);
+        /* task-check（個別完了）クリックを無効化 */
+        var tc = item.querySelector('.task-check');
+        if (tc) { tc._origOnclick = tc.onclick; tc.onclick = null; tc.style.pointerEvents = 'none'; }
+      } else {
+        var bc2 = item.querySelector('.bulk-check');
+        if (bc2) bc2.parentNode.removeChild(bc2);
+        var tc2 = item.querySelector('.task-check');
+        if (tc2) { tc2.onclick = tc2._origOnclick || null; tc2.style.pointerEvents = ''; }
+        item.classList.remove('bulk-selected');
+      }
+    }
+    updateBulkBar();
+  };
+
+  /* 全選択 */
+  function bulkSelectAll() {
+    var pendingItems = document.querySelectorAll('.task-item.pending');
+    for (var i = 0; i < pendingItems.length; i++) {
+      var item = pendingItems[i];
+      var taskId = (item.id || '').replace('task-', '');
+      if (!taskId) continue;
+      _bulkSelected[taskId] = true;
+      item.classList.add('bulk-selected');
+      var bc = item.querySelector('.bulk-check');
+      if (bc) { bc.classList.add('checked'); bc.textContent = '✓'; }
+    }
+    updateBulkBar();
+  }
+
+  /* ── 一括完了 ─── */
+  function bulkDone() {
+    var ids = bulkSelectedIds();
+    if (ids.length === 0) { alert('タスクを選択してください'); return; }
+    if (!confirm(ids.length + '件のタスクをまとめて完了にしますか？')) return;
+    var doneBtn = document.getElementById('btnBulkDone');
+    if (doneBtn) { doneBtn.disabled = true; doneBtn.textContent = '処理中…'; }
+    var promises = ids.map(function (id) {
+      return fetch(API_BASE + '/tasks/' + id + '/done', {
+        method: 'POST', headers: apiHeaders(), cache: 'no-store',
+        body: JSON.stringify({}),
+      }).then(function (r) { return r.json(); });
+    });
+    Promise.all(promises).then(function (results) {
+      var errs = results.filter(function (d) { return d && d.error && d.error !== 'already_completed'; });
+      if (errs.length > 0) alert(errs.length + '件でエラーが発生しました');
+      if (doneBtn) { doneBtn.disabled = false; doneBtn.textContent = '✅ 完了'; }
+      _bulkSelected = {};
+      loadTasks();
+    }).catch(function () {
+      if (doneBtn) { doneBtn.disabled = false; doneBtn.textContent = '✅ 完了'; }
+      alert('保存に失敗しました');
+    });
+  }
+
+  /* ── 一括スキップ モーダル開閉 ─── */
+  function openBulkSkipModal() {
+    var ids = bulkSelectedIds();
+    if (ids.length === 0) { alert('タスクを選択してください'); return; }
+    var modal = document.getElementById('bulkSkipModal');
+    var countText = document.getElementById('bulkSkipCountText');
+    var inp = document.getElementById('bulkSkipReasonText');
+    if (countText) countText.textContent = ids.length + '件のタスクをスキップします。理由を選択または入力してください（任意）。';
+    if (inp) inp.value = '';
+    var chips = document.querySelectorAll('#bulkSkipModal .skip-chip');
+    for (var i = 0; i < chips.length; i++) chips[i].classList.remove('selected');
+    if (modal) modal.classList.add('open');
+  }
+
+  window.closeBulkSkipModal = function () {
+    var modal = document.getElementById('bulkSkipModal');
+    if (modal) modal.classList.remove('open');
+  };
+
+  window.bulkSelectSkipChip = function (el) {
+    var chips = document.querySelectorAll('#bulkSkipModal .skip-chip');
+    for (var i = 0; i < chips.length; i++) chips[i].classList.remove('selected');
+    el.classList.add('selected');
+    var inp = document.getElementById('bulkSkipReasonText');
+    if (inp) inp.value = el.textContent;
+  };
+
+  function submitBulkSkip() {
+    var ids = bulkSelectedIds();
+    if (ids.length === 0) return;
+    var inp = document.getElementById('bulkSkipReasonText');
+    var chip = document.querySelector('#bulkSkipModal .skip-chip.selected');
+    var reason = (inp && inp.value.trim()) ? inp.value.trim() : (chip ? chip.textContent : null);
+    var submitBtn = document.getElementById('btnBulkSkipSubmit');
+    if (submitBtn) { submitBtn.disabled = true; submitBtn.textContent = '処理中…'; }
+    var promises = ids.map(function (id) {
+      return fetch(API_BASE + '/tasks/' + id + '/skip', {
+        method: 'POST', headers: apiHeaders(), cache: 'no-store',
+        body: JSON.stringify({ reason: reason || null }),
+      }).then(function (r) { return r.json(); });
+    });
+    Promise.all(promises).then(function (results) {
+      var errs = results.filter(function (d) { return d && d.error && d.error !== 'already_completed'; });
+      if (errs.length > 0) alert(errs.length + '件でエラーが発生しました');
+      if (submitBtn) { submitBtn.disabled = false; submitBtn.textContent = 'スキップする'; }
+      closeBulkSkipModal();
+      _bulkSelected = {};
+      loadTasks();
+    }).catch(function () {
+      if (submitBtn) { submitBtn.disabled = false; submitBtn.textContent = 'スキップする'; }
+      alert('スキップに失敗しました');
+    });
+  }
+
+  /* ── ボタンのバインド（DOMContentLoaded 後） ─── */
+  (function bindBulkHandlers() {
+    function tryBind() {
+      var doneBtn = document.getElementById('btnBulkDone');
+      var skipBtn = document.getElementById('btnBulkSkip');
+      var selAllBtn = document.getElementById('btnBulkSelectAll');
+      var submitBtn = document.getElementById('btnBulkSkipSubmit');
+      if (!doneBtn || !skipBtn) { setTimeout(tryBind, 200); return; }
+      doneBtn.addEventListener('click', bulkDone);
+      skipBtn.addEventListener('click', openBulkSkipModal);
+      if (selAllBtn) selAllBtn.addEventListener('click', bulkSelectAll);
+      if (submitBtn) submitBtn.addEventListener('click', submitBulkSkip);
+      /* モーダル外タップで閉じる */
+      var modal = document.getElementById('bulkSkipModal');
+      if (modal) modal.addEventListener('click', function (e) { if (e.target === modal) closeBulkSkipModal(); });
+    }
+    setTimeout(tryBind, 100);
+  })();
 
   function renderFinishedTasksSection(finished, sectionUid) {
     if (!finished || finished.length === 0) return '';
@@ -589,7 +1431,7 @@
           if (t.cat_name) html += '<span style="color:#a78bfa;">' + escapeHtml(t.cat_name) + '</span> ';
           html += escapeHtml(t.title);
           html += '</div>';
-          html += '<select class="monitoring-status-select" data-task-id="' + t.id + '" data-current="' + st + '" onchange="changeMonitoringTaskStatus(this)" style="font-size:12px;padding:6px 8px;border-radius:8px;border:1px solid var(--border);background:var(--surface);color:var(--text);max-width:120px;">';
+          html += '<select class="monitoring-status-select" data-task-id="' + t.id + '" data-skip-streak="' + (t.skip_streak != null ? Number(t.skip_streak) : 0) + '" data-current="' + st + '" onchange="changeMonitoringTaskStatus(this)" style="font-size:12px;padding:6px 8px;border-radius:8px;border:1px solid var(--border);background:var(--surface);color:var(--text);max-width:120px;">';
           html += '<option value="pending"' + (st === 'pending' ? ' selected' : '') + '>監視中</option>';
           html += '<option value="done"' + (st === 'done' ? ' selected' : '') + '>解決済</option>';
           html += '<option value="skipped"' + (st === 'skipped' ? ' selected' : '') + '>スキップ</option>';
@@ -638,36 +1480,69 @@
       sel.value = prev;
     }
 
-    var body = { status: newStatus };
-    if (newStatus === 'skipped' && prev !== 'skipped') {
-      var r = window.prompt('スキップ理由（空欄でOK、キャンセルで戻す）', '');
-      if (r === null) {
-        revert();
-        return;
-      }
-      if (r && String(r).trim()) body.reason = String(r).trim();
+    function submitMonitoringPut(finalBody) {
+      fetch(API_BASE + '/tasks/' + taskId + '/status', {
+        method: 'PUT',
+        headers: apiHeaders(),
+        cache: 'no-store',
+        body: JSON.stringify(finalBody),
+      })
+        .then(function (r) {
+          return r.json();
+        })
+        .then(function (data) {
+          if (data.error) {
+            alert(data.message || data.error);
+            revert();
+            return;
+          }
+          sel.setAttribute('data-current', newStatus);
+          showToast('ステータスを更新しました');
+          loadMonitoringTasks();
+        })
+        .catch(function () {
+          alert('更新に失敗しました');
+          revert();
+        });
     }
 
-    fetch(API_BASE + '/tasks/' + taskId + '/status', {
-      method: 'PUT',
-      headers: apiHeaders(),
-      cache: 'no-store',
-      body: JSON.stringify(body),
-    }).then(function (r) { return r.json(); })
-      .then(function (data) {
-        if (data.error) {
-          alert(data.message || data.error);
+    if (newStatus === 'skipped' && prev !== 'skipped') {
+      var carriedMon = parseInt(sel.getAttribute('data-skip-streak') || '0', 10);
+      if (isNaN(carriedMon) || carriedMon < 0) carriedMon = 0;
+      if (taskSkipStreakNeedsConfirm(carriedMon)) {
+        var nextMon = taskSkipStreakNext(carriedMon);
+        if (
+          !window.confirm(
+            'この監視タスクはいままで ' +
+              carriedMon +
+              ' 日連続でスキップが続いており、今回のスキップで ' +
+              nextMon +
+              ' 日連続になります。本当にスキップしますか？'
+          )
+        ) {
           revert();
           return;
         }
-        sel.setAttribute('data-current', newStatus);
-        showToast('ステータスを更新しました');
-        loadMonitoringTasks();
-      })
-      .catch(function () {
-        alert('更新に失敗しました');
-        revert();
+      }
+      var sec = sel.closest('.monitoring-section');
+      var catSel = sec ? sec.querySelector('.monitoring-cat-select') : null;
+      var cRaw = catSel && catSel.value ? parseInt(String(catSel.value), 10) : NaN;
+      var catNum = !isNaN(cRaw) && cRaw > 0 ? cRaw : null;
+
+      runCareFieldGuardThen(catNum, function () {
+        var r = window.prompt('スキップ理由（空欄でOK、キャンセルで戻す）', '');
+        if (r === null) {
+          revert();
+          return;
+        }
+        var fb = { status: 'skipped' };
+        if (r && String(r).trim()) fb.reason = String(r).trim();
+        submitMonitoringPut(fb);
       });
+      return;
+    }
+
+    submitMonitoringPut({ status: newStatus });
   };
 
   /** 監視タスクの猫紐付け（PUT /tasks/:id body: { cat_id }） */
@@ -711,7 +1586,31 @@
 
   // ── タスク完了 / スキップ ────────────────────────────────────────────────────
 
-  window.toggleTask = function (taskId, currentStatus) {
+  function setTaskCheckLoading(taskId, loading) {
+    var el = document.getElementById('task-' + taskId);
+    if (!el) return;
+    var checkEl = el.querySelector('.task-check');
+    if (!checkEl) return;
+    if (loading) {
+      checkEl.setAttribute('data-orig-icon', checkEl.textContent);
+      checkEl.textContent = '⏳';
+      checkEl.style.pointerEvents = 'none';
+    } else {
+      var orig = checkEl.getAttribute('data-orig-icon');
+      if (orig) checkEl.textContent = orig;
+      checkEl.style.pointerEvents = '';
+    }
+  }
+
+  window.toggleTask = function (taskId, currentStatus, morningUrineGuard, catIdOpt, careReductionGuard, hallMedGuard, eveningMedGuard, feedingGuard, eveningFeedGuard, waterMeasGuard) {
+    var morningG = morningUrineGuard === 1 || morningUrineGuard === '1';
+    var careRedG = careReductionGuard === 1 || careReductionGuard === '1';
+    var hallG = hallMedGuard === 1 || hallMedGuard === '1';
+    var eveningG = eveningMedGuard === 1 || eveningMedGuard === '1';
+    var feedingG = feedingGuard === 1 || feedingGuard === '1';
+    var eveningFeedG = eveningFeedGuard === 1 || eveningFeedGuard === '1';
+    var waterG = waterMeasGuard === 1 || waterMeasGuard === '1';
+    var catId = normalizeSkipModalCatId(catIdOpt);
     if (currentStatus === 'done' || currentStatus === 'skipped') {
       if (!confirm('この操作を取り消して「未完了」に戻しますか？')) return;
       fetch(API_BASE + '/tasks/' + taskId + '/undo', {
@@ -727,32 +1626,177 @@
       return;
     }
 
-    fetch(API_BASE + '/tasks/' + taskId + '/done', {
-      method: 'POST',
-      headers: apiHeaders(), cache: 'no-store',
-      body: JSON.stringify({}),
-    }).then(function (r) { return r.json(); })
-    .then(function (data) {
-      if (data.error === 'already_completed') {
-        showToast((data.completed_by || '他のスタッフ') + ' が完了済みです');
+    function postTaskDone() {
+      fetch(API_BASE + '/tasks/' + taskId + '/done', {
+        method: 'POST',
+        headers: apiHeaders(), cache: 'no-store',
+        body: JSON.stringify({}),
+      }).then(function (r) { return r.json(); })
+      .then(function (data) {
+        setTaskCheckLoading(taskId, false);
+        if (data.error === 'already_completed') {
+          showToast((data.completed_by || '他のスタッフ') + ' が完了済みです');
+          loadTasks();
+          return;
+        }
+        if (data.error === 'morning_medication_incomplete') {
+          alertMorningMedicationIncompletePayload(data);
+          return;
+        }
+        if (data.error === 'evening_medication_incomplete') {
+          alertEveningMedicationIncompletePayload(data);
+          return;
+        }
+        if (data.error === 'morning_feeding_incomplete') {
+          alertMorningFeedingIncompletePayload(data);
+          return;
+        }
+        if (data.error === 'evening_feeding_incomplete') {
+          alertEveningFeedingIncompletePayload(data);
+          return;
+        }
+        if (data.error === 'water_measurement_incomplete') {
+          alertHallWaterMeasurementIncompletePayload(data);
+          return;
+        }
+        if (data.error) { alert('エラー: ' + (data.message || data.error)); return; }
         loadTasks();
-        return;
+      }).catch(function () {
+        setTaskCheckLoading(taskId, false);
+        alert('タスクの更新に失敗しました');
+      });
+    }
+
+    function runDoneWithGuards() {
+      // 猫紐付きタスクはケアフィールドガードを通す（完了操作でも確認）
+      runCareFieldGuardThen(catId, function () {
+        // 「実施未確認のケアを減らす」タスクは件数比較チェック
+        if (careRedG) {
+          runCareReductionCheckThen(postTaskDone);
+        } else {
+          postTaskDone();
+        }
+      });
+    }
+
+    function runHallThenDoneChain() {
+      if (hallG) {
+        setTaskCheckLoading(taskId, true);
+        runHallMorningMedicationGuardThen(function () {
+          runDoneWithGuards();
+        });
+      } else if (eveningG) {
+        setTaskCheckLoading(taskId, true);
+        runHallEveningMedicationGuardThen(function () {
+          runDoneWithGuards();
+        });
+      } else if (feedingG) {
+        setTaskCheckLoading(taskId, true);
+        runMorningFeedingGuardThen(function () {
+          setTaskCheckLoading(taskId, false);
+          runDoneWithGuards();
+        });
+      } else if (eveningFeedG) {
+        setTaskCheckLoading(taskId, true);
+        runEveningFeedingGuardThen(function () {
+          setTaskCheckLoading(taskId, false);
+          runDoneWithGuards();
+        });
+      } else if (waterG) {
+        setTaskCheckLoading(taskId, true);
+        runHallWaterMeasurementGuardThen(function () {
+          setTaskCheckLoading(taskId, false);
+          runDoneWithGuards();
+        });
+      } else {
+        runDoneWithGuards();
       }
-      if (data.error) { alert('エラー: ' + (data.message || data.error)); return; }
-      loadTasks();
-    }).catch(function () {
-      alert('タスクの更新に失敗しました');
-    });
+    }
+
+    if (morningG) {
+      runMorningUrineNoCatGuardThen(runHallThenDoneChain);
+      return;
+    }
+    runHallThenDoneChain();
   };
 
   // ── スキップ理由モーダル ────────────────────────────────────────────────────
 
-  window.openSkipModal = function (taskId) {
+  function openSkipReasonModalOnly(taskId) {
     document.getElementById('skipTaskId').value = taskId;
     document.getElementById('skipReasonText').value = '';
     var chips = document.querySelectorAll('.skip-chip');
     for (var i = 0; i < chips.length; i++) chips[i].classList.remove('selected');
     document.getElementById('skipModal').classList.add('open');
+  }
+
+  window.openSkipModal = function (taskId, carriedRaw, catIdOpt, morningUrineGuardOpt, hallMedGuardOpt, eveningMedGuardOpt, feedingGuardOpt, eveningFeedGuardOpt, waterMeasGuardOpt) {
+    var carried = carriedRaw;
+    if (carried === undefined || carried === null) carried = 0;
+    carried = parseInt(String(carried), 10);
+    if (isNaN(carried) || carried < 0) carried = 0;
+    var catNum = normalizeSkipModalCatId(catIdOpt);
+    var morningG =
+      morningUrineGuardOpt === 1 || morningUrineGuardOpt === '1' || morningUrineGuardOpt === true;
+    var hallG =
+      hallMedGuardOpt === 1 || hallMedGuardOpt === '1' || hallMedGuardOpt === true;
+    var eveningG =
+      eveningMedGuardOpt === 1 || eveningMedGuardOpt === '1' || eveningMedGuardOpt === true;
+    var feedingG =
+      feedingGuardOpt === 1 || feedingGuardOpt === '1' || feedingGuardOpt === true;
+    var eveningFeedG =
+      eveningFeedGuardOpt === 1 || eveningFeedGuardOpt === '1' || eveningFeedGuardOpt === true;
+    var waterG =
+      waterMeasGuardOpt === 1 || waterMeasGuardOpt === '1' || waterMeasGuardOpt === true;
+    if (taskSkipStreakNeedsConfirm(carried)) {
+      var nextN = taskSkipStreakNext(carried);
+      document.getElementById('skipStreakGuardTaskId').value = String(taskId);
+      var cidEl0 = document.getElementById('skipStreakGuardCatId');
+      if (cidEl0) cidEl0.value = catNum != null ? String(catNum) : '';
+      var mEl0 = document.getElementById('skipStreakGuardMorningUrine');
+      if (mEl0) mEl0.value = morningG ? '1' : '';
+      var hEl0 = document.getElementById('skipStreakGuardHallMed');
+      if (hEl0) hEl0.value = hallG ? '1' : '';
+      var eEl0 = document.getElementById('skipStreakGuardEveningMed');
+      if (eEl0) eEl0.value = eveningG ? '1' : '';
+      var fEl0 = document.getElementById('skipStreakGuardFeeding');
+      if (fEl0) fEl0.value = feedingG ? '1' : '';
+      var efEl0 = document.getElementById('skipStreakGuardEveningFeed');
+      if (efEl0) efEl0.value = eveningFeedG ? '1' : '';
+      var wEl0 = document.getElementById('skipStreakGuardWaterMeas');
+      if (wEl0) wEl0.value = waterG ? '1' : '';
+      document.getElementById('skipStreakGuardMsg').textContent =
+        'このタスクはいままで ' + carried + ' 日連続でスキップが続いており、今回のスキップで ' + nextN + ' 日連続になります。本当にスキップしますか？';
+      document.getElementById('skipStreakGuardModal').classList.add('open');
+      return;
+    }
+    chainGuardsToSkipReasonModal(taskId, catNum, morningG, hallG, eveningG, feedingG, eveningFeedG, waterG);
+  };
+
+  window.closeSkipStreakGuardModal = function () {
+    document.getElementById('skipStreakGuardModal').classList.remove('open');
+  };
+
+  window.confirmSkipStreakAndOpenReason = function () {
+    var tid = document.getElementById('skipStreakGuardTaskId').value;
+    var cidEl = document.getElementById('skipStreakGuardCatId');
+    var cidRaw = cidEl ? cidEl.value : '';
+    var mEl = document.getElementById('skipStreakGuardMorningUrine');
+    var morningG = mEl && mEl.value === '1';
+    var hEl = document.getElementById('skipStreakGuardHallMed');
+    var hallG = hEl && hEl.value === '1';
+    var eEl = document.getElementById('skipStreakGuardEveningMed');
+    var eveningG = eEl && eEl.value === '1';
+    var fEl = document.getElementById('skipStreakGuardFeeding');
+    var feedingG = fEl && fEl.value === '1';
+    var efEl = document.getElementById('skipStreakGuardEveningFeed');
+    var eveningFeedG = efEl && efEl.value === '1';
+    var wEl = document.getElementById('skipStreakGuardWaterMeas');
+    var waterG = wEl && wEl.value === '1';
+    document.getElementById('skipStreakGuardModal').classList.remove('open');
+    if (!tid) return;
+    var catNum = normalizeSkipModalCatId(cidRaw);
+    chainGuardsToSkipReasonModal(tid, catNum, morningG, hallG, eveningG, feedingG, eveningFeedG, waterG);
   };
 
   window.closeSkipModal = function () {
@@ -782,6 +1826,26 @@
         showToast((data.completed_by || '他のスタッフ') + ' が完了済みです');
         closeSkipModal();
         loadTasks();
+        return;
+      }
+      if (data.error === 'morning_medication_incomplete') {
+        alertMorningMedicationIncompletePayload(data);
+        return;
+      }
+      if (data.error === 'evening_medication_incomplete') {
+        alertEveningMedicationIncompletePayload(data);
+        return;
+      }
+      if (data.error === 'morning_feeding_incomplete') {
+        alertMorningFeedingIncompletePayload(data);
+        return;
+      }
+      if (data.error === 'evening_feeding_incomplete') {
+        alertEveningFeedingIncompletePayload(data);
+        return;
+      }
+      if (data.error === 'water_measurement_incomplete') {
+        alertHallWaterMeasurementIncompletePayload(data);
         return;
       }
       if (data.error) { alert('エラー: ' + (data.message || data.error)); return; }
@@ -840,6 +1904,7 @@
     document.getElementById('ntDeadlineDate').value = '';
     document.getElementById('ntDueTime').value = '';
     document.getElementById('ntExpiresAt').value = '';
+    if (document.getElementById('ntSendSlack')) document.getElementById('ntSendSlack').checked = false;
     populateStaffSelect('ntAssignedTo');
 
     var hint = document.getElementById('ntCatHint');
@@ -870,6 +1935,134 @@
     document.getElementById('newTaskModal').classList.remove('open');
   };
 
+  // ── タスク編集モーダル ────────────────────────────────────────────────────────
+
+  var _editingTaskData = null;
+
+  window.openTaskEditModal = function (taskId) {
+    // 表示中のタスクデータを探す
+    var task = null;
+    var allTasks = (window._cachedTasksForEdit || []);
+    for (var i = 0; i < allTasks.length; i++) {
+      if (allTasks[i].id === taskId) { task = allTasks[i]; break; }
+    }
+    // キャッシュになければAPIから取得
+    if (!task) {
+      fetch(API_BASE + '/tasks/' + encodeURIComponent(taskId), { headers: apiHeaders(), cache: 'no-store' })
+        .then(function (r) { return r.json(); })
+        .then(function (data) {
+          if (data && data.task) _fillTaskEditModal(data.task);
+          else if (data && data.id) _fillTaskEditModal(data);
+        });
+    } else {
+      _fillTaskEditModal(task);
+    }
+  };
+
+  function _fillTaskEditModal(task) {
+    _editingTaskData = task;
+    var el = function (id) { return document.getElementById(id); };
+    if (el('teTaskId')) el('teTaskId').value = task.id;
+    if (el('teTitle')) el('teTitle').value = task.title || '';
+    if (el('tePriority')) el('tePriority').value = task.priority || 'normal';
+    if (el('teScheduledDate')) el('teScheduledDate').value = task.scheduled_date || '';
+    if (el('teDeadlineDate')) el('teDeadlineDate').value = task.deadline_date || '';
+    if (el('teNote')) el('teNote').value = task.note || '';
+    if (el('teSendSlack')) el('teSendSlack').checked = false;
+    var modal = document.getElementById('taskEditModal');
+    if (modal) modal.classList.add('open');
+  }
+
+  window.closeTaskEditModal = function () {
+    var modal = document.getElementById('taskEditModal');
+    if (modal) modal.classList.remove('open');
+    _editingTaskData = null;
+  };
+
+  window.submitTaskEdit = function () {
+    var taskId = document.getElementById('teTaskId') ? document.getElementById('teTaskId').value : '';
+    if (!taskId) return;
+    var title = document.getElementById('teTitle').value.trim();
+    if (!title) { alert('タイトルを入力してください'); return; }
+    var sendSlack = !!(document.getElementById('teSendSlack') && document.getElementById('teSendSlack').checked);
+    var noteText = document.getElementById('teNote').value.trim() || null;
+
+    var payload = {
+      title: title,
+      priority: document.getElementById('tePriority').value,
+      scheduled_date: document.getElementById('teScheduledDate').value || null,
+      deadline_date: document.getElementById('teDeadlineDate').value || null,
+    };
+
+    fetch(API_BASE + '/tasks/' + encodeURIComponent(taskId), {
+      method: 'PUT',
+      headers: apiHeaders(), cache: 'no-store',
+      body: JSON.stringify(payload),
+    }).then(function (r) { return r.json(); })
+    .then(function (data) {
+      if (data.error) { alert('エラー: ' + (data.message || data.error)); return; }
+
+      // メモがあれば追記
+      var afterNote = function (d) { return Promise.resolve(d); };
+      if (noteText) {
+        afterNote = function () {
+          return fetch(API_BASE + '/tasks/' + encodeURIComponent(taskId) + '/note', {
+            method: 'PUT',
+            headers: apiHeaders(), cache: 'no-store',
+            body: JSON.stringify({ note: noteText, also_cat_note: !!(_editingTaskData && _editingTaskData.cat_id) }),
+          }).then(function (r) { return r.json(); });
+        };
+      }
+      return afterNote(data);
+    }).then(function () {
+      closeTaskEditModal();
+      if (currentTab === 'monitoring') { loadMonitoringTasks(); }
+      else { loadTasks(); }
+
+      if (sendSlack) {
+        var task = _editingTaskData || {};
+        sendEditTaskToSlack({
+          id: taskId,
+          title: title,
+          priority: payload.priority,
+          scheduled_date: payload.scheduled_date,
+          deadline_date: payload.deadline_date,
+          task_type: task.task_type || 'routine',
+          attribute: task.attribute || '',
+          cat_id: task.cat_id || null,
+          note: noteText,
+          location_id: getSelectedLocation() || '',
+        });
+      }
+    }).catch(function () {
+      alert('タスクの更新に失敗しました');
+    });
+  };
+
+  /** タスク編集結果をSlackへ通知 */
+  function sendEditTaskToSlack(task) {
+    var slackPayload = {
+      title: task.title,
+      task_type: task.task_type || 'routine',
+      attribute: task.attribute || '',
+      priority: task.priority || 'normal',
+      cat_id: task.cat_id || null,
+      scheduled_date: task.scheduled_date || null,
+      deadline_date: task.deadline_date || null,
+      note: task.note || null,
+      location_id: task.location_id || getSelectedLocation() || '',
+      is_update: true,
+    };
+    fetch(API_BASE + '/tasks/notify-new', {
+      method: 'POST',
+      headers: apiHeaders(), cache: 'no-store',
+      body: JSON.stringify(slackPayload),
+    }).then(function (r) { return r.json(); })
+    .then(function (res) {
+      showToast(res && res.ok ? 'Slackに共有しました' : 'Slack送信失敗: ' + ((res && res.reason) || '不明'));
+    }).catch(function () { showToast('Slack送信に失敗しました'); });
+  }
+
   window.submitNewTask = function () {
     var title = document.getElementById('ntTitle').value.trim();
     if (!title) { alert('タイトルを入力してください'); return; }
@@ -881,6 +2074,7 @@
     var expiresAt = document.getElementById('ntExpiresAt').value || null;
     var catId = document.getElementById('ntCatId').value || null;
     var noteText = document.getElementById('ntNote').value.trim() || null;
+    var sendSlack = !!(document.getElementById('ntSendSlack') && document.getElementById('ntSendSlack').checked);
 
     var assignedTo = document.getElementById('ntAssignedTo').value || null;
 
@@ -916,14 +2110,47 @@
         }).then(function () { return data; });
       }
       return data;
-    }).then(function () {
+    }).then(function (data) {
       closeNewTaskModal();
       if (currentTab === 'monitoring') { loadMonitoringTasks(); }
       else { loadTasks(); }
+
+      if (sendSlack && data && data.task) {
+        sendNewTaskToSlack(data.task, noteText);
+      }
     }).catch(function () {
       alert('タスクの追加に失敗しました');
     });
   };
+
+  /** 新規タスク登録後にSlackへ通知 */
+  function sendNewTaskToSlack(task, noteText) {
+    var slackPayload = {
+      title: task.title,
+      task_type: task.task_type || 'routine',
+      attribute: task.attribute || '',
+      priority: task.priority || 'normal',
+      cat_id: task.cat_id || null,
+      scheduled_date: task.scheduled_date || null,
+      deadline_date: task.deadline_date || null,
+      note: noteText || null,
+      location_id: getSelectedLocation() || '',
+    };
+    fetch(API_BASE + '/tasks/notify-new', {
+      method: 'POST',
+      headers: apiHeaders(), cache: 'no-store',
+      body: JSON.stringify(slackPayload),
+    }).then(function (r) { return r.json(); })
+    .then(function (res) {
+      if (res && res.ok) {
+        showToast('Slackに共有しました');
+      } else {
+        showToast('Slack送信失敗: ' + ((res && res.reason) || '不明'));
+      }
+    }).catch(function () {
+      showToast('Slack送信に失敗しました');
+    });
+  }
 
   // ══════════════════════════════════════════════════════════════════════════════
   //  テンプレート
@@ -1101,6 +2328,7 @@
     document.getElementById('tmplExpiresAt').value = '';
     document.getElementById('tmplDeleteArea').style.display = 'none';
     document.getElementById('tmplSubmitBtn').textContent = '保存';
+    if (document.getElementById('tmplSendSlack')) document.getElementById('tmplSendSlack').checked = false;
     populateStaffSelect('tmplAssignedTo');
     syncTemplateFormForTaskType();
     document.getElementById('newTemplateModal').classList.add('open');
@@ -1130,6 +2358,7 @@
         document.getElementById('tmplExpiresAt').value = expRaw.length >= 10 ? expRaw.slice(0, 10) : '';
         document.getElementById('tmplDeleteArea').style.display = 'block';
         document.getElementById('tmplSubmitBtn').textContent = '更新';
+        if (document.getElementById('tmplSendSlack')) document.getElementById('tmplSendSlack').checked = false;
         populateStaffSelect('tmplAssignedTo');
         if (t.assigned_to) {
           document.getElementById('tmplAssignedTo').value = t.assigned_to;
@@ -1148,6 +2377,7 @@
     var editId = document.getElementById('tmplEditMode').value;
     var title = document.getElementById('tmplTitle').value.trim();
     if (!title) { alert('タイトルは必須です'); return; }
+    var sendSlack = !!(document.getElementById('tmplSendSlack') && document.getElementById('tmplSendSlack').checked);
 
     var tmplTt = document.getElementById('tmplTaskType').value;
     var payload = {
@@ -1169,6 +2399,29 @@
       payload.expires_at = null;
     }
 
+    function doSlackIfNeeded(isUpdate) {
+      if (!sendSlack) return;
+      var slackPayload = {
+        title: payload.title,
+        task_type: payload.task_type || 'routine',
+        attribute: payload.attribute || '',
+        priority: payload.priority || 'normal',
+        cat_id: payload.cat_id || null,
+        note: payload.description || null,
+        location_id: getSelectedLocation() || '',
+        is_update: isUpdate,
+        is_template: true,
+      };
+      fetch(API_BASE + '/tasks/notify-new', {
+        method: 'POST',
+        headers: apiHeaders(), cache: 'no-store',
+        body: JSON.stringify(slackPayload),
+      }).then(function (r) { return r.json(); })
+      .then(function (res) {
+        showToast(res && res.ok ? 'Slackに共有しました' : 'Slack送信失敗: ' + ((res && res.reason) || '不明'));
+      }).catch(function () { showToast('Slack送信に失敗しました'); });
+    }
+
     if (editId) {
       fetch(API_BASE + '/tasks/templates/' + encodeURIComponent(editId), {
         method: 'PUT',
@@ -1180,6 +2433,7 @@
         closeNewTemplateModal();
         showToast('テンプレートを更新しました');
         loadTemplates();
+        doSlackIfNeeded(true);
       }).catch(function () { alert('更新に失敗しました'); });
     } else {
       var id = document.getElementById('tmplId').value.trim();
@@ -1195,6 +2449,7 @@
         closeNewTemplateModal();
         showToast('テンプレートを追加しました');
         loadTemplates();
+        doSlackIfNeeded(false);
       }).catch(function () { alert('保存に失敗しました'); });
     }
   };
@@ -1240,12 +2495,79 @@
     .then(function (data) {
       if (data.error) { alert('エラー: ' + (data.message || data.error)); return; }
       showToast(data.generated + ' 件生成（' + data.skipped + ' 件スキップ）');
+      showGenerateSlackButton(data);
       switchTab('today');
       loadTasks();
     }).catch(function () {
       alert('生成に失敗しました');
     });
   };
+
+  /** 一括生成後にSlack共有ボタンをテンプレート画面上部に表示 */
+  function showGenerateSlackButton(data) {
+    var container = document.getElementById('generateSlackBanner');
+    if (!container) {
+      container = document.createElement('div');
+      container.id = 'generateSlackBanner';
+      container.style.cssText = [
+        'position:fixed', 'top:64px', 'left:50%', 'transform:translateX(-50%)',
+        'z-index:2000', 'background:rgba(20,83,45,0.97)', 'color:#86efac',
+        'border:1.5px solid #4ade80', 'border-radius:12px',
+        'padding:12px 18px', 'display:flex', 'align-items:center', 'gap:12px',
+        'font-size:13px', 'font-weight:700', 'box-shadow:0 4px 24px rgba(0,0,0,0.45)',
+        'max-width:90vw', 'flex-wrap:wrap', 'justify-content:center'
+      ].join(';');
+      document.body.appendChild(container);
+    }
+
+    var taskCount = (data.tasks || []).length;
+    var summary = data.generated + ' 件生成';
+    if (taskCount > 0) {
+      var names = data.tasks.slice(0, 5).map(function (t) { return t.title; });
+      summary += '：' + names.join('、') + (taskCount > 5 ? ' ほか' + (taskCount - 5) + '件' : '');
+    }
+
+    container.innerHTML =
+      '<span>✅ ' + escapeHtml(summary) + '</span>' +
+      '<button id="btnSendSlackGenerate" style="background:#4ade80;color:#14532d;border:none;border-radius:8px;padding:8px 16px;font-size:13px;font-weight:800;cursor:pointer;white-space:nowrap;">📨 Slackに共有</button>' +
+      '<button onclick="document.getElementById(\'generateSlackBanner\').remove()" style="background:transparent;border:none;color:#86efac;font-size:18px;cursor:pointer;padding:0 4px;" title="閉じる">✕</button>';
+
+    document.getElementById('btnSendSlackGenerate').onclick = function () {
+      sendGenerateResultToSlack(data);
+    };
+
+    // 30秒後に自動で消える
+    setTimeout(function () {
+      if (document.getElementById('generateSlackBanner')) {
+        document.getElementById('generateSlackBanner').remove();
+      }
+    }, 30000);
+  }
+
+  function sendGenerateResultToSlack(data) {
+    var btn = document.getElementById('btnSendSlackGenerate');
+    if (btn) { btn.disabled = true; btn.textContent = '送信中…'; }
+
+    fetch(API_BASE + '/tasks/templates/generate-notify', {
+      method: 'POST',
+      headers: apiHeaders(), cache: 'no-store',
+      body: JSON.stringify(data),
+    }).then(function (r) { return r.json(); })
+    .then(function (res) {
+      var banner = document.getElementById('generateSlackBanner');
+      if (res && res.ok) {
+        showToast('Slackに送信しました');
+        if (banner) banner.remove();
+      } else {
+        if (btn) { btn.disabled = false; btn.textContent = '📨 Slackに共有'; }
+        var reason = (res && res.reason) ? res.reason : '不明';
+        showToast('Slack送信失敗: ' + reason);
+      }
+    }).catch(function () {
+      if (btn) { btn.disabled = false; btn.textContent = '📨 Slackに共有'; }
+      showToast('Slack送信に失敗しました');
+    });
+  }
 
   // ══════════════════════════════════════════════════════════════════════════════
   //  プロジェクト

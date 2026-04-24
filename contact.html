@@ -149,15 +149,14 @@
 
         <ul class="contact-fineprint">
           <li>通常 2〜3 営業日以内にご返信いたしますが、混雑時はさらにお時間をいただく場合があります。</li>
-          <li>電話窓口でのお問い合わせ受付は原則として行っておりません（留守番電話のみ）。</li>
+          <li>本サイトのお問い合わせは<strong>上記フォーム</strong>にて受け付け、受付番号を付けて管理しています。直接のメール・お電話での受付は行っていないため、お手数ですが同じ窓口からお願いします（対応履歴と連携するため）。</li>
           <li>送信内容は運営スタッフのみが閲覧し、ご返信以外の目的には使用しません（<a href="privacy.html">プライバシーポリシー</a>）。</li>
         </ul>
 
         <div class="urgent-fallback">
-          <h3>どうしてもお急ぎの場合</h3>
-          <p>メール：<a href="mailto:info@bakeneko-cafe.tokyo" class="contact-link">info@bakeneko-cafe.tokyo</a></p>
-          <p>電話（留守番のみ）：<a href="tel:03-6161-2929" class="contact-link">03-6161-2929</a></p>
-          <p style="font-size:0.85rem; color: rgba(245,245,220,0.7);">一般社団法人 新宿租界 / 代表理事：遠藤慎大 / 〒169-0072 東京都新宿区大久保3-13-1</p>
+          <h3>お急ぎの件について</h3>
+          <p>お急ぎの内容も、上のフォームよりお送りください。到着順に確認し、担当より登録のメールアドレスあてにご返信します。</p>
+          <p style="font-size:0.85rem; color: rgba(245,245,220,0.7); margin-top:0.75rem;">一般社団法人 新宿租界 / 代表理事：遠藤慎大 / 〒169-0072 東京都新宿区大久保3-13-1</p>
         </div>
       </div>
     </section>
@@ -261,12 +260,12 @@
           submitBtn.disabled = false;
           submitBtn.textContent = '送信する';
         } else {
-          showFeedback('error', '<p>⚠️ 送信に失敗しました。しばらくしてから再度お試しください。</p><p style="font-size:.85rem;">お急ぎの場合は <a href="mailto:info@bakeneko-cafe.tokyo">info@bakeneko-cafe.tokyo</a> までお願いします。</p>');
+          showFeedback('error', '<p>⚠️ 送信に失敗しました。しばらく時間をおいてから、再度このフォームからお送りください。</p>');
           submitBtn.disabled = false;
           submitBtn.textContent = '送信する';
         }
       }).catch(function (e) {
-        showFeedback('error', '<p>⚠️ 通信エラーが発生しました。ネットワーク環境をご確認のうえ再度お試しください。</p><p style="font-size:.85rem;">お急ぎの場合は <a href="mailto:info@bakeneko-cafe.tokyo">info@bakeneko-cafe.tokyo</a> までお願いします。</p>');
+        showFeedback('error', '<p>⚠️ 通信エラーが発生しました。ネットワーク環境をご確認のうえ、しばらくしてから再度このフォームからお送りください。</p>');
         submitBtn.disabled = false;
         submitBtn.textContent = '送信する';
       });

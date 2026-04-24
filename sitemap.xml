@@ -5,7 +5,6 @@
   <url><loc>https://www.bakenekocafe.studio/support.html</loc><priority>0.7</priority></url>
   <url><loc>https://www.bakenekocafe.studio/terms.html</loc><priority>0.3</priority></url>
   <url><loc>https://www.bakenekocafe.studio/privacy.html</loc><priority>0.3</priority></url>
-  <url><loc>https://www.bakenekocafe.studio/tokusho.html</loc><priority>0.3</priority></url>
   <url><loc>https://www.bakenekocafe.studio/contact.html</loc><priority>0.3</priority></url>
   <url><loc>https://www.bakenekocafe.studio/about.html</loc><priority>0.7</priority></url>
   <url><loc>https://www.bakenekocafe.studio/howto.html</loc><priority>0.7</priority></url>
@@ -38,4 +37,5 @@
   <url><loc>https://www.bakenekocafe.studio/diary/2026-04-21.html</loc><priority>0.6</priority></url>
   <url><loc>https://www.bakenekocafe.studio/diary/2026-04-22.html</loc><priority>0.6</priority></url>
   <url><loc>https://www.bakenekocafe.studio/diary/2026-04-23.html</loc><priority>0.6</priority></url>
+  <url><loc>https://www.bakenekocafe.studio/diary/2026-04-24.html</loc><priority>0.6</priority></url>
 </urlset>

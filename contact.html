@@ -7,6 +7,7 @@
   <link rel="canonical" href="https://www.bakenekocafe.studio/contact.html">
   <title>お問い合わせ｜BAKENEKO GAMES</title>
   <meta name="description" content="BAKENEKO GAMES / BAKENEKO CAFE（化猫茶屋）へのお問い合わせフォーム。猫の引き受け相談、譲渡希望、見学、取材、ゲームの不具合など、内容に応じて担当が確認のうえご返信いたします。">
+  <script>window.BAKENEKO_API_BASE = window.BAKENEKO_API_BASE || 'https://api.bakenekocafe.studio';</script>
   <script src="ga.js"></script>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -188,7 +189,8 @@
   <script src="portal.js"></script>
   <script>
   (function () {
-    var API_ENDPOINT = 'https://api.bakenekocafe.studio/api/ops/inquiry-public/submit';
+    var API_BASE = window.BAKENEKO_API_BASE || 'https://api.bakenekocafe.studio';
+    var API_ENDPOINT = API_BASE.replace(/\/$/, '') + '/api/ops/inquiry-public/submit';
     var form = document.getElementById('contact-form');
     var fb = document.getElementById('form-feedback');
     var err = document.getElementById('form-error');

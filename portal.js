@@ -230,24 +230,6 @@
     document.head.appendChild(styleEl);
   })();
 
-  // ═══ COUNTER ANIMATION ═══
-  var counterObs = new IntersectionObserver(function (entries) {
-    entries.forEach(function (e) {
-      if (!e.isIntersecting) return;
-      var el = e.target.querySelector('.counter-num');
-      if (!el) return;
-      var target = 100; var cur = 0;
-      function step() {
-        cur = Math.min(cur + 2, target);
-        el.textContent = cur;
-        if (cur < target) requestAnimationFrame(step);
-      }
-      requestAnimationFrame(step);
-      counterObs.unobserve(e.target);
-    });
-  }, { threshold: 0.3 });
-  document.querySelectorAll('.stat-item').forEach(function (el) { counterObs.observe(el); });
-
   // ═══ 3D TILT on game cards ═══
   document.querySelectorAll('.game-card').forEach(function (card) {
     card.addEventListener('mousemove', function (e) {
@@ -327,50 +309,6 @@
         window.gtag('event', 'portal_page_view', { page_name: page });
       }
     } catch (_) {}
-  })();
-
-  // ═══ 本日の応援回数（GET /api/public-stats）60秒TTLキャッシュ・safeGet/safeSet ─══
-  (function () {
-    var el = document.getElementById('portal-today-support-value');
-    if (!el) return;
-    var TTL_MS = 60000;
-    var cache = { val: null, ts: 0 };
-    function safeGet(key) {
-      try { var v = localStorage.getItem(key); return v === null ? null : v; } catch (_) { return null; }
-    }
-    function safeSet(key, value) {
-      try {
-        if (value === null || value === undefined) localStorage.removeItem(key);
-        else localStorage.setItem(key, String(value));
-      } catch (e) {
-        if (e && e.name === 'QuotaExceededError') { /* 容量超過時は握りつぶし（portal はキューを持たない） */ }
-      }
-    }
-    var now = Date.now();
-    if (cache.val != null && (now - cache.ts) < TTL_MS) {
-      el.textContent = String(cache.val);
-      return;
-    }
-    var apiBase = 'https://api.bakenekocafe.studio';
-    fetch(apiBase + '/api/public-stats?gameId=kohada', { method: 'GET', headers: { 'Accept': 'application/json' } })
-      .then(function (r) { return r.ok ? r.json() : Promise.reject(r); })
-      .then(function (data) {
-        var n = data && typeof data.todaySupportCount !== 'undefined' ? Number(data.todaySupportCount)
-          : (data && typeof data.totalSupportCount !== 'undefined' ? Number(data.totalSupportCount)
-            : (data && typeof data.totalRewards !== 'undefined' ? Number(data.totalRewards) : NaN));
-        var val = (n !== n || n < 0) ? 0 : Math.round(n);
-        el.textContent = String(val);
-        safeSet('fallback_today_support', String(val));
-        cache.val = val;
-        cache.ts = Date.now();
-      })
-      .catch(function () {
-        var fallback = 0;
-        var v = safeGet('fallback_today_support');
-        if (v !== null && v !== '') { var n = parseInt(v, 10); if (!isNaN(n)) fallback = Math.max(0, n); }
-        console.warn('[portal public-stats] 取得失敗。fallback_today_support を使用:', fallback);
-        el.textContent = String(fallback);
-      });
   })();
 
   // ═══ ポータル ランキング TOP10（ゲーム別・1日1回更新・24時自動リフレッシュ） ═══

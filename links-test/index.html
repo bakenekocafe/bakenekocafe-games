@@ -145,6 +145,140 @@
       color: var(--cyan);
       text-shadow: var(--glow-c);
     }
+    .links-duo-lead {
+      max-width: 760px;
+      margin: 0 auto 34px;
+      color: rgba(232, 232, 240, .72);
+      font-size: .95rem;
+      line-height: 1.9;
+      text-align: center;
+    }
+    .links-duo-grid {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 28px;
+      max-width: 1080px;
+      margin: 0 auto;
+      position: relative;
+    }
+    .links-duo-grid::before {
+      content: '×';
+      position: absolute;
+      left: 50%;
+      top: 50%;
+      transform: translate(-50%, -50%);
+      z-index: 3;
+      width: 42px;
+      height: 42px;
+      display: grid;
+      place-items: center;
+      font-family: 'Share Tech Mono', monospace;
+      color: var(--gold);
+      border: 1px solid rgba(255, 215, 0, .32);
+      background: rgba(3, 5, 8, .92);
+      box-shadow: var(--glow-g);
+    }
+    .links-side-card {
+      position: relative;
+      min-height: 420px;
+      padding: 30px;
+      color: var(--white);
+      background:
+        radial-gradient(ellipse at 20% 0%, rgba(0, 212, 255, .16), transparent 45%),
+        radial-gradient(ellipse at 100% 100%, rgba(255, 215, 0, .11), transparent 45%),
+        linear-gradient(135deg, rgba(4, 7, 14, .96), rgba(9, 13, 30, .92));
+      border: 1px solid rgba(0, 212, 255, .28);
+      clip-path: polygon(0 0, calc(100% - 28px) 0, 100% 28px, 100% 100%, 28px 100%, 0 calc(100% - 28px));
+      overflow: hidden;
+      box-shadow: 0 0 40px rgba(0, 212, 255, .1), inset 0 0 34px rgba(0, 212, 255, .045);
+    }
+    .links-side-card::before {
+      content: '';
+      position: absolute;
+      inset: 16px;
+      border: 1px solid rgba(255, 215, 0, .16);
+      pointer-events: none;
+    }
+    .links-side-card::after {
+      content: attr(data-side);
+      position: absolute;
+      right: -16px;
+      bottom: 18px;
+      font-family: 'Share Tech Mono', monospace;
+      font-size: clamp(2.8rem, 7vw, 5.4rem);
+      letter-spacing: .08em;
+      color: transparent;
+      -webkit-text-stroke: 1px rgba(255, 215, 0, .1);
+      transform: rotate(-6deg);
+      pointer-events: none;
+    }
+    .links-side-kicker,
+    .links-side-title,
+    .links-side-subtitle,
+    .links-side-actions {
+      position: relative;
+      z-index: 1;
+    }
+    .links-side-kicker {
+      font-family: 'Share Tech Mono', monospace;
+      font-size: .72rem;
+      letter-spacing: .28em;
+      color: var(--cyan);
+      text-shadow: var(--glow-c);
+      text-transform: uppercase;
+      margin-bottom: 12px;
+    }
+    .links-side-title {
+      font-family: 'Zen Old Mincho', 'Noto Serif JP', serif;
+      font-weight: 900;
+      font-size: clamp(1.8rem, 3.4vw, 2.8rem);
+      color: var(--gold);
+      text-shadow: var(--glow-g);
+      line-height: 1.25;
+      margin-bottom: 8px;
+    }
+    .links-side-subtitle {
+      color: rgba(232, 232, 240, .68);
+      font-size: .92rem;
+      line-height: 1.75;
+      margin-bottom: 24px;
+    }
+    .links-side-actions {
+      display: grid;
+      gap: 12px;
+    }
+    .links-side-link {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 14px;
+      min-height: 58px;
+      padding: 14px 18px;
+      color: var(--white);
+      text-decoration: none;
+      background: rgba(255, 255, 255, .035);
+      border: 1px solid rgba(0, 212, 255, .18);
+      clip-path: polygon(12px 0, 100% 0, calc(100% - 12px) 100%, 0 100%);
+      transition: transform .25s ease, border-color .25s ease, background .25s ease, box-shadow .25s ease;
+    }
+    .links-side-link:hover {
+      transform: translateX(5px);
+      border-color: rgba(255, 215, 0, .55);
+      background: rgba(255, 215, 0, .08);
+      box-shadow: 0 0 24px rgba(0, 212, 255, .12);
+    }
+    .links-side-label {
+      font-weight: 700;
+      line-height: 1.45;
+    }
+    .links-side-code {
+      flex: 0 0 auto;
+      font-family: 'Share Tech Mono', monospace;
+      font-size: .72rem;
+      letter-spacing: .16em;
+      color: var(--cyan);
+      text-shadow: var(--glow-c);
+    }
     .links-mission-grid {
       display: grid;
       grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
@@ -378,6 +512,28 @@
         min-height: 58px;
         padding: 14px 16px;
       }
+      .links-duo-grid {
+        grid-template-columns: 1fr;
+        gap: 20px;
+      }
+      .links-duo-grid::before {
+        top: calc(50% - 2px);
+        width: 34px;
+        height: 34px;
+        font-size: .95rem;
+      }
+      .links-side-card {
+        min-height: auto;
+        padding: 26px 22px;
+      }
+      .links-side-card::after {
+        font-size: 3rem;
+        opacity: .9;
+      }
+      .links-side-link {
+        min-height: 56px;
+        padding: 13px 15px;
+      }
     }
   </style>
 </head>
@@ -419,8 +575,8 @@
   <header class="portal-header" id="header">
     <a href="../index.html" class="portal-logo">BAKENEKO GAMES</a>
     <nav class="portal-nav" aria-label="主要リンク">
-      <a href="#first-mission">来店</a>
-      <a href="#support-links">支援</a>
+      <a href="#visit-feature">来店</a>
+      <a href="#visit-feature">支援</a>
       <a href="#watch-links">SNS</a>
       <a href="#join-links">参加</a>
       <a href="../index.html#games">ゲーム</a>
@@ -478,7 +634,7 @@
         <div class="hero-divider"></div>
         <p class="hero-subline">来店・支援・遊ぶ・見る、すべての入口</p>
         <p class="hero-desc">ご来店・アクセス・支援・ゲーム・SNSはこちらからご確認いただけます。</p>
-        <a href="#first-mission" class="portal-cta" id="cta-btn">
+        <a href="#visit-feature" class="portal-cta" id="cta-btn">
           <span>▶</span><span>リンクを選ぶ</span>
         </a>
       </div>
@@ -507,57 +663,30 @@
       <!-- ═══ FEATURE VISUAL ═══ -->
       <section class="portal-section links-feature" id="visit-feature" aria-labelledby="visit-feature-title">
         <div class="hanko">入口</div>
-        <div class="support-inner">
-          <div class="links-entry-panel" aria-label="主要リンク">
-            <span class="links-entry-kicker">ENTRY SELECT</span>
-            <div class="links-entry-title">行き先を選ぶ</div>
-            <div class="links-entry-buttons">
-              <a class="links-entry-button" href="https://www.hotpepper.jp/strJ001295774/yoyaku/?vos=othpporgzzzzx00000001" target="_blank" rel="noopener noreferrer"><span class="links-entry-label">BAKENEKO CAFE 来店予約</span><span class="links-entry-code">VISIT</span></a>
-              <a class="links-entry-button" href="https://www.google.com/maps/search/?api=1&amp;query=BAKENEKO%20CAFE%20%E6%9D%B1%E4%BA%AC%E9%83%BD%E6%96%B0%E5%AE%BF%E5%8C%BA%E5%A4%A7%E4%B9%853-13-1-1-106" target="_blank" rel="noopener noreferrer"><span class="links-entry-label">BAKENEKO CAFE 地図</span><span class="links-entry-code">MAP</span></a>
-              <a class="links-entry-button" href="https://nekomata-sanatorium.com/support/" target="_blank" rel="noopener noreferrer"><span class="links-entry-label">猫又療養所を支援</span><span class="links-entry-code">SUPPORT</span></a>
-              <a class="links-entry-button" href="#watch-links"><span class="links-entry-label">SNS・最新情報を見る</span><span class="links-entry-code">SNS</span></a>
+        <h2 class="section-title" id="visit-feature-title">2つの入口を選ぶ</h2>
+        <p class="links-duo-lead">BAKENEKO CAFEと猫又療養所、それぞれに関わるリンクを分けてまとめました。ご来店の方は CAFE SIDE、療養所への支援や場所を確認したい方は NEKOMATA SIDE へお進みください。</p>
+        <div class="links-duo-grid">
+          <article class="links-side-card" data-side="CAFE">
+            <div class="links-side-kicker">CAFE SIDE</div>
+            <h3 class="links-side-title">BAKENEKO CAFE</h3>
+            <p class="links-side-subtitle">化猫茶屋へのご来店予約、アクセス、公式情報、物資支援はこちらです。</p>
+            <div class="links-side-actions">
+              <a class="links-side-link" href="https://www.hotpepper.jp/strJ001295774/yoyaku/?vos=othpporgzzzzx00000001" target="_blank" rel="noopener noreferrer"><span class="links-side-label">BAKENEKO CAFE 来店予約</span><span class="links-side-code">VISIT</span></a>
+              <a class="links-side-link" href="https://www.google.com/maps/search/?api=1&amp;query=BAKENEKO%20CAFE%20%E6%9D%B1%E4%BA%AC%E9%83%BD%E6%96%B0%E5%AE%BF%E5%8C%BA%E5%A4%A7%E4%B9%853-13-1-1-106" target="_blank" rel="noopener noreferrer"><span class="links-side-label">Googleマップ</span><span class="links-side-code">MAP</span></a>
+              <a class="links-side-link" href="https://bakeneko-cafe.tokyo/" target="_blank" rel="noopener noreferrer"><span class="links-side-label">BAKENEKO CAFE 公式HP</span><span class="links-side-code">OFFICIAL</span></a>
+              <a class="links-side-link" href="https://www.amazon.co.jp/hz/wishlist/ls/1MBB32N6M8OAG?ref_=wl_share" target="_blank" rel="noopener noreferrer"><span class="links-side-label">Amazon物資支援</span><span class="links-side-code">ITEM</span></a>
             </div>
-          </div>
-          <div class="support-text">
-            <h2 class="section-title" id="visit-feature-title">リンクを選んで、<br>次の場所へ進む</h2>
-            <p>BAKENEKO CAFEへの来店予約、アクセス、支援、SNS、ゲームをまとめています。来店予約は BAKENEKO CAFE の予約ページへ移動します。</p>
-            <p>BAKENEKO CAFEと猫又療養所の地図もこちらから確認できます。初めての方も、まずは行き先に近いリンクをお選びください。</p>
-            <div class="links-feature-actions">
-              <a href="#first-mission" class="portal-cta"><span>▶</span><span>来店・アクセスへ</span></a>
-              <a href="#watch-links" class="portal-cta"><span>▶</span><span>SNSを見る</span></a>
+          </article>
+          <article class="links-side-card" data-side="NEKOMATA">
+            <div class="links-side-kicker">NEKOMATA SIDE</div>
+            <h3 class="links-side-title">猫又療養所</h3>
+            <p class="links-side-subtitle">ハンディキャップのある猫さんたちの療養・生活を支える導線です。</p>
+            <div class="links-side-actions">
+              <a class="links-side-link" href="https://nekomata-sanatorium.com/support/" target="_blank" rel="noopener noreferrer"><span class="links-side-label">猫又療養所を支援する</span><span class="links-side-code">SUPPORT</span></a>
+              <a class="links-side-link" href="https://www.google.com/maps/search/?api=1&amp;query=%E7%8C%AB%E5%8F%88%E7%99%82%E9%A4%8A%E6%89%80%20%E5%8D%83%E8%91%89%E7%9C%8C%E5%AF%8C%E6%B4%A5%E5%B8%82%E5%B0%8F%E4%B9%85%E4%BF%9D1711" target="_blank" rel="noopener noreferrer"><span class="links-side-label">Googleマップ</span><span class="links-side-code">MAP</span></a>
+              <a class="links-side-link" href="https://nekomata-sanatorium.com/" target="_blank" rel="noopener noreferrer"><span class="links-side-label">活動ページを見る</span><span class="links-side-code">INFO</span></a>
             </div>
-          </div>
-        </div>
-      </section>
-
-      <!-- ═══ FIRST MISSION ═══ -->
-      <section class="portal-section" id="first-mission" aria-labelledby="first-mission-title">
-        <h2 class="section-title" id="first-mission-title">来店・アクセス・支援</h2>
-        <div class="links-mission-grid">
-          <a class="links-mission-card" href="https://www.hotpepper.jp/strJ001295774/yoyaku/?vos=othpporgzzzzx00000001" target="_blank" rel="noopener noreferrer">
-            <span class="links-mission-kicker">VISIT</span>
-            <span class="links-mission-title">BAKENEKO CAFE 来店予約</span>
-            <span class="links-mission-text">BAKENEKO CAFE の Hot Pepper 予約ページを開きます。ご来店予定の方はこちらからお進みください。</span>
-            <span class="links-mission-mark">OPEN RESERVATION</span>
-          </a>
-          <a class="links-mission-card" href="https://www.google.com/maps/search/?api=1&amp;query=BAKENEKO%20CAFE%20%E6%9D%B1%E4%BA%AC%E9%83%BD%E6%96%B0%E5%AE%BF%E5%8C%BA%E5%A4%A7%E4%B9%853-13-1-1-106" target="_blank" rel="noopener noreferrer">
-            <span class="links-mission-kicker">MAP</span>
-            <span class="links-mission-title">BAKENEKO CAFE の地図を開く</span>
-            <span class="links-mission-text">東京都新宿区大久保3-13-1-1-106 を Googleマップで開きます。</span>
-            <span class="links-mission-mark">OPEN MAP</span>
-          </a>
-          <a class="links-mission-card" href="https://nekomata-sanatorium.com/support/" target="_blank" rel="noopener noreferrer">
-            <span class="links-mission-kicker">NEKOMATA</span>
-            <span class="links-mission-title">猫又療養所を支援する</span>
-            <span class="links-mission-text">ハンディキャップのある猫さんたちの療養・生活を支える導線です。</span>
-            <span class="links-mission-mark">SUPPORT</span>
-          </a>
-          <a class="links-mission-card" href="https://www.google.com/maps/search/?api=1&amp;query=%E7%8C%AB%E5%8F%88%E7%99%82%E9%A4%8A%E6%89%80%20%E5%8D%83%E8%91%89%E7%9C%8C%E5%AF%8C%E6%B4%A5%E5%B8%82%E5%B0%8F%E4%B9%85%E4%BF%9D1711" target="_blank" rel="noopener noreferrer">
-            <span class="links-mission-kicker">NEKOMATA MAP</span>
-            <span class="links-mission-title">猫又療養所の地図を開く</span>
-            <span class="links-mission-text">千葉県富津市小久保1711 を Googleマップで開きます。</span>
-            <span class="links-mission-mark">OPEN MAP</span>
-          </a>
+          </article>
         </div>
       </section>
 
@@ -609,29 +738,20 @@
             </div>
           </a>
         </div>
-        <div class="links-compact-grid">
-          <a class="links-compact-card" href="https://www.amazon.co.jp/hz/wishlist/ls/1MBB32N6M8OAG?ref_=wl_share" target="_blank" rel="noopener noreferrer"><span><span class="links-compact-label">Amazon物資支援</span><span class="links-compact-note">猫さんたちへの物資支援リスト。</span></span><span class="links-compact-code">ITEM</span></a>
-          <a class="links-compact-card" href="https://bakeneko-cafe.tokyo/support/" target="_blank" rel="noopener noreferrer"><span><span class="links-compact-label">BAKENEKO CAFE 支援</span><span class="links-compact-note">公式HP側の支援案内を見る。</span></span><span class="links-compact-code">CAFE</span></a>
-          <a class="links-compact-card" href="https://www.google.com/maps/search/?api=1&amp;query=BAKENEKO%20CAFE%20%E6%9D%B1%E4%BA%AC%E9%83%BD%E6%96%B0%E5%AE%BF%E5%8C%BA%E5%A4%A7%E4%B9%853-13-1-1-106" target="_blank" rel="noopener noreferrer"><span><span class="links-compact-label">BAKENEKO CAFE 地図</span><span class="links-compact-note">東京都新宿区大久保3-13-1-1-106。</span></span><span class="links-compact-code">MAP</span></a>
-          <a class="links-compact-card" href="https://www.google.com/maps/search/?api=1&amp;query=%E7%8C%AB%E5%8F%88%E7%99%82%E9%A4%8A%E6%89%80%20%E5%8D%83%E8%91%89%E7%9C%8C%E5%AF%8C%E6%B4%A5%E5%B8%82%E5%B0%8F%E4%B9%85%E4%BF%9D1711" target="_blank" rel="noopener noreferrer"><span><span class="links-compact-label">猫又療養所 地図</span><span class="links-compact-note">千葉県富津市小久保1711。</span></span><span class="links-compact-code">MAP</span></a>
-          <a class="links-compact-card" href="../index.html"><span><span class="links-compact-label">BAKENEKO GAMES</span><span class="links-compact-note">ブラウザゲームで遊ぶ。</span></span><span class="links-compact-code">PLAY</span></a>
-          <a class="links-compact-card" href="../sayori-punch/"><span><span class="links-compact-label">さよりパンチ防衛</span><span class="links-compact-note">第3弾の3レーンアクションで遊ぶ。</span></span><span class="links-compact-code">SAYORI</span></a>
-          <a class="links-compact-card" href="../diary/"><span><span class="links-compact-label">こはだ日記</span><span class="links-compact-note">副店長こはだの日々。</span></span><span class="links-compact-code">DIARY</span></a>
-        </div>
       </section>
 
       <!-- ═══ JOIN LINKS ═══ -->
       <section class="portal-section" id="join-links" aria-labelledby="join-links-title">
-        <h2 class="section-title" id="join-links-title">Join / Contact</h2>
+        <h2 class="section-title" id="join-links-title">参加・お問い合わせ</h2>
         <div class="links-compact-grid">
-          <a class="links-compact-card" href="https://forms.gle/4NQjzmjcYaUQP4RSA" target="_blank" rel="noopener noreferrer"><span><span class="links-compact-label">ボランティア申込</span><span class="links-compact-note">本番反映前に受付状態の確認が必要です。</span></span><span class="links-compact-code">JOIN</span></a>
-          <a class="links-compact-card" href="https://docs.google.com/forms/d/e/1FAIpQLSekpfGpBcxwgABK1QFYW_7HmCc5sTKOiGnuaKg4u66NkbU2JA/viewform" target="_blank" rel="noopener noreferrer"><span><span class="links-compact-label">求人フォーム</span><span class="links-compact-note">本番反映前に受付状態の確認が必要です。</span></span><span class="links-compact-code">WORK</span></a>
-          <a class="links-compact-card" href="https://line.me/ti/g2/DUgvhnzEXNq9uEMoURbbtNQ8dRFmgA3plR2l8A?utm_source=invitation&amp;utm_medium=link_copy&amp;utm_campaign=default" target="_blank" rel="noopener noreferrer"><span><span class="links-compact-label">LINEオープンチャット</span><span class="links-compact-note">本番反映前に招待URLの有効性確認が必要です。</span></span><span class="links-compact-code">LINE</span></a>
+          <a class="links-compact-card" href="https://forms.gle/4NQjzmjcYaUQP4RSA" target="_blank" rel="noopener noreferrer"><span><span class="links-compact-label">ボランティア申込</span><span class="links-compact-note">活動に関わりたい方はこちら。</span></span><span class="links-compact-code">JOIN</span></a>
+          <a class="links-compact-card" href="https://docs.google.com/forms/d/e/1FAIpQLSekpfGpBcxwgABK1QFYW_7HmCc5sTKOiGnuaKg4u66NkbU2JA/viewform" target="_blank" rel="noopener noreferrer"><span><span class="links-compact-label">求人フォーム</span><span class="links-compact-note">採用・お仕事に関するフォーム。</span></span><span class="links-compact-code">WORK</span></a>
+          <a class="links-compact-card" href="https://line.me/ti/g2/DUgvhnzEXNq9uEMoURbbtNQ8dRFmgA3plR2l8A?utm_source=invitation&amp;utm_medium=link_copy&amp;utm_campaign=default" target="_blank" rel="noopener noreferrer"><span><span class="links-compact-label">LINEオープンチャット</span><span class="links-compact-note">参加前に案内内容をご確認ください。</span></span><span class="links-compact-code">LINE</span></a>
           <a class="links-compact-card" href="https://ad.bakeneko-cafe.tokyo" target="_blank" rel="noopener noreferrer"><span><span class="links-compact-label">広告依頼</span><span class="links-compact-note">一般問い合わせフォームの代用ではありません。</span></span><span class="links-compact-code">AD</span></a>
           <a class="links-compact-card" href="../contact.html"><span><span class="links-compact-label">お問い合わせフォーム</span><span class="links-compact-note">BAKENEKO GAMES / CAFE 共通窓口。</span></span><span class="links-compact-code">FORM</span></a>
-          <div class="links-compact-card is-pending" aria-disabled="true"><span><span class="links-compact-label">NYAGI問い合わせ窓口</span><span class="links-compact-note">URL未確定：別途指定。</span></span><span class="links-compact-code">NYAGI</span></div>
+          <div class="links-compact-card is-pending" aria-disabled="true"><span><span class="links-compact-label">NYAGI問い合わせ窓口</span><span class="links-compact-note">現在準備中です。</span></span><span class="links-compact-code">NYAGI</span></div>
         </div>
-        <p class="links-note-box">このページはテスト用です。NYAGI問い合わせ窓口、各フォーム・LINE招待URLは、本番反映前に人間が有効性を確認します。Googleマップは住所検索リンクとして設定しています。広告依頼URLは一般問い合わせフォームとして扱いません。</p>
+        <p class="links-note-box">お問い合わせ内容に迷う場合は、共通のお問い合わせフォームからお送りください。広告依頼は専用ページをご利用ください。</p>
         <p class="links-footer-code">BAKENEKO GAMES / LINKS-TEST / NOINDEX</p>
       </section>
     </div>

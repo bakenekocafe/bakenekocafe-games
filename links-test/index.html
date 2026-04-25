@@ -50,6 +50,101 @@
       opacity: 1;
       animation: none;
     }
+    .links-entry-panel {
+      position: relative;
+      min-height: 420px;
+      padding: 34px;
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+      gap: 18px;
+      background:
+        radial-gradient(ellipse at 20% 0%, rgba(0, 212, 255, .16), transparent 45%),
+        radial-gradient(ellipse at 90% 100%, rgba(255, 215, 0, .12), transparent 48%),
+        linear-gradient(135deg, rgba(3, 5, 8, .94), rgba(8, 12, 28, .92));
+      border: 1px solid rgba(0, 212, 255, .32);
+      clip-path: polygon(0 0, calc(100% - 34px) 0, 100% 34px, 100% 100%, 34px 100%, 0 calc(100% - 34px));
+      box-shadow: 0 0 44px rgba(0, 212, 255, .13), inset 0 0 36px rgba(0, 212, 255, .05);
+      overflow: hidden;
+    }
+    .links-entry-panel::before {
+      content: '';
+      position: absolute;
+      inset: 18px;
+      border: 1px solid rgba(255, 215, 0, .18);
+      pointer-events: none;
+    }
+    .links-entry-panel::after {
+      content: 'LINK MODE';
+      position: absolute;
+      right: -22px;
+      bottom: 24px;
+      font-family: 'Share Tech Mono', monospace;
+      font-size: clamp(2.4rem, 6vw, 5.2rem);
+      letter-spacing: .1em;
+      color: transparent;
+      -webkit-text-stroke: 1px rgba(255, 215, 0, .1);
+      transform: rotate(-6deg);
+      pointer-events: none;
+    }
+    .links-entry-kicker {
+      position: relative;
+      z-index: 1;
+      font-family: 'Share Tech Mono', monospace;
+      font-size: .72rem;
+      letter-spacing: .34em;
+      color: var(--cyan);
+      text-shadow: var(--glow-c);
+      text-transform: uppercase;
+    }
+    .links-entry-title {
+      position: relative;
+      z-index: 1;
+      font-family: 'Zen Old Mincho', 'Noto Serif JP', serif;
+      font-size: clamp(1.6rem, 3vw, 2.6rem);
+      color: var(--gold);
+      text-shadow: var(--glow-g);
+      line-height: 1.25;
+    }
+    .links-entry-buttons {
+      position: relative;
+      z-index: 1;
+      display: grid;
+      gap: 12px;
+      margin-top: 8px;
+    }
+    .links-entry-button {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 18px;
+      min-height: 62px;
+      padding: 16px 20px;
+      color: var(--white);
+      text-decoration: none;
+      background: linear-gradient(135deg, rgba(0, 212, 255, .11), rgba(255, 215, 0, .035));
+      border: 1px solid rgba(0, 212, 255, .22);
+      clip-path: polygon(12px 0, 100% 0, calc(100% - 12px) 100%, 0 100%);
+      transition: transform .25s ease, border-color .25s ease, box-shadow .25s ease, background .25s ease;
+    }
+    .links-entry-button:hover {
+      transform: translateX(6px);
+      border-color: rgba(255, 215, 0, .58);
+      box-shadow: 0 0 26px rgba(0, 212, 255, .16);
+      background: linear-gradient(135deg, rgba(255, 215, 0, .16), rgba(0, 212, 255, .08));
+    }
+    .links-entry-label {
+      font-weight: 700;
+      letter-spacing: .08em;
+    }
+    .links-entry-code {
+      flex: 0 0 auto;
+      font-family: 'Share Tech Mono', monospace;
+      font-size: .72rem;
+      letter-spacing: .18em;
+      color: var(--cyan);
+      text-shadow: var(--glow-c);
+    }
     .links-mission-grid {
       display: grid;
       grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
@@ -275,6 +370,14 @@
         width: 100%;
         justify-content: center;
       }
+      .links-entry-panel {
+        min-height: 360px;
+        padding: 28px 22px;
+      }
+      .links-entry-button {
+        min-height: 58px;
+        padding: 14px 16px;
+      }
     }
   </style>
 </head>
@@ -405,9 +508,14 @@
       <section class="portal-section links-feature" id="visit-feature" aria-labelledby="visit-feature-title">
         <div class="hanko">入口</div>
         <div class="support-inner">
-          <div class="support-visual">
-            <div class="support-visual-inner">
-              <img src="../siyougazou/portaruyou1.png" alt="BAKENEKO GAMES のリンクハブ案内ビジュアル" loading="lazy" onerror="this.onerror=null;this.src='../siyougazou/portaruyou1.jpg';" class="support-visual-img">
+          <div class="links-entry-panel" aria-label="主要リンク">
+            <span class="links-entry-kicker">ENTRY SELECT</span>
+            <div class="links-entry-title">行き先を選ぶ</div>
+            <div class="links-entry-buttons">
+              <a class="links-entry-button" href="https://www.hotpepper.jp/strJ001295774/yoyaku/?vos=othpporgzzzzx00000001" target="_blank" rel="noopener noreferrer"><span class="links-entry-label">来店予約</span><span class="links-entry-code">VISIT</span></a>
+              <a class="links-entry-button" href="https://www.google.com/maps/search/?api=1&amp;query=BAKENEKO%20CAFE%20%E6%9D%B1%E4%BA%AC%E9%83%BD%E6%96%B0%E5%AE%BF%E5%8C%BA%E5%A4%A7%E4%B9%853-13-1-1-106" target="_blank" rel="noopener noreferrer"><span class="links-entry-label">BAKENEKO CAFE 地図</span><span class="links-entry-code">MAP</span></a>
+              <a class="links-entry-button" href="https://nekomata-sanatorium.com/support/" target="_blank" rel="noopener noreferrer"><span class="links-entry-label">猫又療養所を支援</span><span class="links-entry-code">SUPPORT</span></a>
+              <a class="links-entry-button" href="../index.html#games"><span class="links-entry-label">ゲームへ戻る</span><span class="links-entry-code">PLAY</span></a>
             </div>
           </div>
           <div class="support-text">

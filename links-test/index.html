@@ -180,6 +180,8 @@
     }
     .links-side-card {
       position: relative;
+      display: flex;
+      flex-direction: column;
       min-height: 420px;
       padding: 30px;
       color: var(--white);
@@ -212,6 +214,15 @@
       transform: rotate(-6deg);
       pointer-events: none;
     }
+    .links-side-top {
+      position: relative;
+      z-index: 1;
+      display: flex;
+      flex-direction: column;
+      flex: 0 0 auto;
+      margin-bottom: 24px;
+      min-height: 12.25rem;
+    }
     .links-side-kicker,
     .links-side-title,
     .links-side-subtitle,
@@ -241,11 +252,13 @@
       color: rgba(232, 232, 240, .68);
       font-size: .92rem;
       line-height: 1.75;
-      margin-bottom: 24px;
+      margin-bottom: 0;
     }
     .links-side-actions {
       display: grid;
       gap: 12px;
+      margin-top: 0;
+      flex: 0 0 auto;
     }
     .links-side-link {
       display: flex;
@@ -579,6 +592,9 @@
         min-height: auto;
         padding: 26px 22px;
       }
+      .links-side-top {
+        min-height: 15rem;
+      }
       .links-side-card::after {
         font-size: 3rem;
         opacity: .9;
@@ -720,9 +736,11 @@
         <p class="links-duo-lead">BAKENEKO CAFEに関わるリンク集です。</p>
         <div class="links-duo-grid">
           <article class="links-side-card" data-side="CAFE">
-            <div class="links-side-kicker">CAFE SIDE</div>
-            <h3 class="links-side-title">BAKENEKO CAFE</h3>
-            <p class="links-side-subtitle">化猫茶屋へのご来店予約、アクセス、公式情報、物資支援、採用・ボランティアはこちらです。</p>
+            <div class="links-side-top">
+              <div class="links-side-kicker">CAFE SIDE</div>
+              <h3 class="links-side-title">BAKENEKO CAFE</h3>
+              <p class="links-side-subtitle">化猫茶屋へのご来店予約、アクセス、公式情報、物資支援、採用・ボランティアはこちらです。</p>
+            </div>
             <div class="links-side-actions">
               <a class="links-side-link" href="https://www.hotpepper.jp/strJ001295774/yoyaku/?vos=othpporgzzzzx00000001" target="_blank" rel="noopener noreferrer"><span class="links-side-label">BAKENEKO CAFE 来店予約</span><span class="links-side-code">VISIT</span></a>
               <a class="links-side-link" href="https://www.google.com/maps/search/?api=1&amp;query=BAKENEKO%20CAFE%20%E6%9D%B1%E4%BA%AC%E9%83%BD%E6%96%B0%E5%AE%BF%E5%8C%BA%E5%A4%A7%E4%B9%853-13-1-1-106" target="_blank" rel="noopener noreferrer"><span class="links-side-label">Googleマップ</span><span class="links-side-code">MAP</span></a>
@@ -733,9 +751,11 @@
             </div>
           </article>
           <article class="links-side-card" data-side="NEKOMATA">
-            <div class="links-side-kicker">NEKOMATA SIDE</div>
-            <h3 class="links-side-title">猫又療養所</h3>
-            <p class="links-side-subtitle">ハンディキャップのある猫さんたちの療養・生活を支える導線です。</p>
+            <div class="links-side-top">
+              <div class="links-side-kicker">NEKOMATA SIDE</div>
+              <h3 class="links-side-title">猫又療養所</h3>
+              <p class="links-side-subtitle">ハンディキャップのある猫さんたちの療養・生活を支える導線です。</p>
+            </div>
             <div class="links-side-actions">
               <a class="links-side-link" href="https://nekomata-sanatorium.com/support/" target="_blank" rel="noopener noreferrer"><span class="links-side-label">猫又療養所を支援する</span><span class="links-side-code">SUPPORT</span></a>
               <a class="links-side-link" href="https://www.google.com/maps/search/?api=1&amp;query=%E7%8C%AB%E5%8F%88%E7%99%82%E9%A4%8A%E6%89%80%20%E5%8D%83%E8%91%89%E7%9C%8C%E5%AF%8C%E6%B4%A5%E5%B8%82%E5%B0%8F%E4%B9%85%E4%BF%9D1711" target="_blank" rel="noopener noreferrer"><span class="links-side-label">Googleマップ</span><span class="links-side-code">MAP</span></a>

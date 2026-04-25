@@ -101,6 +101,263 @@
       line-height: 1.8;
       text-align: center;
     }
+    .place-hub-aux-heading {
+      font-family: 'Share Tech Mono', monospace;
+      font-size: .78rem;
+      letter-spacing: .22em;
+      text-align: center;
+      color: var(--cyan);
+      text-transform: uppercase;
+      text-shadow: var(--glow-c);
+      margin: 36px 0 16px;
+    }
+    .links-duo-lead {
+      max-width: 760px;
+      margin: 0 auto 34px;
+      color: rgba(232, 232, 240, .72);
+      font-size: .95rem;
+      line-height: 1.9;
+      text-align: center;
+    }
+    .links-duo-grid {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+      grid-template-rows: auto repeat(6, minmax(58px, auto));
+      column-gap: 28px;
+      row-gap: 12px;
+      align-items: stretch;
+      max-width: 1080px;
+      margin: 0 auto;
+      position: relative;
+    }
+    .links-skin {
+      position: relative;
+      z-index: 0;
+      min-height: 0;
+      pointer-events: none;
+      color: var(--white);
+      background:
+        radial-gradient(ellipse at 20% 0%, rgba(0, 212, 255, .16), transparent 45%),
+        radial-gradient(ellipse at 100% 100%, rgba(255, 215, 0, .11), transparent 45%),
+        linear-gradient(135deg, rgba(4, 7, 14, .96), rgba(9, 13, 30, .92));
+      border: 1px solid rgba(0, 212, 255, .28);
+      clip-path: polygon(0 0, calc(100% - 28px) 0, 100% 28px, 100% 100%, 28px 100%, 0 calc(100% - 28px));
+      overflow: hidden;
+      box-shadow: 0 0 40px rgba(0, 212, 255, .1), inset 0 0 34px rgba(0, 212, 255, .045);
+    }
+    .links-skin::before {
+      content: '';
+      position: absolute;
+      inset: 16px;
+      border: 1px solid rgba(255, 215, 0, .16);
+      pointer-events: none;
+    }
+    .links-skin::after {
+      content: attr(data-side);
+      position: absolute;
+      right: -16px;
+      bottom: 18px;
+      font-family: 'Share Tech Mono', monospace;
+      font-size: clamp(2.8rem, 7vw, 5.4rem);
+      letter-spacing: .08em;
+      color: transparent;
+      -webkit-text-stroke: 1px rgba(255, 215, 0, .1);
+      transform: rotate(-6deg);
+      pointer-events: none;
+    }
+    .links-skin--L { grid-column: 1; grid-row: 1 / -1; }
+    .links-skin--R { grid-column: 2; grid-row: 1 / -1; }
+    .duo-ct { grid-column: 1; grid-row: 1; }
+    .duo-nt { grid-column: 2; grid-row: 1; }
+    .duo-r2L { grid-column: 1; grid-row: 2; }
+    .duo-r2R { grid-column: 2; grid-row: 2; }
+    .duo-r3L { grid-column: 1; grid-row: 3; }
+    .duo-r3R { grid-column: 2; grid-row: 3; }
+    .duo-r4L { grid-column: 1; grid-row: 4; }
+    .duo-r4R { grid-column: 2; grid-row: 4; }
+    .duo-r5L { grid-column: 1; grid-row: 5; }
+    .duo-r5R { grid-column: 2; grid-row: 5; }
+    .duo-r6L { grid-column: 1; grid-row: 6; }
+    .duo-r6R { grid-column: 2; grid-row: 6; }
+    .duo-r7L { grid-column: 1; grid-row: 7; }
+    .duo-r7R { grid-column: 2; grid-row: 7; }
+    .links-duo-grid > *:not(.links-skin) {
+      z-index: 1;
+      position: relative;
+      min-width: 0;
+    }
+    .duo-ct, .duo-nt { align-self: start; }
+    a.links-side-link,
+    div.links-side-link {
+      align-self: stretch;
+      min-height: 58px;
+      height: 100%;
+      box-sizing: border-box;
+    }
+    .duo-ct, .duo-nt, .duo-r2L, .duo-r2R, .duo-r3L, .duo-r3R, .duo-r4L, .duo-r4R, .duo-r5L, .duo-r5R, .duo-r6L, .duo-r6R, .duo-r7L, .duo-r7R { padding-left: 30px; padding-right: 30px; box-sizing: border-box; }
+    .duo-ct, .duo-nt { padding-top: 30px; }
+    .duo-r7L, .duo-r7R { padding-bottom: 30px; }
+    .links-duo-spacer { visibility: hidden; pointer-events: none; border: 0; background: transparent; margin: 0; min-height: 0; }
+    .links-duo-grid::before {
+      content: '×';
+      position: absolute;
+      left: 50%;
+      top: 50%;
+      transform: translate(-50%, -50%);
+      z-index: 3;
+      width: 42px;
+      height: 42px;
+      display: grid;
+      place-items: center;
+      font-family: 'Share Tech Mono', monospace;
+      color: var(--gold);
+      border: 1px solid rgba(255, 215, 0, .32);
+      background: rgba(3, 5, 8, .92);
+      box-shadow: var(--glow-g);
+    }
+    .links-side-top {
+      position: relative;
+      z-index: 1;
+      display: flex;
+      flex-direction: column;
+    }
+    .links-side-kicker,
+    .links-side-title,
+    .links-side-subtitle {
+      position: relative;
+      z-index: 1;
+    }
+    .links-side-kicker {
+      font-family: 'Share Tech Mono', monospace;
+      font-size: .72rem;
+      letter-spacing: .28em;
+      color: var(--cyan);
+      text-shadow: var(--glow-c);
+      text-transform: uppercase;
+      margin-bottom: 12px;
+    }
+    .links-side-title {
+      font-family: 'Zen Old Mincho', 'Noto Serif JP', serif;
+      font-weight: 900;
+      font-size: clamp(1.8rem, 3.4vw, 2.8rem);
+      color: var(--gold);
+      text-shadow: var(--glow-g);
+      line-height: 1.25;
+      margin-bottom: 8px;
+    }
+    .links-side-subtitle {
+      color: rgba(232, 232, 240, .68);
+      font-size: .92rem;
+      line-height: 1.75;
+      margin-bottom: 0;
+    }
+    .links-side-link {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 14px;
+      min-height: 58px;
+      padding: 14px 18px;
+      color: var(--white);
+      text-decoration: none;
+      background: rgba(255, 255, 255, .035);
+      border: 1px solid rgba(0, 212, 255, .18);
+      clip-path: polygon(12px 0, 100% 0, calc(100% - 12px) 100%, 0 100%);
+      transition: transform .25s ease, border-color .25s ease, background .25s ease, box-shadow .25s ease;
+    }
+    .links-side-link:hover {
+      transform: translateX(5px);
+      border-color: rgba(255, 215, 0, .55);
+      background: rgba(255, 215, 0, .08);
+      box-shadow: 0 0 24px rgba(0, 212, 255, .12);
+    }
+    .links-side-link.is-pending,
+    div.links-side-link.is-pending {
+      opacity: .75;
+      border-style: dashed;
+      cursor: not-allowed;
+      pointer-events: none;
+    }
+    .links-side-link.is-pending:hover {
+      transform: none;
+      border-color: rgba(0, 212, 255, .18);
+      background: rgba(255, 255, 255, .035);
+      box-shadow: none;
+    }
+    .links-side-label-block {
+      display: flex;
+      flex-direction: column;
+      align-items: flex-start;
+      gap: 3px;
+      min-width: 0;
+    }
+    .links-side-pending-note {
+      font-size: .72rem;
+      font-weight: 600;
+      letter-spacing: .1em;
+      color: rgba(255, 215, 0, .78);
+    }
+    .links-side-code.is-muted {
+      opacity: .42;
+    }
+    .links-side-label {
+      font-weight: 700;
+      line-height: 1.45;
+    }
+    .links-side-code {
+      flex: 0 0 auto;
+      font-family: 'Share Tech Mono', monospace;
+      font-size: .72rem;
+      letter-spacing: .16em;
+      color: var(--cyan);
+      text-shadow: var(--glow-c);
+    }
+    @media (max-width: 768px) {
+      .links-skin { display: none; }
+      .links-duo-grid {
+        display: flex;
+        flex-direction: column;
+        gap: 10px;
+        max-width: 100%;
+        grid-template-columns: unset;
+        grid-template-rows: unset;
+      }
+      .duo-ct, .duo-nt, .duo-r2L, .duo-r2R, .duo-r3L, .duo-r3R, .duo-r4L, .duo-r4R, .duo-r5L, .duo-r5R, .duo-r6L, .duo-r6R, .duo-r7L, .duo-r7R {
+        padding-left: 22px;
+        padding-right: 22px;
+      }
+      .duo-ct, .duo-nt { padding-top: 22px; }
+      .duo-r7L, .duo-r7R { padding-bottom: 22px; }
+      .duo-ct { order: 1; }
+      .duo-r2L { order: 2; }
+      .duo-r3L { order: 3; }
+      .duo-r4L { order: 4; }
+      .duo-r5L { order: 5; }
+      .duo-r6L { order: 6; }
+      .duo-r7L { order: 7; }
+      .duo-nt {
+        order: 8;
+        border-top: 1px solid rgba(0, 212, 255, .2);
+        margin-top: 10px;
+        padding-top: 20px;
+      }
+      .duo-r2R { order: 9; }
+      .duo-r3R { order: 10; }
+      .duo-r4R { order: 11; }
+      .duo-r5R { order: 12; }
+      .duo-r6R { order: 13; }
+      .duo-r7R { order: 14; display: none; }
+      .links-duo-grid::before {
+        top: calc(50% - 2px);
+        width: 34px;
+        height: 34px;
+        font-size: .95rem;
+      }
+      .links-side-link {
+        min-height: 56px;
+        padding: 13px 15px;
+      }
+    }
   </style>
   <script type="application/ld+json">
   {
@@ -441,60 +698,63 @@
         <p class="how-optional">広告の閲覧は任意です。<br>無理のない範囲で応援していただけます。</p>
       </section>
 
-      <!-- ═══ LINKS / VISIT / SUPPORT BOOST ═══ -->
-      <section class="portal-section portal-linkboost-section" id="linkboost" aria-labelledby="linkboost-title">
-        <h2 class="section-title" id="linkboost-title">ゲーム以外の応援方法</h2>
-        <p class="portal-linkboost-lead">BAKENEKO GAMESで遊んだあとは、来店・物資支援・猫又療養所への支援・SNSでの応援にも進めます。主役はゲームのまま、保護猫活動への入口を少しだけ広げています。</p>
-        <div class="portal-linkboost-grid">
-          <a class="portal-linkboost-card" href="https://www.hotpepper.jp/strJ001295774/yoyaku/?vos=othpporgzzzzx00000001" target="_blank" rel="noopener noreferrer">
-            <span class="portal-linkboost-kicker">VISIT</span>
-            <span class="portal-linkboost-title">お店に行く</span>
-            <span class="portal-linkboost-text">来店予約ページを開きます。初めての方も、まずは予約導線からご確認ください。</span>
-          </a>
-          <a class="portal-linkboost-card" href="https://www.amazon.co.jp/hz/wishlist/ls/1MBB32N6M8OAG?ref_=wl_share" target="_blank" rel="noopener noreferrer">
-            <span class="portal-linkboost-kicker">ITEM SUPPORT</span>
-            <span class="portal-linkboost-title">物資で応援する</span>
-            <span class="portal-linkboost-text">猫さんたちの日々に必要なものを、Amazon リストから確認できます。</span>
-          </a>
-          <a class="portal-linkboost-card" href="https://nekomata-sanatorium.com/support/" target="_blank" rel="noopener noreferrer">
-            <span class="portal-linkboost-kicker">NEKOMATA</span>
-            <span class="portal-linkboost-title">猫又療養所を支援する</span>
-            <span class="portal-linkboost-text">ハンディキャップのある猫さんたちの療養・生活を支える導線です。</span>
-          </a>
+      <!-- ═══ PLACE HUB（A案: CAFE × 猫又 双璧1ブロック）═══ -->
+      <section class="portal-section links-feature" id="place-hub" aria-labelledby="place-hub-title">
+        <div class="hanko">入口</div>
+        <h2 class="section-title" id="place-hub-title">2つの入口を選ぶ</h2>
+        <p class="links-duo-lead">BAKENEKO CAFE と千葉の猫又療養所の導線を、同じ並びでまとめています。左列がCAFE、右列が猫又です。来店予約・地図・公式・物資・採用は行ごとに対応しています。</p>
+        <div class="links-duo-grid">
+          <div class="links-skin links-skin--L" data-side="CAFE" aria-hidden="true"></div>
+          <div class="links-skin links-skin--R" data-side="NEKOMATA" aria-hidden="true"></div>
+          <div class="links-side-top duo-ct">
+            <div class="links-side-kicker">CAFE SIDE</div>
+            <h3 class="links-side-title">BAKENEKO CAFE</h3>
+            <p class="links-side-subtitle">化猫茶屋へのご来店予約、アクセス、公式情報、物資支援、採用・ボランティアはこちらです。</p>
+          </div>
+          <div class="links-side-top duo-nt">
+            <div class="links-side-kicker">NEKOMATA SIDE</div>
+            <h3 class="links-side-title">猫又療養所</h3>
+            <p class="links-side-subtitle">ハンディキャップのある猫さんたちの療養・生活を支える導線です。</p>
+          </div>
+          <a class="links-side-link duo-r2L" href="https://www.hotpepper.jp/strJ001295774/yoyaku/?vos=othpporgzzzzx00000001" target="_blank" rel="noopener noreferrer"><span class="links-side-label">BAKENEKO CAFE 来店予約</span><span class="links-side-code">VISIT</span></a>
+          <a class="links-side-link duo-r2R" href="https://nekomata-sanatorium.com/support/" target="_blank" rel="noopener noreferrer"><span class="links-side-label">猫又療養所を支援する</span><span class="links-side-code">SUPPORT</span></a>
+          <a class="links-side-link duo-r3L" href="https://www.google.com/maps/search/?api=1&amp;query=BAKENEKO%20CAFE%20%E6%9D%B1%E4%BA%AC%E9%83%BD%E6%96%B0%E5%AE%BF%E5%8C%BA%E5%A4%A7%E4%B9%853-13-1-1-106" target="_blank" rel="noopener noreferrer"><span class="links-side-label">Googleマップ</span><span class="links-side-code">MAP</span></a>
+          <a class="links-side-link duo-r3R" href="https://www.google.com/maps/search/?api=1&amp;query=%E7%8C%AB%E5%8F%88%E7%99%82%E9%A4%8A%E6%89%80%20%E5%8D%83%E8%91%89%E7%9C%8C%E5%AF%8C%E6%B4%A5%E5%B8%82%E5%B0%8F%E4%B9%85%E4%BF%9D1711" target="_blank" rel="noopener noreferrer"><span class="links-side-label">Googleマップ</span><span class="links-side-code">MAP</span></a>
+          <a class="links-side-link duo-r4L" href="https://bakeneko-cafe.tokyo/" target="_blank" rel="noopener noreferrer"><span class="links-side-label">BAKENEKO CAFE 公式HP</span><span class="links-side-code">OFFICIAL</span></a>
+          <a class="links-side-link duo-r4R" href="https://nekomata-sanatorium.com/" target="_blank" rel="noopener noreferrer"><span class="links-side-label">猫又療養所 公式HP</span><span class="links-side-code">OFFICIAL</span></a>
+          <a class="links-side-link duo-r5L" href="https://www.amazon.co.jp/hz/wishlist/ls/1MBB32N6M8OAG?ref_=wl_share" target="_blank" rel="noopener noreferrer"><span class="links-side-label">Amazon物資支援</span><span class="links-side-code">ITEM</span></a>
+          <div class="links-side-link is-pending duo-r5R" aria-disabled="true" aria-label="ボランティア申し込み（準備中）">
+            <span class="links-side-label-block">
+              <span class="links-side-label">ボランティア申し込み</span>
+              <span class="links-side-pending-note">準備中</span>
+            </span>
+            <span class="links-side-code is-muted">JOIN</span>
+          </div>
+          <a class="links-side-link duo-r6L" href="https://forms.gle/4NQjzmjcYaUQP4RSA" target="_blank" rel="noopener noreferrer"><span class="links-side-label">ボランティア申し込み</span><span class="links-side-code">JOIN</span></a>
+          <div class="links-side-link is-pending duo-r6R" aria-disabled="true" aria-label="求人フォーム（準備中）">
+            <span class="links-side-label-block">
+              <span class="links-side-label">求人フォーム</span>
+              <span class="links-side-pending-note">準備中</span>
+            </span>
+            <span class="links-side-code is-muted">WORK</span>
+          </div>
+          <a class="links-side-link duo-r7L" href="https://docs.google.com/forms/d/e/1FAIpQLSekpfGpBcxwgABK1QFYW_7HmCc5sTKOiGnuaKg4u66NkbU2JA/viewform" target="_blank" rel="noopener noreferrer"><span class="links-side-label">求人フォーム</span><span class="links-side-code">WORK</span></a>
+          <div class="duo-r7R links-duo-spacer" aria-hidden="true"></div>
+        </div>
+        <p class="portal-linkboost-note">住所・アクセスの確定は、各公式情報を優先します。Googleマップは住所検索として外部で開きます。埋め込みは重くなりやすいため、リンク導線中心で扱います。</p>
+        <h3 class="place-hub-aux-heading">SNS・拡充</h3>
+        <div class="portal-linkboost-grid" style="max-width: 640px">
           <a class="portal-linkboost-card" href="https://x.com/bakenekocafe?s=21&amp;t=MEqYIuhzQdOvnLgOfF2qgw" target="_blank" rel="noopener noreferrer">
             <span class="portal-linkboost-kicker">WATCH</span>
-            <span class="portal-linkboost-title">SNSで活動を見る</span>
-            <span class="portal-linkboost-text">X や各SNSから、カフェの日常・猫さんたちの様子を追えます。</span>
+            <span class="portal-linkboost-title">SNS（X）で活動を見る</span>
+            <span class="portal-linkboost-text">店舗の日常・猫さんたちの様子を追えます。YouTube 等はリンクハブでも開けます。</span>
+          </a>
+          <a class="portal-linkboost-card" href="links-test/">
+            <span class="portal-linkboost-kicker">HUB</span>
+            <span class="portal-linkboost-title">他のSNS・全リンク</span>
+            <span class="portal-linkboost-text">拡充版のリンク集（下の「すべてのリンク」と同じ先）です。</span>
           </a>
         </div>
-      </section>
-
-      <section class="portal-section portal-linkboost-section" id="visit-cafe" aria-labelledby="visit-cafe-title">
-        <h2 class="section-title" id="visit-cafe-title">BAKENEKO CAFEへ行く</h2>
-        <p class="portal-linkboost-lead">東京・新宿の BAKENEKO CAFE 化猫茶屋は、ゲームに登場する猫さんたちの背景にもつながる場所です。Googleマップは住所検索リンクとして開きます。</p>
-        <div class="portal-linkboost-grid">
-          <a class="portal-linkboost-card" href="https://www.hotpepper.jp/strJ001295774/yoyaku/?vos=othpporgzzzzx00000001" target="_blank" rel="noopener noreferrer">
-            <span class="portal-linkboost-kicker">RESERVE</span>
-            <span class="portal-linkboost-title">来店予約する</span>
-            <span class="portal-linkboost-text">Hot Pepper の予約ページを開きます。</span>
-          </a>
-          <a class="portal-linkboost-card" href="https://www.google.com/maps/search/?api=1&amp;query=BAKENEKO%20CAFE%20%E6%9D%B1%E4%BA%AC%E9%83%BD%E6%96%B0%E5%AE%BF%E5%8C%BA%E5%A4%A7%E4%B9%853-13-1-1-106" target="_blank" rel="noopener noreferrer">
-            <span class="portal-linkboost-kicker">MAP</span>
-            <span class="portal-linkboost-title">BAKENEKO CAFE の地図を開く</span>
-            <span class="portal-linkboost-text">東京都新宿区大久保3-13-1-1-106 を Googleマップで開きます。</span>
-          </a>
-          <a class="portal-linkboost-card" href="https://www.google.com/maps/search/?api=1&amp;query=%E7%8C%AB%E5%8F%88%E7%99%82%E9%A4%8A%E6%89%80%20%E5%8D%83%E8%91%89%E7%9C%8C%E5%AF%8C%E6%B4%A5%E5%B8%82%E5%B0%8F%E4%B9%85%E4%BF%9D1711" target="_blank" rel="noopener noreferrer">
-            <span class="portal-linkboost-kicker">NEKOMATA MAP</span>
-            <span class="portal-linkboost-title">猫又療養所の地図を開く</span>
-            <span class="portal-linkboost-text">千葉県富津市小久保1711 を Googleマップで開きます。</span>
-          </a>
-          <a class="portal-linkboost-card" href="https://bakeneko-cafe.tokyo/" target="_blank" rel="noopener noreferrer">
-            <span class="portal-linkboost-kicker">OFFICIAL</span>
-            <span class="portal-linkboost-title">公式HPを見る</span>
-            <span class="portal-linkboost-text">店舗・支援・活動情報は BAKENEKO CAFE 公式HPへ。</span>
-          </a>
-        </div>
-        <p class="portal-linkboost-note">住所・アクセス詳細は、確定済みの公式ページ側を優先します。Googleマップの埋め込みは重くなりやすいため、まずは外部リンク導線中心で扱います。</p>
       </section>
 
       <section class="portal-section portal-linkboost-section" id="all-links" aria-labelledby="all-links-title">
@@ -519,6 +779,10 @@
       <section class="portal-section" id="updates">
         <h2 class="section-title">更新履歴</h2>
         <ul class="update-history-list">
+          <li class="update-item">
+            <span class="update-date">2026-04-25</span>
+            <span class="update-body">トップの来店・支援導線を、CAFE×猫又の<strong>双璧1ブロック</strong>（<a href="#place-hub">#place-hub</a>）に集約。重複していた2セクションを整理し、SNS等は補助枠＋<a href="links-test/">リンクハブ</a>へ誘導。</span>
+          </li>
           <li class="update-item">
             <span class="update-date">2026-04-25</span>
             <span class="update-body">第3弾「<a href="sayori-punch/">さよりパンチ防衛</a>」を公開。3レーンパンチで迫りくる敵を撃退する爽快アクションです。</span>

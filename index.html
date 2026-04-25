@@ -22,6 +22,86 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Noto+Serif+JP:wght@400;700;900&family=Share+Tech+Mono&family=Zen+Old+Mincho:wght@400;700;900&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="portal.css?v=20260408a">
+  <style>
+    .portal-linkboost-lead {
+      max-width: 720px;
+      margin: 0 auto 28px;
+      text-align: center;
+      color: rgba(232,232,240,.72);
+      font-size: .95rem;
+      line-height: 1.9;
+    }
+    .portal-linkboost-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+      gap: 18px;
+      max-width: 920px;
+      margin: 0 auto;
+    }
+    .portal-linkboost-card {
+      display: block;
+      min-height: 150px;
+      padding: 22px 22px 24px;
+      color: var(--white);
+      text-decoration: none;
+      background: linear-gradient(135deg, rgba(8,8,15,.96), rgba(12,16,32,.9));
+      border: 1px solid rgba(0,212,255,.16);
+      border-radius: 12px;
+      position: relative;
+      overflow: hidden;
+      transition: border-color .25s ease, transform .25s ease, background .25s ease;
+    }
+    .portal-linkboost-card::before {
+      content: '';
+      position: absolute;
+      inset: 0;
+      background: radial-gradient(ellipse at 100% 0%, rgba(255,215,0,.12), transparent 45%);
+      opacity: .8;
+      pointer-events: none;
+    }
+    .portal-linkboost-card:hover {
+      border-color: rgba(0,212,255,.55);
+      transform: translateY(-3px);
+      background: linear-gradient(135deg, rgba(0,212,255,.1), rgba(12,16,32,.92));
+    }
+    .portal-linkboost-kicker {
+      display: block;
+      margin-bottom: 10px;
+      font-family: 'Share Tech Mono', monospace;
+      font-size: .68rem;
+      letter-spacing: .16em;
+      color: var(--cyan);
+      text-transform: uppercase;
+      position: relative;
+      z-index: 1;
+    }
+    .portal-linkboost-title {
+      display: block;
+      margin-bottom: 8px;
+      color: var(--gold);
+      font-weight: 700;
+      font-size: 1rem;
+      line-height: 1.45;
+      position: relative;
+      z-index: 1;
+    }
+    .portal-linkboost-text {
+      display: block;
+      color: rgba(232,232,240,.58);
+      font-size: .82rem;
+      line-height: 1.7;
+      position: relative;
+      z-index: 1;
+    }
+    .portal-linkboost-note {
+      max-width: 720px;
+      margin: 22px auto 0;
+      color: rgba(232,232,240,.52);
+      font-size: .82rem;
+      line-height: 1.8;
+      text-align: center;
+    }
+  </style>
   <script type="application/ld+json">
   {
     "@context": "https://schema.org",
@@ -192,7 +272,7 @@
         <div class="site-about-body">
           <p class="site-about-lead">BAKENEKO GAMES（公開URL：<strong>https://www.bakenekocafe.studio</strong>）は、<strong>一般社団法人 新宿租界</strong>が運営する<strong>無料のブラウザゲーム</strong>ポータルです。保護猫カフェ「BAKENEKO CAFE 化猫茶屋」の活動をオンラインでも知っていただくこと、そして気軽に遊べるオリジナルゲームで「猫を身近に感じるきっかけ」をつくることを目的にしています。</p>
           <p>掲載しているゲームは、スマートフォンやPCのブラウザから<strong>会員登録なしで</strong>遊べます。スコアは<strong>世界ランキング</strong>に送信できるタイトルもあり、記録を競う楽しみ方も用意しています。リザルト画面などに表示される広告は<strong>Google AdSense 等の第三者配信</strong>によるもので、<strong>視聴は任意</strong>です。広告を見なくてもゲームは最後までプレイでき、利用者への<strong>金銭・ポイント・景品の付与は行っていません</strong>（いわゆるポイ活サイトではありません）。収益の一部は運営および保護猫に関わる活動に活用しています。仕組みの詳細は<a href="support.html">広告とサイトの仕組み</a>をご覧ください。</p>
-          <p>コンテンツは、リリース中・開発中の<strong>オリジナルゲーム</strong>に加え、カフェの猫スタッフの視点で綴る<strong><a href="diary/">こはだ日記</a></strong>、遊び方や画面の見方をまとめた<strong><a href="howto.html">遊び方ガイド</a></strong>、運営情報の<strong><a href="about.html">About</a></strong>などで構成しています。サイトの利用条件・免責、お子様のご利用、個人情報の取扱いは<a href="terms.html">利用規約</a>および<a href="privacy.html">プライバシーポリシー</a>に記載しています。ご質問は<a href="contact.html">お問い合わせ</a>から受け付けています。</p>
+          <p>コンテンツは、リリース中の<strong>オリジナルゲーム</strong>に加え、カフェの猫スタッフの視点で綴る<strong><a href="diary/">こはだ日記</a></strong>、遊び方や画面の見方をまとめた<strong><a href="howto.html">遊び方ガイド</a></strong>、運営情報の<strong><a href="about.html">About</a></strong>などで構成しています。サイトの利用条件・免責、お子様のご利用、個人情報の取扱いは<a href="terms.html">利用規約</a>および<a href="privacy.html">プライバシーポリシー</a>に記載しています。ご質問は<a href="contact.html">お問い合わせ</a>から受け付けています。</p>
           <p>当ポータルは継続的にページやゲームを更新しています。直近の変更は下記の<strong>更新履歴</strong>からもご確認いただけます。</p>
         </div>
       </section>
@@ -303,16 +383,26 @@
           <a href="nameko.html" style="color:var(--gold);font-size:.85rem;opacity:.7">なめこバランスの詳細 →</a>
         </div>
         <div class="games-grid" style="margin-top:32px">
-          <div class="game-card" style="opacity:.7;pointer-events:none">
+          <a href="sayori-punch/" class="game-card">
             <div class="game-card-thumb">
-              <img src="siyougazou/sayorishoumen.png" alt="さよりパンチ防衛（開発中）" loading="lazy" onerror="this.style.display='none'">
+              <img src="siyougazou/sayorishoumen.png" alt="ブラウザゲーム さよりパンチ防衛" loading="lazy" onerror="this.style.display='none'">
             </div>
             <div class="game-card-body">
               <h3>さよりパンチ防衛</h3>
-              <p>迫りくる敵を3レーンパンチで撃退！<br>コンボを繋いでハイスコアを目指せ！<br>テンポ良く叩いて爽快アクション！</p>
-              <span class="play-btn" style="background:#888">🚧 開発中</span>
+              <p>迫りくる敵を3レーンパンチで撃退！<br>コンボを繋いでハイスコアを目指せ！<br>テンポ良く叩いて爽快アクション！<br>世界ランキング対応です！</p>
+              <span class="play-btn">▶ PLAY NOW</span>
             </div>
+          </a>
+        </div>
+        <div class="portal-ranking-block" data-game-id="sayori-punch" data-unit="">
+          <div class="portal-ranking-header">
+            <span class="portal-ranking-title">🏆 世界ランキング TOP 10</span>
+            <span class="portal-ranking-note">1日1回更新（毎日24時）</span>
           </div>
+          <div class="portal-ranking-list" id="portal-rank-sayori-punch"><p class="portal-ranking-loading">読込中…</p></div>
+        </div>
+        <div style="text-align:center;margin-top:10px">
+          <a href="sayori.html" style="color:var(--gold);font-size:.85rem;opacity:.7">さよりパンチ防衛の詳細 →</a>
         </div>
       </section>
 
@@ -351,6 +441,67 @@
         <p class="how-optional">広告の閲覧は任意です。<br>無理のない範囲で応援していただけます。</p>
       </section>
 
+      <!-- ═══ LINKS / VISIT / SUPPORT BOOST ═══ -->
+      <section class="portal-section portal-linkboost-section" id="linkboost" aria-labelledby="linkboost-title">
+        <h2 class="section-title" id="linkboost-title">ゲーム以外の応援方法</h2>
+        <p class="portal-linkboost-lead">BAKENEKO GAMESで遊んだあとは、来店・物資支援・猫又療養所への支援・SNSでの応援にも進めます。主役はゲームのまま、保護猫活動への入口を少しだけ広げています。</p>
+        <div class="portal-linkboost-grid">
+          <a class="portal-linkboost-card" href="https://www.hotpepper.jp/strJ001295774/yoyaku/?vos=othpporgzzzzx00000001" target="_blank" rel="noopener noreferrer">
+            <span class="portal-linkboost-kicker">VISIT</span>
+            <span class="portal-linkboost-title">お店に行く</span>
+            <span class="portal-linkboost-text">来店予約ページを開きます。初めての方も、まずは予約導線からご確認ください。</span>
+          </a>
+          <a class="portal-linkboost-card" href="https://www.amazon.co.jp/hz/wishlist/ls/1MBB32N6M8OAG?ref_=wl_share" target="_blank" rel="noopener noreferrer">
+            <span class="portal-linkboost-kicker">ITEM SUPPORT</span>
+            <span class="portal-linkboost-title">物資で応援する</span>
+            <span class="portal-linkboost-text">猫さんたちの日々に必要なものを、Amazon リストから確認できます。</span>
+          </a>
+          <a class="portal-linkboost-card" href="https://nekomata-sanatorium.com/support/" target="_blank" rel="noopener noreferrer">
+            <span class="portal-linkboost-kicker">NEKOMATA</span>
+            <span class="portal-linkboost-title">猫又療養所を支援する</span>
+            <span class="portal-linkboost-text">ハンディキャップのある猫さんたちの療養・生活を支える導線です。</span>
+          </a>
+          <a class="portal-linkboost-card" href="https://x.com/bakenekocafe?s=21&amp;t=MEqYIuhzQdOvnLgOfF2qgw" target="_blank" rel="noopener noreferrer">
+            <span class="portal-linkboost-kicker">WATCH</span>
+            <span class="portal-linkboost-title">SNSで活動を見る</span>
+            <span class="portal-linkboost-text">X や各SNSから、カフェの日常・猫さんたちの様子を追えます。</span>
+          </a>
+        </div>
+      </section>
+
+      <section class="portal-section portal-linkboost-section" id="visit-cafe" aria-labelledby="visit-cafe-title">
+        <h2 class="section-title" id="visit-cafe-title">BAKENEKO CAFEへ行く</h2>
+        <p class="portal-linkboost-lead">東京・新宿の BAKENEKO CAFE 化猫茶屋は、ゲームに登場する猫さんたちの背景にもつながる場所です。地図URLは確定後に追加します。</p>
+        <div class="portal-linkboost-grid">
+          <a class="portal-linkboost-card" href="https://www.hotpepper.jp/strJ001295774/yoyaku/?vos=othpporgzzzzx00000001" target="_blank" rel="noopener noreferrer">
+            <span class="portal-linkboost-kicker">RESERVE</span>
+            <span class="portal-linkboost-title">来店予約する</span>
+            <span class="portal-linkboost-text">Hot Pepper の予約ページを開きます。</span>
+          </a>
+          <div class="portal-linkboost-card" aria-disabled="true">
+            <span class="portal-linkboost-kicker">MAP</span>
+            <span class="portal-linkboost-title">Googleマップを開く</span>
+            <span class="portal-linkboost-text">URL未確定：別途指定。仮リンクは入れていません。</span>
+          </div>
+          <a class="portal-linkboost-card" href="https://bakeneko-cafe.tokyo/" target="_blank" rel="noopener noreferrer">
+            <span class="portal-linkboost-kicker">OFFICIAL</span>
+            <span class="portal-linkboost-title">公式HPを見る</span>
+            <span class="portal-linkboost-text">店舗・支援・活動情報は BAKENEKO CAFE 公式HPへ。</span>
+          </a>
+        </div>
+        <p class="portal-linkboost-note">住所・アクセス詳細は、確定済みの公式ページ側を優先します。Googleマップの埋め込みは重くなりやすいため、まずは外部リンク導線中心で扱います。</p>
+      </section>
+
+      <section class="portal-section portal-linkboost-section" id="all-links" aria-labelledby="all-links-title">
+        <h2 class="section-title" id="all-links-title">すべてのリンク</h2>
+        <p class="portal-linkboost-lead">来店予約・支援・SNS・問い合わせをまとめて確認できる、テスト中の軽量リンクハブです。</p>
+        <div style="text-align:center">
+          <a href="links-test/" class="portal-cta" style="display:inline-flex">
+            <span>↗</span><span>リンクハブ（テスト）を見る</span>
+          </a>
+        </div>
+      </section>
+
       <!-- ═══ ABOUT ═══ -->
       <section class="portal-section portal-about" id="about">
         <h2 class="section-title">運営について</h2>
@@ -363,6 +514,10 @@
       <section class="portal-section" id="updates">
         <h2 class="section-title">更新履歴</h2>
         <ul class="update-history-list">
+          <li class="update-item">
+            <span class="update-date">2026-04-25</span>
+            <span class="update-body">第3弾「<a href="sayori-punch/">さよりパンチ防衛</a>」を公開。3レーンパンチで迫りくる敵を撃退する爽快アクションです。</span>
+          </li>
           <li class="update-item">
             <span class="update-date">2026-04-08</span>
             <span class="update-body">審査・クロール向けに<strong>初めての方へ</strong>（サイト内ガイド）、<strong>JSON-LD</strong>（Organization / WebSite）、主要ページの<strong>canonical</strong>を追加。<a href="support.html">広告とサイトの仕組み</a>のFAQを拡充、<a href="howto.html">遊び方ガイド</a>・<a href="contact.html">お問い合わせ</a>に説明文を追記。</span>

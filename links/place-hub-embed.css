@@ -1,4 +1,4 @@
-/* トップ #place-hub と同じ可視装飾（links-test 専用。index とは別表記で二重定義） */
+/* トップ #place-hub と同じ可視装飾（/links/ 専用。index とは別表記で二重定義） */
 .portal-section--page .page-lead code {
   font-family: 'Share Tech Mono', monospace;
   font-size: 0.9em;

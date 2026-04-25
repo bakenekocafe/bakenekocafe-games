@@ -4,6 +4,10 @@
 # ルート (/) を必ず index.html（ポータル）として配信
 /    /index.html   200
 
+# 旧パス links-test → /links/（フォルダ名変更）
+/links-test    /links/   301
+/links-test/   /links/   301
+
 # nyagi-app を専用ドメインにリダイレクト
 /nyagi-app/*  https://nyagi.bakenekocafe.studio/:splat  301
 /nyagi-app    https://nyagi.bakenekocafe.studio/         301

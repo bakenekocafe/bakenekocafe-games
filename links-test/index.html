@@ -267,6 +267,35 @@
       background: rgba(255, 215, 0, .08);
       box-shadow: 0 0 24px rgba(0, 212, 255, .12);
     }
+    .links-side-link.is-pending,
+    div.links-side-link.is-pending {
+      opacity: .75;
+      border-style: dashed;
+      cursor: not-allowed;
+      pointer-events: none;
+    }
+    .links-side-link.is-pending:hover {
+      transform: none;
+      border-color: rgba(0, 212, 255, .18);
+      background: rgba(255, 255, 255, .035);
+      box-shadow: none;
+    }
+    .links-side-label-block {
+      display: flex;
+      flex-direction: column;
+      align-items: flex-start;
+      gap: 3px;
+      min-width: 0;
+    }
+    .links-side-pending-note {
+      font-size: .72rem;
+      font-weight: 600;
+      letter-spacing: .1em;
+      color: rgba(255, 215, 0, .78);
+    }
+    .links-side-code.is-muted {
+      opacity: .42;
+    }
     .links-side-label {
       font-weight: 700;
       line-height: 1.45;
@@ -693,12 +722,14 @@
           <article class="links-side-card" data-side="CAFE">
             <div class="links-side-kicker">CAFE SIDE</div>
             <h3 class="links-side-title">BAKENEKO CAFE</h3>
-            <p class="links-side-subtitle">化猫茶屋へのご来店予約、アクセス、公式情報、物資支援はこちらです。</p>
+            <p class="links-side-subtitle">化猫茶屋へのご来店予約、アクセス、公式情報、物資支援、採用・ボランティアはこちらです。</p>
             <div class="links-side-actions">
               <a class="links-side-link" href="https://www.hotpepper.jp/strJ001295774/yoyaku/?vos=othpporgzzzzx00000001" target="_blank" rel="noopener noreferrer"><span class="links-side-label">BAKENEKO CAFE 来店予約</span><span class="links-side-code">VISIT</span></a>
               <a class="links-side-link" href="https://www.google.com/maps/search/?api=1&amp;query=BAKENEKO%20CAFE%20%E6%9D%B1%E4%BA%AC%E9%83%BD%E6%96%B0%E5%AE%BF%E5%8C%BA%E5%A4%A7%E4%B9%853-13-1-1-106" target="_blank" rel="noopener noreferrer"><span class="links-side-label">Googleマップ</span><span class="links-side-code">MAP</span></a>
               <a class="links-side-link" href="https://bakeneko-cafe.tokyo/" target="_blank" rel="noopener noreferrer"><span class="links-side-label">BAKENEKO CAFE 公式HP</span><span class="links-side-code">OFFICIAL</span></a>
               <a class="links-side-link" href="https://www.amazon.co.jp/hz/wishlist/ls/1MBB32N6M8OAG?ref_=wl_share" target="_blank" rel="noopener noreferrer"><span class="links-side-label">Amazon物資支援</span><span class="links-side-code">ITEM</span></a>
+              <a class="links-side-link" href="https://forms.gle/4NQjzmjcYaUQP4RSA" target="_blank" rel="noopener noreferrer"><span class="links-side-label">ボランティア申し込み</span><span class="links-side-code">JOIN</span></a>
+              <a class="links-side-link" href="https://docs.google.com/forms/d/e/1FAIpQLSekpfGpBcxwgABK1QFYW_7HmCc5sTKOiGnuaKg4u66NkbU2JA/viewform" target="_blank" rel="noopener noreferrer"><span class="links-side-label">求人フォーム</span><span class="links-side-code">WORK</span></a>
             </div>
           </article>
           <article class="links-side-card" data-side="NEKOMATA">
@@ -709,6 +740,20 @@
               <a class="links-side-link" href="https://nekomata-sanatorium.com/support/" target="_blank" rel="noopener noreferrer"><span class="links-side-label">猫又療養所を支援する</span><span class="links-side-code">SUPPORT</span></a>
               <a class="links-side-link" href="https://www.google.com/maps/search/?api=1&amp;query=%E7%8C%AB%E5%8F%88%E7%99%82%E9%A4%8A%E6%89%80%20%E5%8D%83%E8%91%89%E7%9C%8C%E5%AF%8C%E6%B4%A5%E5%B8%82%E5%B0%8F%E4%B9%85%E4%BF%9D1711" target="_blank" rel="noopener noreferrer"><span class="links-side-label">Googleマップ</span><span class="links-side-code">MAP</span></a>
               <a class="links-side-link" href="https://nekomata-sanatorium.com/" target="_blank" rel="noopener noreferrer"><span class="links-side-label">活動ページを見る</span><span class="links-side-code">INFO</span></a>
+              <div class="links-side-link is-pending" aria-disabled="true" aria-label="ボランティア申し込み（準備中）">
+                <span class="links-side-label-block">
+                  <span class="links-side-label">ボランティア申し込み</span>
+                  <span class="links-side-pending-note">準備中</span>
+                </span>
+                <span class="links-side-code is-muted">JOIN</span>
+              </div>
+              <div class="links-side-link is-pending" aria-disabled="true" aria-label="求人フォーム（準備中）">
+                <span class="links-side-label-block">
+                  <span class="links-side-label">求人フォーム</span>
+                  <span class="links-side-pending-note">準備中</span>
+                </span>
+                <span class="links-side-code is-muted">WORK</span>
+              </div>
             </div>
           </article>
         </div>
@@ -767,8 +812,6 @@
       <section class="portal-section" id="join-links" aria-labelledby="join-links-title">
         <h2 class="section-title" id="join-links-title">参加・お問い合わせ</h2>
         <div class="links-compact-grid">
-          <a class="links-compact-card" href="https://forms.gle/4NQjzmjcYaUQP4RSA" target="_blank" rel="noopener noreferrer"><span><span class="links-compact-label">ボランティア申込</span><span class="links-compact-note">活動に関わりたい方はこちら。</span></span><span class="links-compact-code">JOIN</span></a>
-          <a class="links-compact-card" href="https://docs.google.com/forms/d/e/1FAIpQLSekpfGpBcxwgABK1QFYW_7HmCc5sTKOiGnuaKg4u66NkbU2JA/viewform" target="_blank" rel="noopener noreferrer"><span><span class="links-compact-label">求人フォーム</span><span class="links-compact-note">採用・お仕事に関するフォーム。</span></span><span class="links-compact-code">WORK</span></a>
           <a class="links-compact-card" href="https://line.me/ti/g2/DUgvhnzEXNq9uEMoURbbtNQ8dRFmgA3plR2l8A?utm_source=invitation&amp;utm_medium=link_copy&amp;utm_campaign=default" target="_blank" rel="noopener noreferrer"><span><span class="links-compact-label">LINEオープンチャット</span><span class="links-compact-note">参加前に案内内容をご確認ください。</span></span><span class="links-compact-code">LINE</span></a>
           <a class="links-compact-card" href="https://ad.bakeneko-cafe.tokyo" target="_blank" rel="noopener noreferrer"><span><span class="links-compact-label">広告依頼</span><span class="links-compact-note">一般問い合わせフォームの代用ではありません。</span></span><span class="links-compact-code">AD</span></a>
           <a class="links-compact-card" href="../contact.html"><span><span class="links-compact-label">お問い合わせフォーム</span><span class="links-compact-note">BAKENEKO GAMES / CAFE 共通窓口。</span></span><span class="links-compact-code">FORM</span></a>

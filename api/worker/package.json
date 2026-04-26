@@ -1,0 +1,13 @@
+{
+  "name": "bakeneko-api",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "npx wrangler dev",
+    "deploy": "npx wrangler deploy",
+    "d1:ops:voice-provenance": "node scripts/apply-voice-dict-provenance.mjs"
+  },
+  "devDependencies": {
+    "wrangler": "^4.80.0"
+  }
+}

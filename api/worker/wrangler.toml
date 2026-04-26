@@ -1,0 +1,48 @@
+name = "bakeneko-api"
+main = "src/index.js"
+compatibility_date = "2024-01-01"
+
+[triggers]
+crons = ["*/5 * * * *", "0 5 * * *", "0 15 * * *", "0 20 * * *", "0 23 * * *"]
+
+[[kv_namespaces]]
+binding = "ADS_CONFIG_KV"
+id = "042ca3f9ad6b4c1084ccb3fe6ce07913"
+
+[[kv_namespaces]]
+binding = "IDEMPOTENCY_KV"
+id = "2b2931d89ca840158d7ce57153b03901"
+
+[[kv_namespaces]]
+binding = "NONCE_KV"
+id = "c4f34363eb3f45a5bebff5e18b5d392d"
+
+[[kv_namespaces]]
+binding = "RATE_LIMIT_KV"
+id = "988ec1e7583542b2a132e03cc852e383"
+
+[[d1_databases]]
+binding = "DB"
+database_name = "bakeneko-db"
+database_id = "611fba29-829e-4faf-9e17-ba90ee746bc1"
+
+[[d1_databases]]
+binding = "OPS_DB"
+database_name = "bakeneko-ops"
+database_id = "ba3bddb9-37b1-4cb7-9a94-ea2aa8f2874b"
+
+[[r2_buckets]]
+binding = "NYAGI_FILES"
+bucket_name = "nyagi-files"
+
+[ai]
+binding = "AI"
+
+[vars]
+ADMIN_KEY = "dev-admin-key-change-in-production"
+ALLOWED_ORIGINS = "https://bakenekocafe.studio,https://www.bakenekocafe.studio,https://nyagi.bakenekocafe.studio"
+PSEUDO_VERIFY_MODE = "true"
+SLACK_ALERT_CHANNEL = "C0AUR9MSY6N"   # #nyagi-alert の Slack チャンネル ID
+RESEND_FROM = "noreply@bakenekocafe.studio"
+SLACK_CHANNEL_CAFE = "C0AHWBEFULS"
+SLACK_CHANNEL_NEKOMATA = ""

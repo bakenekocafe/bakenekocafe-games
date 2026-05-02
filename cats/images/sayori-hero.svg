@@ -1,0 +1,9 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="630" viewBox="0 0 1200 630" role="img" aria-label="さより（プレースホルダ）">
+  <rect width="1200" height="630" fill="#08080f"/>
+  <rect x="0" y="0" width="1200" height="4" fill="#00d4ff" opacity="0.5"/>
+  <path d="M320 400 Q600 120 880 400" fill="none" stroke="#00d4ff" stroke-width="3" opacity="0.35"/>
+  <circle cx="420" cy="260" r="28" fill="#00d4ff" opacity="0.25"/>
+  <circle cx="780" cy="260" r="28" fill="#00d4ff" opacity="0.25"/>
+  <text x="600" y="480" text-anchor="middle" fill="#ffd700" font-family="serif" font-size="42">さより</text>
+  <text x="600" y="540" text-anchor="middle" fill="#e8e8f0" font-family="monospace" font-size="16" opacity="0.55">BAKENEKO GAMES · 在籍猫紹介 · sayori</text>
+</svg>

@@ -1,0 +1,7 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="630" viewBox="0 0 1200 630" role="img" aria-label="在籍猫紹介（プレースホルダ）">
+  <rect width="1200" height="630" fill="#08080f"/>
+  <rect x="0" y="626" width="1200" height="4" fill="#ffd700" opacity="0.6"/>
+  <text x="600" y="300" text-anchor="middle" fill="#e8e8f0" font-family="serif" font-size="52">在籍猫紹介</text>
+  <text x="600" y="380" text-anchor="middle" fill="#00d4ff" font-family="monospace" font-size="22">BAKENEKO GAMES · DIGITAL FIELD GUIDE</text>
+  <text x="600" y="500" text-anchor="middle" fill="#e8e8f0" font-family="serif" font-size="24" opacity="0.75">BAKENEKO CAFE の猫たち</text>
+</svg>

@@ -1,0 +1,135 @@
+/* こはだボット紹介コーナー専用（portal.css 拡張なし） */
+
+.kbot-subnav {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem 1rem;
+  justify-content: center;
+  margin: 0 auto 2.5rem;
+  max-width: 52rem;
+  padding: 0 0.5rem;
+}
+
+.kbot-subnav a {
+  font-family: "Share Tech Mono", monospace;
+  font-size: 0.82rem;
+  color: var(--cyan);
+  text-decoration: none;
+  letter-spacing: 0.04em;
+}
+
+.kbot-subnav a:hover {
+  text-decoration: underline;
+}
+
+.kbot-hero {
+  margin: 0 auto 2.5rem;
+  max-width: 52rem;
+  border-radius: 12px;
+  overflow: hidden;
+  border: 1px solid rgba(0, 212, 255, 0.18);
+}
+
+.kbot-hero img {
+  width: 100%;
+  height: auto;
+  display: block;
+  vertical-align: middle;
+}
+
+.kbot-prose {
+  max-width: 48rem;
+  margin: 0 auto;
+}
+
+.kbot-prose p {
+  line-height: 1.95;
+  color: var(--white);
+  margin: 0 0 1.1rem;
+}
+
+.kbot-prose .kbot-lead {
+  font-size: 1.05rem;
+  color: var(--grey);
+}
+
+.kbot-section {
+  margin-bottom: 3rem;
+}
+
+.kbot-today {
+  margin: 2.5rem auto 0;
+  max-width: 48rem;
+  padding: 1.5rem 1.75rem;
+  background: rgba(6, 12, 26, 0.55);
+  border: 1px solid rgba(255, 215, 0, 0.14);
+  border-radius: 12px;
+  text-align: center;
+}
+
+.kbot-today p {
+  margin: 0 0 1rem;
+  color: var(--white);
+  line-height: 1.85;
+}
+
+.kbot-links {
+  margin: 3rem auto 0;
+  max-width: 48rem;
+  padding-top: 2rem;
+  border-top: 1px solid rgba(255, 215, 0, 0.15);
+}
+
+.kbot-links h2 {
+  margin-bottom: 1rem;
+}
+
+.kbot-links ul {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.65rem;
+}
+
+.kbot-links a {
+  color: var(--cyan);
+  text-decoration: none;
+  font-family: "Share Tech Mono", monospace;
+  font-size: 0.88rem;
+}
+
+.kbot-links a:hover {
+  text-decoration: underline;
+}
+
+.kbot-breadcrumb {
+  font-size: 0.9rem;
+  margin-bottom: 1.75rem;
+  color: var(--grey);
+  max-width: 48rem;
+  margin-left: auto;
+  margin-right: auto;
+}
+
+.kbot-breadcrumb a {
+  color: var(--cyan);
+  text-decoration: none;
+}
+
+.kbot-breadcrumb a:hover {
+  text-decoration: underline;
+}
+
+.kbot-breadcrumb span[aria-hidden="true"] {
+  margin: 0 0.45rem;
+  color: var(--gold);
+  opacity: 0.55;
+}
+
+@media (max-width: 768px) {
+  .kbot-subnav {
+    justify-content: flex-start;
+  }
+}

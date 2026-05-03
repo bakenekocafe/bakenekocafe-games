@@ -1,0 +1,245 @@
+/* 在籍猫紹介専用（portal.css 拡張なし・:root 非追加） */
+
+/* 一覧: ヒーロー */
+.page-hero {
+  text-align: center;
+  margin-bottom: 2.5rem;
+}
+
+.page-subtitle {
+  color: var(--grey);
+  font-size: 1.05rem;
+  margin-top: 0.75rem;
+  line-height: 1.7;
+}
+
+.page-intro {
+  max-width: 48rem;
+  margin: 0 auto 3rem;
+  line-height: 1.9;
+  color: var(--white);
+}
+
+/* 一覧グリッド */
+.cats-grid {
+  list-style: none;
+  padding: 0;
+  margin: 0 0 3.5rem;
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 32px;
+}
+
+@media (max-width: 768px) {
+  .cats-grid {
+    grid-template-columns: repeat(2, 1fr);
+    gap: 24px;
+  }
+}
+
+@media (max-width: 680px) {
+  .cats-grid {
+    grid-template-columns: 1fr;
+    gap: 20px;
+  }
+}
+
+.cat-card {
+  display: flex;
+  flex-direction: column;
+  background: var(--deep);
+  border-radius: 12px;
+  overflow: hidden;
+  text-decoration: none;
+  color: inherit;
+  border: 1px solid rgba(0, 212, 255, 0.12);
+  transition: box-shadow 0.25s ease, border-color 0.25s ease, transform 0.2s ease;
+}
+
+.cat-card:hover {
+  box-shadow: var(--glow-c);
+  border-color: rgba(0, 212, 255, 0.35);
+  transform: translateY(-2px);
+}
+
+.cat-card:focus-visible {
+  outline: 2px solid var(--cyan);
+  outline-offset: 3px;
+}
+
+.cat-card img {
+  width: 100%;
+  aspect-ratio: 1 / 1;
+  object-fit: cover;
+  display: block;
+  background: var(--black);
+}
+
+.cat-card__body {
+  padding: 1rem 1.1rem 1.25rem;
+}
+
+.cat-card__name {
+  font-family: "Zen Old Mincho", serif;
+  font-size: 1.35rem;
+  font-weight: 700;
+  margin: 0 0 0.35rem;
+  color: var(--white);
+}
+
+.cat-card__role {
+  font-family: "Share Tech Mono", monospace;
+  font-size: 0.8rem;
+  letter-spacing: 0.06em;
+  color: var(--cyan);
+  margin: 0;
+  text-transform: uppercase;
+}
+
+/* CTA ブロック */
+.cats-cta {
+  text-align: center;
+  padding: 2rem 0 0;
+  border-top: 1px solid rgba(255, 215, 0, 0.15);
+  margin-top: 1rem;
+}
+
+.cats-cta p {
+  margin: 0 0 1rem;
+  color: var(--grey);
+}
+
+/* 個別: パンくず */
+.breadcrumb {
+  font-size: 0.9rem;
+  margin-bottom: 1.75rem;
+  color: var(--grey);
+}
+
+.breadcrumb a {
+  color: var(--cyan);
+  text-decoration: none;
+}
+
+.breadcrumb a:hover {
+  text-decoration: underline;
+}
+
+.breadcrumb span[aria-hidden="true"] {
+  margin: 0 0.5rem;
+  color: var(--gold);
+  opacity: 0.6;
+}
+
+/* 個別: ヒーロー画像 */
+.cat-hero {
+  margin: 0 0 2rem;
+  border-radius: 12px;
+  overflow: hidden;
+  border: 1px solid rgba(0, 212, 255, 0.15);
+}
+
+.cat-hero img {
+  width: 100%;
+  height: auto;
+  display: block;
+  vertical-align: middle;
+}
+
+.cat-header {
+  margin-bottom: 2rem;
+}
+
+.cat-status {
+  font-family: "Share Tech Mono", monospace;
+  color: var(--cyan);
+  font-size: 0.85rem;
+  letter-spacing: 0.05em;
+  margin: 0.5rem 0 0;
+}
+
+/* 基本情報 */
+.cat-facts {
+  margin: 0 0 2.5rem;
+  padding: 1.25rem 1.5rem;
+  background: rgba(6, 12, 26, 0.55);
+  border-radius: 12px;
+  border: 1px solid rgba(255, 215, 0, 0.12);
+}
+
+.cat-facts__row {
+  display: grid;
+  grid-template-columns: 7rem 1fr;
+  gap: 1rem 1.5rem;
+  align-items: start;
+}
+
+.cat-facts__row dt {
+  font-family: "Share Tech Mono", monospace;
+  font-size: 0.78rem;
+  color: var(--gold);
+  margin: 0;
+}
+
+.cat-facts__row dd {
+  margin: 0;
+  line-height: 1.75;
+  color: var(--white);
+}
+
+@media (max-width: 680px) {
+  .cat-facts__row {
+    grid-template-columns: 1fr;
+  }
+}
+
+.cat-section {
+  margin-bottom: 2.75rem;
+}
+
+.cat-section p {
+  line-height: 1.95;
+  color: var(--white);
+  margin: 0.75rem 0 0;
+}
+
+/* 前後ナビ */
+.cat-nav {
+  display: flex;
+  flex-direction: column;
+  gap: 1.25rem;
+  padding-top: 2rem;
+  margin-top: 1rem;
+  border-top: 1px solid rgba(255, 215, 0, 0.15);
+}
+
+.cat-nav__back {
+  font-family: "Share Tech Mono", monospace;
+  font-size: 0.9rem;
+  color: var(--cyan);
+  text-decoration: none;
+}
+
+.cat-nav__back:hover {
+  text-decoration: underline;
+}
+
+.cat-nav__sibling {
+  display: flex;
+  justify-content: space-between;
+  gap: 1rem;
+  flex-wrap: wrap;
+}
+
+.cat-nav__prev,
+.cat-nav__next {
+  font-family: "Share Tech Mono", monospace;
+  font-size: 0.85rem;
+  color: var(--cyan);
+  text-decoration: none;
+}
+
+.cat-nav__prev:hover,
+.cat-nav__next:hover {
+  text-decoration: underline;
+}
